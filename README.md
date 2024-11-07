@@ -1,50 +1,100 @@
-# React + TypeScript + Vite
+# OpenSecret React SDK
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is a React SDK for the [OpenSecret](https://opensecret.cloud) platform.
 
-Currently, two official plugins are available:
+## Installation
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install @opensecret/react
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Usage
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+Wrap your application in the `OpenSecretProvider` component and provide the URL of your OpenSecret backend:
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+```tsx
+import { OpenSecretProvider } from "@opensecret/react";
+
+function App() {
+  return (
+    <OpenSecretProvider apiUrl="https://preview.opensecret.ai">
+      <App />
+    </OpenSecretProvider>
+  );
+}
 ```
+
+Now import the `useOpenSecret` hook and use it to access the OpenSecret API:
+
+```tsx
+import { useOpenSecret } from "@opensecret/react";
+
+function App() {
+  const os = useOpenSecret();
+
+  return (
+    <div>
+      <button onClick={() => os.signIn("email", "password")}>Sign In</button>
+      <button onClick={() => os.signUp("name", "email", "password", "inviteCode")}>Sign Up</button>
+      <button onClick={() => os.signOut()}>Sign Out</button>
+      <button onClick={() => os.get("key")}>Get Value</button>
+      <button onClick={() => os.put("key", "value")}>Put Value</button>
+      <button onClick={() => os.list()}>List Values</button>
+      <button onClick={() => os.del("key")}>Delete Value</button>
+    </div>
+  );
+}
+```
+
+## API Reference
+
+### `OpenSecretProvider`
+
+The `OpenSecretProvider` component is the main entry point for the SDK. It requires a single prop, `apiUrl`, which should be set to the URL of your OpenSecret backend.
+
+```tsx
+<OpenSecretProvider apiUrl="https://preview.opensecret.ai">
+  <App />
+</OpenSecretProvider>
+```
+
+### `useOpenSecret`
+
+The `useOpenSecret` hook provides access to the OpenSecret API. It returns an object with the following methods:
+
+- `signIn(email: string, password: string): Promise<void>`: Signs in a user with the provided email and password.
+- `signUp(name: string, email: string, password: string, inviteCode: string): Promise<void>`: Signs up a new user with the provided name, email, password, and invite code.
+- `signOut(): Promise<void>`: Signs out the current user.
+- `get(key: string): Promise<string | undefined>`: Retrieves the value associated with the provided key.
+- `put(key: string, value: string): Promise<string>`: Stores the provided value with the provided key.
+- `list(): Promise<KVListItem[]>`: Retrieves all key-value pairs stored by the user.
+- `del(key: string): Promise<void>`: Deletes the value associated with the provided key.
+- `refetchUser(): Promise<void>`: Refreshes the user's authentication state.
+- `changePassword(currentPassword: string, newPassword: string): Promise<void>`: Changes the user's password.
+
+### Library development
+
+This library uses [Bun](https://bun.sh/) for development.
+
+To run the demo app, run the following commands:
+
+```bash
+bun install
+bun run dev
+```
+
+To build the library, run the following command:
+
+```bash
+bun run build
+```
+
+To pack the library, run the following command:
+
+```bash
+bun run pack
+```
+
+## License
+
+This project is licensed under the MIT License.

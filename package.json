@@ -1,17 +1,18 @@
 {
-  "name": "opensecret-sdk",
-  "version": "0.1.1",
+  "name": "@opensecret/react",
+  "version": "0.1.2",
+  "license": "MIT",
   "type": "module",
   "files": [
     "dist"
   ],
-  "main": "./dist/opensecret-sdk.umd.js",
-  "module": "./dist/opensecret-sdk.es.js",
+  "main": "./dist/opensecret-react.umd.js",
+  "module": "./dist/opensecret-react.es.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/opensecret-sdk.es.js",
-      "require": "./dist/opensecret-sdk.umd.js",
+      "import": "./dist/opensecret-react.es.js",
+      "require": "./dist/opensecret-react.umd.js",
       "types": "./dist/index.d.ts"
     }
   },

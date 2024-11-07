@@ -42,8 +42,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: path.resolve(__dirname, "src/lib/index.ts"),
-      name: "OpenSecretSDK",
-      fileName: (format) => `opensecret-sdk.${format}.js`
+      name: "OpenSecretReact",
+      fileName: (format) => `opensecret-react.${format}.js`
     },
     rollupOptions: {
       // Only externalize React and React DOM

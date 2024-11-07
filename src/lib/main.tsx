@@ -1,10 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
 
-export interface OpenSecretConfig {
-  apiUrl?: string;
-}
-
 export type OpenSecretAuthState = {
   loading: boolean;
   user?: api.UserResponse;
@@ -19,7 +15,7 @@ export type OpenSecretContextType = {
    * @param password - User's password
    * @returns A promise that resolves when authentication is complete
    * @throws {Error} If login fails
-   * 
+   *
    * @description
    * - Calls the login API endpoint
    * - Stores access_token and refresh_token in localStorage
@@ -36,7 +32,7 @@ export type OpenSecretContextType = {
    * @param inviteCode - Invitation code for registration
    * @returns A promise that resolves when account creation is complete
    * @throws {Error} If signup fails
-   * 
+   *
    * @description
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
@@ -49,7 +45,7 @@ export type OpenSecretContextType = {
    * Logs out the current user
    * @returns A promise that resolves when logout is complete
    * @throws {Error} If logout fails
-   * 
+   *
    * @description
    * - Calls the logout API endpoint with the current refresh_token
    * - Removes access_token, refresh_token from localStorage
@@ -63,7 +59,7 @@ export type OpenSecretContextType = {
    * @param key - The unique identifier for the stored value
    * @returns A promise resolving to the stored value
    * @throws {Error} If the key cannot be retrieved
-   * 
+   *
    * @description
    * - Calls the authenticated API endpoint to fetch a value
    * - Returns undefined if the key does not exist
@@ -78,7 +74,7 @@ export type OpenSecretContextType = {
    * @param value - The string value to be stored
    * @returns A promise resolving to the server's response
    * @throws {Error} If the value cannot be stored
-   * 
+   *
    * @description
    * - Calls the authenticated API endpoint to store a value
    * - Requires an active authentication session
@@ -91,7 +87,7 @@ export type OpenSecretContextType = {
    * Retrieves all key-value pairs stored by the user
    * @returns A promise resolving to an array of stored items
    * @throws {Error} If the list cannot be retrieved
-   * 
+   *
    * @description
    * - Calls the authenticated API endpoint to fetch all stored items
    * - Returns an array of key-value pairs with metadata
@@ -106,7 +102,7 @@ export type OpenSecretContextType = {
    * @param key - The unique identifier for the value to be deleted
    * @returns A promise resolving when the deletion is complete
    * @throws {Error} If the key cannot be deleted
-   * 
+   *
    * @description
    * - Calls the authenticated API endpoint to remove a specific key
    * - Requires an active authentication session
@@ -151,12 +147,32 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   handleGoogleCallback: async () => {}
 });
 
-export function OpenSecretProvider({ 
-  children, 
-  config = {} 
-}: { 
+/**
+ * Provider component for OpenSecret authentication and key-value storage.
+ *
+ * @param props - Configuration properties for the OpenSecret provider
+ * @param props.children - React child components to be wrapped by the provider
+ * @param props.apiUrl - URL of OpenSecret enclave backend
+ *
+ * @remarks
+ * This provider manages:
+ * - User authentication state
+ * - Authentication methods (sign in, sign up, sign out)
+ * - Key-value storage operations
+ *
+ * @example
+ * ```tsx
+ * <OpenSecretProvider apiUrl='https://preview.opensecret.ai'>
+ *   <App />
+ * </OpenSecretProvider>
+ * ```
+ */
+export function OpenSecretProvider({
+  children,
+  apiUrl
+}: {
   children: React.ReactNode;
-  config?: OpenSecretConfig;
+  apiUrl: string;
 }) {
   const [auth, setAuth] = useState<OpenSecretAuthState>({
     loading: true,
@@ -164,10 +180,11 @@ export function OpenSecretProvider({
   });
 
   useEffect(() => {
-    if (config.apiUrl) {
-      api.setApiUrl(config.apiUrl);
+    if (!apiUrl || apiUrl.trim() === '') {
+      throw new Error('OpenSecretProvider requires a non-empty apiUrl. Please provide a valid API endpoint URL.');
     }
-  }, [config.apiUrl]);
+    api.setApiUrl(apiUrl);
+  }, [apiUrl]);
 
   async function fetchUser() {
     const access_token = window.localStorage.getItem("access_token");
