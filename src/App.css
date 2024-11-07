@@ -1,0 +1,100 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.docs-container {
+  text-align: left;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+p {
+  margin-bottom: 1.5rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 300px;
+}
+
+.auth-form input {
+  padding: 0.5rem;
+  color: inherit;
+  background: rgba(127, 127, 127, 0.1);
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 4px;
+}
+
+button {
+  padding: 0.5rem;
+}
+
+.data-display {
+  background: rgba(127, 127, 127, 0.1);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.data-display pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.json-input {
+  padding: 0.5rem;
+  color: inherit;
+  background: rgba(127, 127, 127, 0.1);
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 4px;
+  font-family: monospace;
+  resize: vertical;
+}
+
+.api-message {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.1);
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: minmax(min-content, 150px) 1fr minmax(min-content, 120px) minmax(min-content, 120px);
+  gap: 1rem;
+}
+
+.grid-header {
+  font-weight: bold;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+  padding-bottom: 0.5rem;
+}
+
+.grid-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.1);
+}
+
+.grid-item.value {
+  max-height: 4.5rem; /* Approx. 4 lines of text */
+  overflow-y: auto;
+  font-family: monospace;
+}
+
+.grid-item.timestamp {
+  font-size: 0.8rem;
+  color: rgba(127, 127, 127, 0.7);
+}
