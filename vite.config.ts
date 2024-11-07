@@ -1,8 +1,63 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import derPlugin from "./vite-der-plugin";
+import path from "path";
+import fs from "fs";
+
+// Custom plugin for .der file handling
+function derPlugin() {
+  return {
+    name: "vite-der-plugin",
+    transform(_src: string, id: string) {
+      if (id.endsWith(".der")) {
+        // Read the .der file as a buffer
+        const buffer = fs.readFileSync(id);
+
+        // Convert the buffer to a Uint8Array
+        const uint8Array = new Uint8Array(buffer);
+
+        // Generate code to create and export a Uint8Array
+        return {
+          code: `export default new Uint8Array([${uint8Array.toString()}]);`,
+          map: null
+        };
+      }
+    }
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), derPlugin()]
+  plugins: [
+    react(), 
+    derPlugin()
+  ],
+  // Add .der to assetsInclude to ensure it's processed
+  assetsInclude: ['**/*.der'],
+  resolve: {
+    alias: {
+      // Ensure absolute imports work correctly
+      '@': path.resolve(__dirname, './src')
+    }
+  },
+  build: {
+    lib: {
+      entry: path.resolve(__dirname, "src/lib/index.ts"),
+      name: "OpenSecretSDK",
+      fileName: (format) => `opensecret-sdk.${format}.js`
+    },
+    rollupOptions: {
+      // Only externalize React and React DOM
+      external: [
+        "react", 
+        "react-dom"
+      ],
+      output: {
+        // Provide global variables to use in the UMD build
+        globals: {
+          react: "React",
+          "react-dom": "ReactDOM"
+        }
+      }
+    }
+  }
 });

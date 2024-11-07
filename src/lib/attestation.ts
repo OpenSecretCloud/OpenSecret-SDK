@@ -5,6 +5,11 @@ import { z } from "zod";
 import { fetchAttestationDocument } from "./api";
 import awsRootCertDer from "../assets/aws_root.der";
 
+// Assert that the root cert is not empty
+if (!awsRootCertDer || awsRootCertDer.length === 0) {
+  throw new Error("AWS root certificate is empty or not loaded correctly");
+}
+
 const AttestationDocumentSchema = z.object({
   module_id: z.string().min(1),
   digest: z.literal("SHA384"),
@@ -161,6 +166,9 @@ export async function authenticate(
     // Verify that the trusted root cert is the same as the first cert in the cabundle
     const firstCertBase64 = encode(document.cabundle[0]);
     if (firstCertBase64 !== encode(trustedRootCert)) {
+      console.error("Root cert doesn't match first cert");
+      console.log("First cert base64:", firstCertBase64);
+      console.log("Trusted root cert base64:", encode(trustedRootCert));
       throw new Error("Root cert does not match first cert in attestation document.");
     }
 

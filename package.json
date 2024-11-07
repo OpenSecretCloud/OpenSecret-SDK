@@ -1,19 +1,30 @@
 {
   "name": "opensecret-sdk",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.1",
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/opensecret-sdk.umd.js",
+  "module": "./dist/opensecret-sdk.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/opensecret-sdk.es.js",
+      "require": "./dist/opensecret-sdk.umd.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""
+    "build": "bun run tsc -p tsconfig.build.json && bunx vite build",
+    "pack": "bun run build && bun pm pack"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "@peculiar/x509": "^1.12.2",
     "@stablelib/base64": "^2.0.0",
     "@stablelib/chacha20poly1305": "^2.0.0",
@@ -23,6 +34,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@eslint/js": "^9.13.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
