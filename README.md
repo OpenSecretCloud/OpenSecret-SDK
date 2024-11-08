@@ -35,7 +35,7 @@ function App() {
   return (
     <div>
       <button onClick={() => os.signIn("email", "password")}>Sign In</button>
-      <button onClick={() => os.signUp("name", "email", "password", "inviteCode")}>Sign Up</button>
+      <button onClick={() => os.signUp("name", "email", "password")}>Sign Up</button>
       <button onClick={() => os.signOut()}>Sign Out</button>
       <button onClick={() => os.get("key")}>Get Value</button>
       <button onClick={() => os.put("key", "value")}>Put Value</button>
