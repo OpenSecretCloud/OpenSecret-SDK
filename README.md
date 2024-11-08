@@ -17,7 +17,7 @@ import { OpenSecretProvider } from "@opensecret/react";
 
 function App() {
   return (
-    <OpenSecretProvider apiUrl="https://preview.opensecret.ai">
+    <OpenSecretProvider apiUrl="https://preview-enclave.opensecret.cloud">
       <App />
     </OpenSecretProvider>
   );
@@ -53,7 +53,7 @@ function App() {
 The `OpenSecretProvider` component is the main entry point for the SDK. It requires a single prop, `apiUrl`, which should be set to the URL of your OpenSecret backend.
 
 ```tsx
-<OpenSecretProvider apiUrl="https://preview.opensecret.ai">
+<OpenSecretProvider apiUrl="https://preview-enclave.opensecret.cloud">
   <App />
 </OpenSecretProvider>
 ```
