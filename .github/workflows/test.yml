@@ -1,0 +1,31 @@
+name: Library Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        env:
+          VITE_OPEN_SECRET_API_URL: ${{ secrets.VITE_OPEN_SECRET_API_URL }}
+          VITE_TEST_EMAIL: ${{ secrets.VITE_TEST_EMAIL }}
+          VITE_TEST_PASSWORD: ${{ secrets.VITE_TEST_PASSWORD }}
+          VITE_TEST_NAME: ${{ secrets.VITE_TEST_NAME }}
+          VITE_TEST_INVITE_CODE: ${{ secrets.VITE_TEST_INVITE_CODE }}
+        run: bun test 
