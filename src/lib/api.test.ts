@@ -1,20 +1,24 @@
 import { expect, test } from "bun:test";
 import { fetchLogin, fetchSignUp, fetchLogout, refreshToken, fetchUser } from "./api";
 
-const TEST_EMAIL = "test@test.com";
-const TEST_PASSWORD = "test";
-const TEST_NAME = "Test User";
-const TEST_INVITE_CODE = "bearclaw24";
+const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
+const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
+const TEST_NAME = process.env.VITE_TEST_NAME;
+const TEST_INVITE_CODE = process.env.VITE_TEST_INVITE_CODE;
+
+if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_NAME || !TEST_INVITE_CODE) {
+  throw new Error("Test credentials must be set in .env.local");
+}
 
 async function tryLogin() {
   // Ensure the test user exists
   try {
-    return await fetchLogin(TEST_EMAIL, TEST_PASSWORD);
+    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   } catch (error) {
     console.warn(error);
     console.log("Login failed, attempting signup");
-    await fetchSignUp(TEST_NAME, TEST_EMAIL, TEST_PASSWORD, TEST_INVITE_CODE);
-    return await fetchLogin(TEST_EMAIL, TEST_PASSWORD);
+    await fetchSignUp(TEST_NAME!, TEST_EMAIL!, TEST_PASSWORD!, TEST_INVITE_CODE!);
+    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   }
 }
 

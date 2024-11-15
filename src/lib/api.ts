@@ -1,3 +1,4 @@
+import { encode } from "@stablelib/base64";
 import { authenticatedApiCall, encryptedApiCall } from "./encryptedApi";
 
 let API_URL = "http://localhost:3000";
@@ -359,4 +360,51 @@ export async function handleGoogleCallback(
     }
     throw error;
   }
+}
+
+export type PrivateKeyResponse = {
+  mnemonic: string;
+};
+
+export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
+  return authenticatedApiCall<void, PrivateKeyResponse>(
+    `${API_URL}/protected/private_key`,
+    "GET",
+    undefined,
+    "Failed to fetch private key"
+  );
+}
+
+export type SignMessageResponse = {
+  signature: string;
+  message_hash: string;
+};
+
+type SigningAlgorithm = "schnorr" | "ecdsa"
+
+export async function signMessage(message_bytes: Uint8Array, algorithm: SigningAlgorithm): Promise<SignMessageResponse> {
+  const message_base64 = encode(message_bytes);
+  return authenticatedApiCall<{message_base64: string, algorithm: SigningAlgorithm}, SignMessageResponse>(
+    `${API_URL}/protected/sign_message`,
+    "POST",
+    { 
+      message_base64,
+      algorithm
+    },
+    "Failed to sign message"
+  );
+}
+
+export type PublicKeyResponse = {
+  public_key: string;
+  algorithm: SigningAlgorithm;
+};
+
+export async function fetchPublicKey(algorithm: SigningAlgorithm): Promise<PublicKeyResponse> {
+  return authenticatedApiCall<void, PublicKeyResponse>(
+    `${API_URL}/protected/public_key?algorithm=${algorithm}`,
+    "GET",
+    undefined,
+    "Failed to fetch public key"
+  );
 }
