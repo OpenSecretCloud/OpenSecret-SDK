@@ -3,10 +3,19 @@ import { useState } from "react";
 import React from "react";
 import { useOpenSecret } from "./lib";
 import type { KVListItem } from "./lib";
+import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
 
 function App() {
   const os = useOpenSecret();
   const [listData, setListData] = useState<KVListItem[]>([]);
+  const [algorithm, setAlgorithm] = useState<"schnorr" | "ecdsa">("schnorr");
+  const [publicKey, setPublicKey] = useState<string>("");
+  const [lastSignature, setLastSignature] = useState<{
+    signature: string;
+    messageHash: string;
+    message: string;
+  } | null>(null);
+  const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -121,6 +130,66 @@ function App() {
     } catch (error) {
       console.error("Delete error:", error);
       alert("Delete failed: " + (error as Error).message);
+    }
+  };
+
+  const handleGetPublicKey = async () => {
+    try {
+      const response = await os.getPublicKey(algorithm);
+      setPublicKey(response.public_key);
+      setVerificationResult(null); // Reset verification when changing keys
+    } catch (error) {
+      console.error("Failed to get public key:", error);
+      alert("Failed to get public key: " + (error as Error).message);
+    }
+  };
+
+  const handleSignMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const message = formData.get("message") as string;
+    
+    try {
+      const messageBytes = new TextEncoder().encode(message);
+      const response = await os.signMessage(messageBytes, algorithm);
+      
+      setLastSignature({
+        signature: response.signature,
+        messageHash: response.message_hash,
+        message
+      });
+      setVerificationResult(null); // Reset verification on new signature
+    } catch (error) {
+      console.error("Failed to sign message:", error);
+      alert("Failed to sign message: " + (error as Error).message);
+    }
+  };
+
+  const handleVerifySignature = async () => {
+    if (!lastSignature || !publicKey) {
+      alert("Please get public key and sign a message first");
+      return;
+    }
+
+    try {
+      let isValid: boolean;
+      if (algorithm === "schnorr") {
+        isValid = schnorr.verify(
+          lastSignature.signature,
+          lastSignature.messageHash,
+          publicKey
+        );
+      } else {
+        isValid = secp256k1.verify(
+          lastSignature.signature,
+          lastSignature.messageHash,
+          publicKey
+        );
+      }
+      setVerificationResult(isValid);
+    } catch (error) {
+      console.error("Verification error:", error);
+      alert("Verification failed: " + (error as Error).message);
     }
   };
 
@@ -239,6 +308,87 @@ function App() {
           <button type="submit">Delete Data</button>
         </form>
       </section>
+
+      <section>
+        <h2>Private Key</h2>
+        <p>Retrieve your private key mnemonic phrase. Keep this secure and never share it.</p>
+        
+        <button 
+          onClick={async () => {
+            try {
+              const response = await os.getPrivateKey();
+              alert(`Your mnemonic phrase is:\n\n${response.mnemonic}\n\nPlease store this securely and never share it with anyone.`);
+            } catch (error) {
+              console.error("Failed to get private key:", error);
+              alert("Failed to get private key: " + (error as Error).message);
+            }
+          }}
+          style={{ marginBottom: "1rem" }}
+        >
+          Show Private Key
+        </button>
+      </section>
+
+      <section>
+        <h2>Cryptographic Signing</h2>
+        <p>Demonstrate message signing and verification using your key pair.</p>
+        
+        <div style={{ marginBottom: "1rem" }}>
+          <label>
+            Algorithm:
+            <select 
+              value={algorithm} 
+              onChange={(e) => setAlgorithm(e.target.value as "schnorr" | "ecdsa")}
+              style={{ marginLeft: "0.5rem" }}
+            >
+              <option value="schnorr">Schnorr</option>
+              <option value="ecdsa">ECDSA</option>
+            </select>
+          </label>
+        </div>
+
+        <button onClick={handleGetPublicKey} style={{ marginBottom: "1rem" }}>Get Public Key</button>
+        {publicKey && (
+          <div className="data-display" style={{ wordBreak: "break-all", marginBottom: "1rem" }}>
+            <strong>Public Key:</strong> {publicKey}
+          </div>
+        )}
+
+        <form onSubmit={handleSignMessage} className="auth-form">
+          <textarea 
+            name="message" 
+            placeholder="Enter message to sign" 
+            rows={4} 
+            className="json-input"
+            required 
+          />
+          <button type="submit">Sign Message</button>
+        </form>
+
+        {lastSignature && (
+          <div className="data-display" style={{ marginTop: "1rem", wordBreak: "break-all" }}>
+            <div><strong>Message:</strong> {lastSignature.message}</div>
+            <div><strong>Message Hash:</strong> {lastSignature.messageHash}</div>
+            <div><strong>Signature:</strong> {lastSignature.signature}</div>
+            <button 
+              onClick={handleVerifySignature}
+              style={{ marginTop: "0.5rem" }}
+            >
+              Verify Signature
+            </button>
+            {verificationResult !== null && (
+              <div style={{ 
+                marginTop: "0.5rem",
+                color: verificationResult ? "green" : "red",
+                fontWeight: "bold"
+              }}>
+                Signature is {verificationResult ? "valid" : "invalid"}!
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
     </main>
   );
 }

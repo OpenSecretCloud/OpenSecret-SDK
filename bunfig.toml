@@ -1,2 +1,6 @@
 [test]
-preload = ["./src/lib/test/preload.ts", "./src/lib/test/der-loader.ts"]
+preload = [
+  "./src/lib/test/preload.ts",
+  "./src/lib/test/der-loader.ts",
+  "./src/lib/test/api-url-loader.ts"
+]

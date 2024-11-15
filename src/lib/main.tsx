@@ -121,6 +121,30 @@ export type OpenSecretContextType = {
   handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
   handleGoogleCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
+
+  /**
+   * Retrieves the user's private key mnemonic phrase
+   * @returns A promise resolving to the private key response
+   * @throws {Error} If the private key cannot be retrieved
+   */
+  getPrivateKey: typeof api.fetchPrivateKey;
+
+  /**
+   * Retrieves the user's public key for the specified algorithm
+   * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
+   * @returns A promise resolving to the public key response
+   * @throws {Error} If the public key cannot be retrieved
+   */
+  getPublicKey: typeof api.fetchPublicKey;
+
+  /**
+   * Signs a message using the specified algorithm
+   * @param messageBytes - The message to sign as a Uint8Array
+   * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
+   * @returns A promise resolving to the signature response
+   * @throws {Error} If the message signing fails
+   */
+  signMessage: typeof api.signMessage;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -144,7 +168,10 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   initiateGitHubAuth: async () => ({ auth_url: "", csrf_token: "" }),
   handleGitHubCallback: async () => {},
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
-  handleGoogleCallback: async () => {}
+  handleGoogleCallback: async () => {},
+  getPrivateKey: api.fetchPrivateKey,
+  getPublicKey: api.fetchPublicKey,
+  signMessage: api.signMessage
 });
 
 /**
@@ -333,7 +360,10 @@ export function OpenSecretProvider({
     initiateGitHubAuth,
     handleGitHubCallback,
     initiateGoogleAuth,
-    handleGoogleCallback
+    handleGoogleCallback,
+    getPrivateKey: api.fetchPrivateKey,
+    getPublicKey: api.fetchPublicKey,
+    signMessage: api.signMessage
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
