@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
+import { createCustomFetch } from "./ai";
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -145,6 +146,33 @@ export type OpenSecretContextType = {
    * @throws {Error} If the message signing fails
    */
   signMessage: typeof api.signMessage;
+
+  /**
+   * Custom fetch function for AI requests that handles encryption
+   * and token refreshing.
+   * 
+   * Meant to be used with the OpenAI JS library
+   * 
+   * Example:
+   * ```tsx
+   * const openai = new OpenAI({
+   *   baseURL: `${os.apiUrl}/v1/`,
+   *   dangerouslyAllowBrowser: true,
+   *   apiKey: "the-api-key-doesnt-matter",
+   *   defaultHeaders: {
+   *     "Accept-Encoding": "identity"
+   *   },
+   *   fetch: os.aiCustomFetch
+   * });
+   * ```
+   */
+  aiCustomFetch: (url: RequestInfo, init?: RequestInit) => Promise<Response>;
+
+  /**
+   * Returns the current OpenSecret enclave API URL being used
+   * @returns The current API URL
+   */
+  apiUrl: string;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -171,7 +199,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   handleGoogleCallback: async () => {},
   getPrivateKey: api.fetchPrivateKey,
   getPublicKey: api.fetchPublicKey,
-  signMessage: api.signMessage
+  signMessage: api.signMessage,
+  aiCustomFetch: async () => new Response(),
+  apiUrl: ""
 });
 
 /**
@@ -205,6 +235,7 @@ export function OpenSecretProvider({
     loading: true,
     user: undefined
   });
+  const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType['aiCustomFetch']>();
 
   useEffect(() => {
     if (!apiUrl || apiUrl.trim() === '') {
@@ -212,6 +243,15 @@ export function OpenSecretProvider({
     }
     api.setApiUrl(apiUrl);
   }, [apiUrl]);
+
+  // Create aiCustomFetch when user is authenticated
+  useEffect(() => {
+    if (auth.user) {
+      setAiCustomFetch(() => createCustomFetch());
+    } else {
+      setAiCustomFetch(undefined);
+    }
+  }, [auth.user]);
 
   async function fetchUser() {
     const access_token = window.localStorage.getItem("access_token");
@@ -363,7 +403,9 @@ export function OpenSecretProvider({
     handleGoogleCallback,
     getPrivateKey: api.fetchPrivateKey,
     getPublicKey: api.fetchPublicKey,
-    signMessage: api.signMessage
+    signMessage: api.signMessage,
+    aiCustomFetch: aiCustomFetch || (async () => new Response()),
+    apiUrl
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

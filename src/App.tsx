@@ -4,6 +4,7 @@ import React from "react";
 import { useOpenSecret } from "./lib";
 import type { KVListItem } from "./lib";
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import { AI } from "./AI";
 
 function App() {
   const os = useOpenSecret();
@@ -387,6 +388,12 @@ function App() {
             )}
           </div>
         )}
+      </section>
+
+      <section>
+        <h2>AI Chat Demo</h2>
+        <p>Try out the AI chat functionality with encrypted communication.</p>
+        <AI />
       </section>
 
     </main>
