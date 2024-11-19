@@ -86,6 +86,43 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 
 - `signMessage(messageBytes: Uint8Array, algorithm: 'schnorr' | 'ecdsa'): Promise<SignatureResponse>`: Signs a message using the specified algorithm. The message must be provided as a Uint8Array of bytes. Returns a signature that can be verified using the corresponding public key.
 
+### AI Integration
+
+To get encrypted-to-the-gpu AI chat we provide a special version of `fetch` (`os.aiCustomFetch`) that handles all the encryption. Because we require the user to be logged in, and do the encryption client-side, this is safe to call from the client.
+
+The easiest way to use this is through the OpenAI client:
+
+```bash
+npm install openai
+```
+
+```typescript
+import OpenAI from "openai";
+import { useOpenSecret } from "@opensecret/react";
+
+//...
+
+// In a component
+const os = useOpenSecret();
+
+const openai = new OpenAI({
+  baseURL: `${os.apiUrl}/v1/`,
+  dangerouslyAllowBrowser: true,
+  apiKey: "api-key-doesnt-matter", // The actual API key is handled by OpenSecret
+  defaultHeaders: {
+    "Accept-Encoding": "identity",
+    "Content-Type": "application/json",
+  },
+  fetch: os.aiCustomFetch, // Use OpenSecret's encrypted fetch
+});
+
+//...
+```
+
+You can now use the OpenAI client as normal. (Right now only streaming responses are supported.) See the example in `src/AI.tsx` in the SDK source code for a complete example.
+
+For an alternative approach using custom fetch directly, see the implementation in `src/lib/ai.test.ts` in the SDK source code.
+
 ### Library development
 
 This library uses [Bun](https://bun.sh/) for development.
