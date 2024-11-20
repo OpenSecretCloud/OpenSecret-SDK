@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "fs";
+import dts from 'vite-plugin-dts'
 
 // Custom plugin for .der file handling
 function derPlugin() {
@@ -29,7 +30,11 @@ function derPlugin() {
 export default defineConfig({
   plugins: [
     react(), 
-    derPlugin()
+    derPlugin(),
+    dts({
+      rollupTypes: true,
+      tsconfigPath: "tsconfig.app.json"
+    }),
   ],
   // Add .der to assetsInclude to ensure it's processed
   assetsInclude: ['**/*.der'],
