@@ -13,7 +13,12 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = [ pkgs.bun ];
+          packages = with pkgs; [
+            bun
+            nodejs_20
+            nodePackages.typescript
+            nodePackages.typescript-language-server
+          ];
         };
       }
     );
