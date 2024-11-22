@@ -28,7 +28,7 @@ export type { AttestationDocument } from "./attestation";
 // Export attestationForView
 export { parseAttestationForView } from "./attestationForView";
 export type { ParsedAttestationView } from "./attestationForView";
-export { EXPECTED_ROOT_CERT_HASH, VALID_PCR0_VALUES, VALID_PCR0_VALUES_DEV } from "./attestationForView";
+export { EXPECTED_ROOT_CERT_HASH, VALID_PCR0_VALUES, VALID_PCR0_VALUES_DEV, AWS_ROOT_CERT_DER } from "./attestationForView";
 
 // Export crypto stuff
 export { generateSecureSecret, hashSecret } from "./crypto";

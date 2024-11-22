@@ -1,7 +1,9 @@
 import { encode } from "@stablelib/base64";
-import { authenticate, type AttestationDocument } from "./attestation";
+import { type AttestationDocument } from "./attestation";
 import awsRootCertDer from "../assets/aws_root.der";
 import { X509Certificate } from "@peculiar/x509";
+
+export const AWS_ROOT_CERT_DER = awsRootCertDer;
 
 export const EXPECTED_ROOT_CERT_HASH = "641a0321a3e244efe456463195d606317ed7cdcc3c1756e09893f3c68f79bb5b";
 
