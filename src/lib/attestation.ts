@@ -239,9 +239,37 @@ export async function authenticate(
   }
 }
 
+ // For localhost we get a fake document and we only need the public key
+ const FakeAttestationDocumentSchema = z.object({
+  public_key: z.nullable(z.instanceof(Uint8Array))
+});
+
+type FakeAttestationDocument = z.infer<typeof FakeAttestationDocumentSchema>;
+
+async function fakeAuthenticate(
+  attestationDocumentBase64: string
+): Promise<FakeAttestationDocument> {
+  const attestationDocumentBuffer = decode(attestationDocumentBase64);
+  const cborAttestationDocument: Uint8Array[] = cbor.decode(attestationDocumentBuffer);
+  const payload = cborAttestationDocument[2];
+  const payloadDecoded = cbor.decode(payload);
+  const zodParsed = await FakeAttestationDocumentSchema.parse(payloadDecoded);
+  return zodParsed;
+}
+
 export async function verifyAttestation(nonce: string): Promise<AttestationDocument> {
   try {
     const attestationDocumentBase64 = await fetchAttestationDocument(nonce);
+
+        // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
+        const API_URL = import.meta.env.VITE_OPEN_SECRET_API_URL;
+        if (API_URL === "http://127.0.0.1:3000" || API_URL === "http://localhost:3000" || API_URL === "http://0.0.0.0:3000" ) {
+          console.log("DEV MODE: Using fake attestation document");
+          const fakeDocument = await fakeAuthenticate(attestationDocumentBase64);
+          return fakeDocument as AttestationDocument;
+        }
+
+        // The real thing!
     const verifiedDocument = await authenticate(attestationDocumentBase64, awsRootCertDer, nonce);
     return verifiedDocument;
   } catch (error) {

@@ -118,6 +118,8 @@ export type OpenSecretContextType = {
   refetchUser: () => Promise<void>;
   changePassword: typeof api.changePassword;
   refreshAccessToken: typeof api.refreshToken;
+  requestPasswordReset: typeof api.requestPasswordReset;
+  confirmPasswordReset: typeof api.confirmPasswordReset;
   initiateGitHubAuth: (inviteCode: string) => Promise<api.GithubAuthResponse>;
   handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
@@ -180,9 +182,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
     loading: true,
     user: undefined
   },
-  signIn: async () => {},
-  signUp: async () => {},
-  signOut: async () => {},
+  signIn: async () => { },
+  signUp: async () => { },
+  signOut: async () => { },
   get: api.fetchGet,
   put: api.fetchPut,
   list: api.fetchList,
@@ -190,13 +192,15 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   verifyEmail: api.verifyEmail,
   requestNewVerificationCode: api.requestNewVerificationCode,
   requestNewVerificationEmail: api.requestNewVerificationCode,
-  refetchUser: async () => {},
+  refetchUser: async () => { },
   changePassword: api.changePassword,
   refreshAccessToken: api.refreshToken,
+  requestPasswordReset: api.requestPasswordReset,
+  confirmPasswordReset: api.confirmPasswordReset,
   initiateGitHubAuth: async () => ({ auth_url: "", csrf_token: "" }),
-  handleGitHubCallback: async () => {},
+  handleGitHubCallback: async () => { },
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
-  handleGoogleCallback: async () => {},
+  handleGoogleCallback: async () => { },
   getPrivateKey: api.fetchPrivateKey,
   getPublicKey: api.fetchPublicKey,
   signMessage: api.signMessage,
@@ -397,6 +401,8 @@ export function OpenSecretProvider({
     requestNewVerificationEmail: api.requestNewVerificationCode,
     changePassword: api.changePassword,
     refreshAccessToken: api.refreshToken,
+    requestPasswordReset: api.requestPasswordReset,
+    confirmPasswordReset: api.confirmPasswordReset,
     initiateGitHubAuth,
     handleGitHubCallback,
     initiateGoogleAuth,
