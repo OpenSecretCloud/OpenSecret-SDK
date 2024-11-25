@@ -7,28 +7,18 @@ export type {
   GoogleAuthResponse
 } from "./api";
 
-// Export types and components from main
-export type { OpenSecretAuthState, OpenSecretContextType } from "./main";
-
 // Export the provider and context
 export { OpenSecretProvider, OpenSecretContext } from "./main";
 
 // Export the hook
 export { useOpenSecret } from "./context";
 
-// Export key functions that might be useful
-export { setApiUrl } from "./api";
-
-// Export getAttestation
-export { getAttestation } from "./getAttestation";
-
-export { authenticate } from "./attestation";
+// Export types needed by consumers
+export type { OpenSecretAuthState, OpenSecretContextType } from "./main";
 export type { AttestationDocument } from "./attestation";
-
-// Export attestationForView
-export { parseAttestationForView } from "./attestationForView";
 export type { ParsedAttestationView } from "./attestationForView";
-export { EXPECTED_ROOT_CERT_HASH, VALID_PCR0_VALUES, VALID_PCR0_VALUES_DEV, AWS_ROOT_CERT_DER } from "./attestationForView";
+export type { PcrConfig, Pcr0ValidationResult } from "./pcr";
 
-// Export crypto stuff
+// Export crypto utilities
+// TODO: these can actually just be used internally by the password reset function
 export { generateSecureSecret, hashSecret } from "./crypto";

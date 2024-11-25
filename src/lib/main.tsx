@@ -1,6 +1,11 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
 import { createCustomFetch } from "./ai";
+import { getAttestation } from "./getAttestation";
+import { authenticate } from "./attestation";
+import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, ParsedAttestationView } from "./attestationForView";
+import type { AttestationDocument } from "./attestation";
+import { PcrConfig } from "./pcr";
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -175,6 +180,53 @@ export type OpenSecretContextType = {
    * @returns The current API URL
    */
   apiUrl: string;
+
+  /**
+   * Additional PCR0 hashes to validate against
+   */
+  pcrConfig: PcrConfig;
+
+  /**
+   * Gets attestation from the enclave
+   */
+  getAttestation: typeof getAttestation;
+
+  /**
+   * Authenticates an attestation document
+   */
+  authenticate: typeof authenticate;
+
+  /**
+   * Parses an attestation document for viewing
+   */
+  parseAttestationForView: (
+    document: AttestationDocument,
+    cabundle: Uint8Array[],
+    pcrConfig?: PcrConfig
+  ) => Promise<ParsedAttestationView>;
+
+  /**
+   * AWS root certificate in DER format
+   */
+  awsRootCertDer: typeof AWS_ROOT_CERT_DER;
+
+  /**
+   * Expected hash of the AWS root certificate
+   */
+  expectedRootCertHash: typeof EXPECTED_ROOT_CERT_HASH;
+
+  /**
+   * Gets and verifies an attestation document from the enclave
+   * @returns A promise resolving to the parsed attestation document
+   * @throws {Error} If attestation fails or is invalid
+   * 
+   * @description
+   * This is a convenience function that:
+   * 1. Fetches the attestation document with a random nonce
+   * 2. Authenticates the document
+   * 3. Parses it for viewing
+   */
+  getAttestationDocument: () => Promise<ParsedAttestationView>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -205,7 +257,16 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   getPublicKey: api.fetchPublicKey,
   signMessage: api.signMessage,
   aiCustomFetch: async () => new Response(),
-  apiUrl: ""
+  apiUrl: "",
+  pcrConfig: {},
+  getAttestation,
+  authenticate,
+  parseAttestationForView,
+  awsRootCertDer: AWS_ROOT_CERT_DER,
+  expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
+  getAttestationDocument: async () => {
+    throw new Error("getAttestationDocument called outside of OpenSecretProvider");
+  }
 });
 
 /**
@@ -230,10 +291,12 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
  */
 export function OpenSecretProvider({
   children,
-  apiUrl
+  apiUrl,
+  pcrConfig = {}
 }: {
   children: React.ReactNode;
   apiUrl: string;
+  pcrConfig?: PcrConfig;
 }) {
   const [auth, setAuth] = useState<OpenSecretAuthState>({
     loading: true,
@@ -386,6 +449,17 @@ export function OpenSecretProvider({
     }
   };
 
+  const getAttestationDocument = async () => {
+    const nonce = window.crypto.randomUUID();
+    const response = await fetch(`${apiUrl}/attestation/${nonce}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch attestation document");
+    }
+    const data = await response.json();
+    const verifiedDocument = await authenticate(data.attestation_document, AWS_ROOT_CERT_DER, nonce);
+    return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
+  };
+
   const value: OpenSecretContextType = {
     auth,
     signIn,
@@ -411,7 +485,14 @@ export function OpenSecretProvider({
     getPublicKey: api.fetchPublicKey,
     signMessage: api.signMessage,
     aiCustomFetch: aiCustomFetch || (async () => new Response()),
-    apiUrl
+    apiUrl,
+    pcrConfig,
+    getAttestation,
+    authenticate,
+    parseAttestationForView,
+    awsRootCertDer: AWS_ROOT_CERT_DER,
+    expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
+    getAttestationDocument
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
