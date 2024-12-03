@@ -38,6 +38,60 @@ function App() {
     }
   };
 
+  const handleGuestSignup = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const password = formData.get("password") as string;
+    const inviteCode = formData.get("inviteCode") as string;
+
+    console.log("Guest Signup request:", { password, inviteCode });
+
+    try {
+      const response = await os.signUpGuest(password, inviteCode);
+      console.log("Guest Signup response:", response);
+      alert("Guest Signup successful! Your ID is: " + response.id);
+    } catch (error) {
+      console.error("Guest Signup error:", error);
+      alert("Guest Signup failed: " + (error as Error).message);
+    }
+  };
+
+  const handleGuestLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const id = formData.get("id") as string;
+    const password = formData.get("password") as string;
+
+    console.log("Guest Login request:", { id, password });
+
+    try {
+      const response = await os.signInGuest(id, password);
+      console.log("Guest Login response:", response);
+      alert("Guest Login successful!");
+    } catch (error) {
+      console.error("Guest Login error:", error);
+      alert("Guest Login failed: " + (error as Error).message);
+    }
+  };
+
+  const handleGuestConversion = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    console.log("Guest Conversion request:", { email, password });
+
+    try {
+      await os.convertGuestToUserAccount(email, password);
+      console.log("Guest Conversion successful");
+      alert("Account successfully converted to email login!");
+    } catch (error) {
+      console.error("Guest Conversion error:", error);
+      alert("Guest Conversion failed: " + (error as Error).message);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -251,6 +305,59 @@ function App() {
           <button type="submit">Sign Up</button>
         </form>
       </section>
+
+      <section>
+        <h2>Guest Sign Up</h2>
+        <p>Create a new guest account with just a password and invite code.</p>
+        <form onSubmit={handleGuestSignup} className="auth-form">
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+          <input type="text" name="inviteCode" placeholder="Invite Code" required />
+          <button type="submit">Sign Up as Guest</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Guest Login</h2>
+        <p>Sign in to your guest account with ID and password.</p>
+        <form onSubmit={handleGuestLogin} className="auth-form">
+          <input type="text" name="id" placeholder="Guest ID" required />
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            autoComplete="current-password"
+            minLength={8}
+            required
+          />
+          <button type="submit">Login as Guest</button>
+        </form>
+      </section>
+
+      {(os.auth.user?.user && (os.auth.user.user.email === undefined || os.auth.user.user.email === null)) && (
+        <section>
+          <h2>Convert Guest Account</h2>
+          <p>Convert your guest account to a regular account with email.</p>
+          <form onSubmit={handleGuestConversion} className="auth-form">
+            <input type="email" name="email" placeholder="Email" autoComplete="email" required />
+            <input
+              type="password"
+              name="password"
+              placeholder="New Password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+            <button type="submit">Convert to Email Account</button>
+          </form>
+        </section>
+      )}
 
       <section>
         <h2>Get Data</h2>

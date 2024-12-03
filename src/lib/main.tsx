@@ -5,6 +5,7 @@ import { getAttestation } from "./getAttestation";
 import { authenticate } from "./attestation";
 import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, ParsedAttestationView } from "./attestationForView";
 import type { AttestationDocument } from "./attestation";
+import type { LoginResponse } from "./api";
 import { PcrConfig } from "./pcr";
 
 export type OpenSecretAuthState = {
@@ -66,7 +67,7 @@ export type OpenSecretContextType = {
    * Creates a new guest account, which can be upgraded to a normal account later with email.
    * @param password - User's chosen password, cannot be changed or recovered without adding email address.
    * @param inviteCode - Invitation code for registration
-   * @returns A promise that resolves when account creation is complete
+   * @returns A promise that resolves to the login response containing the guest ID
    * @throws {Error} If signup fails
    *
    * @description
@@ -75,7 +76,7 @@ export type OpenSecretContextType = {
    * - Updates the auth state with new user information
    * - Throws an error if account creation fails
    */
-  signUpGuest: (password: string, inviteCode: string) => Promise<void>;
+  signUpGuest: (password: string, inviteCode: string) => Promise<LoginResponse>;
 
   /**
    * Upgrades a guest account to a user account with email and password authentication.
@@ -281,7 +282,12 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   signIn: async () => { },
   signUp: async () => { },
   signInGuest: async () => { },
-  signUpGuest: async () => { },
+  signUpGuest: async (): Promise<LoginResponse> => ({
+    id: "",
+    email: undefined,
+    access_token: "",
+    refresh_token: ""
+  }),
   convertGuestToUserAccount: async () => { },
   signOut: async () => { },
   get: api.fetchGet,
@@ -442,13 +448,14 @@ export function OpenSecretProvider({
 
   async function signUpGuest(password: string, inviteCode: string) {
     try {
-      const { access_token, refresh_token } = await api.fetchGuestSignUp(
+      const { access_token, refresh_token, id } = await api.fetchGuestSignUp(
         password,
         inviteCode,
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
       await fetchUser();
+      return { access_token, refresh_token, id };
     } catch (error) {
       console.error(error);
       throw error;
