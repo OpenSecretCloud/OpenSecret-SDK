@@ -25,3 +25,7 @@ dist-ssr
 
 # Ignore package tarball files
 *.tgz
+
+# Environment files
+.env
+.env.local
