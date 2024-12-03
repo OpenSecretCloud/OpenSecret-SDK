@@ -29,7 +29,7 @@ function App() {
     console.log("Signup request:", { name, email, password, inviteCode });
 
     try {
-      const response = await os.signUp(name, email, password, inviteCode);
+      const response = await os.signUp(email, password, inviteCode, name);
       console.log("Signup response:", response);
       alert("Signup successful!");
     } catch (error) {
