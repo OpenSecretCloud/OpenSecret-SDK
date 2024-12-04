@@ -84,12 +84,16 @@ export type OpenSecretContextType = {
    * @param password - User's chosen password
    * @param name - Optional user's full name
    * @returns A promise that resolves when account creation is complete
-   * @throws {Error} If upgrade fails
+   * @throws {Error} If:
+   * - The current user is not a guest account
+   * - The email address is already in use
+   * - The user is not authenticated
    *
    * @description
-   * - Calls the guest upgrade API endpoint
+   * - Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
+   * - Requires the user to be currently authenticated as a guest
    * - Updates the auth state with new user information
-   * - Throws an error if account is not a guest account or email address is already in use.
+   * - Preserves all existing data associated with the guest account
    */
   convertGuestToUserAccount: (email: string, password: string, name?: string) => Promise<void>;
 
