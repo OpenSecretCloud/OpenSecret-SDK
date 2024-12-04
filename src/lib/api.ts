@@ -437,11 +437,13 @@ export async function fetchPublicKey(algorithm: SigningAlgorithm): Promise<Publi
 
 export async function convertGuestToEmailAccount(
   email: string,
-  password: string
+  password: string,
+  name?: string
 ): Promise<void> {
   const conversionData = {
     email,
-    password
+    password,
+    name
   };
 
   return authenticatedApiCall<typeof conversionData, void>(

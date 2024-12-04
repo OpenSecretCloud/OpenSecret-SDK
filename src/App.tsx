@@ -79,11 +79,12 @@ function App() {
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const name = formData.get("name") as string;
 
-    console.log("Guest Conversion request:", { email, password });
+    console.log("Guest Conversion request:", { email, password, name });
 
     try {
-      await os.convertGuestToUserAccount(email, password);
+      await os.convertGuestToUserAccount(email, password, name);
       console.log("Guest Conversion successful");
       alert("Account successfully converted to email login!");
     } catch (error) {
@@ -346,6 +347,7 @@ function App() {
           <p>Convert your guest account to a regular account with email.</p>
           <form onSubmit={handleGuestConversion} className="auth-form">
             <input type="email" name="email" placeholder="Email" autoComplete="email" required />
+            <input type="text" name="name" placeholder="Name (optional)" autoComplete="name" />
             <input
               type="password"
               name="password"

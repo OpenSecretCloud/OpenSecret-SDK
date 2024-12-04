@@ -81,7 +81,8 @@ export type OpenSecretContextType = {
   /**
    * Upgrades a guest account to a user account with email and password authentication.
    * @param email - User's email address
-   * @param password - User's chosen password..
+   * @param password - User's chosen password
+   * @param name - Optional user's full name
    * @returns A promise that resolves when account creation is complete
    * @throws {Error} If upgrade fails
    *
@@ -90,7 +91,7 @@ export type OpenSecretContextType = {
    * - Updates the auth state with new user information
    * - Throws an error if account is not a guest account or email address is already in use.
    */
-  convertGuestToUserAccount: (email: string, password: string) => Promise<void>;
+  convertGuestToUserAccount: (email: string, password: string, name?: string) => Promise<void>;
 
   /**
    * Logs out the current user
@@ -462,11 +463,12 @@ export function OpenSecretProvider({
     }
   }
 
-  async function convertGuestToUserAccount(email: string, password: string) {
+  async function convertGuestToUserAccount(email: string, password: string, name?: string) {
     try {
       await api.convertGuestToEmailAccount(
         email,
         password,
+        name
       );
       await fetchUser();
     } catch (error) {
