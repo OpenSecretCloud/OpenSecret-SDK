@@ -5,6 +5,7 @@ import { getAttestation } from "./getAttestation";
 import { authenticate } from "./attestation";
 import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, ParsedAttestationView } from "./attestationForView";
 import type { AttestationDocument } from "./attestation";
+import type { LoginResponse } from "./api";
 import { PcrConfig } from "./pcr";
 
 export type OpenSecretAuthState = {
@@ -32,10 +33,10 @@ export type OpenSecretContextType = {
 
   /**
    * Creates a new user account
-   * @param name - User's full name
    * @param email - User's email address
    * @param password - User's chosen password
    * @param inviteCode - Invitation code for registration
+   * @param name - Optional user's full name
    * @returns A promise that resolves when account creation is complete
    * @throws {Error} If signup fails
    *
@@ -45,7 +46,56 @@ export type OpenSecretContextType = {
    * - Updates the auth state with new user information
    * - Throws an error if account creation fails
    */
-  signUp: (name: string, email: string, password: string, inviteCode: string) => Promise<void>;
+  signUp: (email: string, password: string, inviteCode: string, name?: string) => Promise<void>;
+
+  /**
+   * Authenticates a guest user with user id and password
+   * @param id - User's unique id
+   * @param password - User's password
+   * @returns A promise that resolves when authentication is complete
+   * @throws {Error} If login fails
+   *
+   * @description
+   * - Calls the login API endpoint
+   * - Stores access_token and refresh_token in localStorage
+   * - Updates the auth state with user information
+   * - Throws an error if authentication fails
+   */
+  signInGuest: (id: string, password: string) => Promise<void>;
+
+  /**
+   * Creates a new guest account, which can be upgraded to a normal account later with email.
+   * @param password - User's chosen password, cannot be changed or recovered without adding email address.
+   * @param inviteCode - Invitation code for registration
+   * @returns A promise that resolves to the login response containing the guest ID
+   * @throws {Error} If signup fails
+   *
+   * @description
+   * - Calls the registration API endpoint
+   * - Stores access_token and refresh_token in localStorage
+   * - Updates the auth state with new user information
+   * - Throws an error if account creation fails
+   */
+  signUpGuest: (password: string, inviteCode: string) => Promise<LoginResponse>;
+
+  /**
+   * Upgrades a guest account to a user account with email and password authentication.
+   * @param email - User's email address
+   * @param password - User's chosen password
+   * @param name - Optional user's full name
+   * @returns A promise that resolves when account creation is complete
+   * @throws {Error} If:
+   * - The current user is not a guest account
+   * - The email address is already in use
+   * - The user is not authenticated
+   *
+   * @description
+   * - Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
+   * - Requires the user to be currently authenticated as a guest
+   * - Updates the auth state with new user information
+   * - Preserves all existing data associated with the guest account
+   */
+  convertGuestToUserAccount: (email: string, password: string, name?: string) => Promise<void>;
 
   /**
    * Logs out the current user
@@ -236,6 +286,14 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   },
   signIn: async () => { },
   signUp: async () => { },
+  signInGuest: async () => { },
+  signUpGuest: async (): Promise<LoginResponse> => ({
+    id: "",
+    email: undefined,
+    access_token: "",
+    refresh_token: ""
+  }),
+  convertGuestToUserAccount: async () => { },
   signOut: async () => { },
   get: api.fetchGet,
   put: api.fetchPut,
@@ -363,16 +421,59 @@ export function OpenSecretProvider({
     }
   }
 
-  async function signUp(name: string, email: string, password: string, inviteCode: string) {
+  async function signUp(email: string, password: string, inviteCode: string, name?: string) {
     try {
       const { access_token, refresh_token } = await api.fetchSignUp(
-        name,
         email,
         password,
-        inviteCode
+        inviteCode,
+        name
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchUser();
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function signInGuest(id: string, password: string) {
+    console.log("Signing in Guest");
+    try {
+      const { access_token, refresh_token } = await api.fetchGuestLogin(id, password);
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchUser();
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function signUpGuest(password: string, inviteCode: string) {
+    try {
+      const { access_token, refresh_token, id } = await api.fetchGuestSignUp(
+        password,
+        inviteCode,
+      );
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchUser();
+      return { access_token, refresh_token, id };
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function convertGuestToUserAccount(email: string, password: string, name?: string) {
+    try {
+      await api.convertGuestToEmailAccount(
+        email,
+        password,
+        name
+      );
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -463,8 +564,11 @@ export function OpenSecretProvider({
   const value: OpenSecretContextType = {
     auth,
     signIn,
+    signInGuest,
     signOut,
     signUp,
+    signUpGuest,
+    convertGuestToUserAccount,
     get: api.fetchGet,
     put: api.fetchPut,
     list: api.fetchList,

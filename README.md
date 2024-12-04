@@ -64,7 +64,10 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 
 #### Authentication Methods
 - `signIn(email: string, password: string): Promise<void>`: Signs in a user with the provided email and password.
-- `signUp(name: string, email: string, password: string, inviteCode: string): Promise<void>`: Signs up a new user with the provided name, email, password, and invite code.
+- `signUp(email: string, password: string, inviteCode: string, name?: string): Promise<void>`: Signs up a new user with the provided email, password, invite code, and optional name.
+- `signInGuest(id: string, password: string): Promise<void>`: Signs in a guest user with their ID and password.
+- `signUpGuest(password: string, inviteCode: string): Promise<LoginResponse>`: Creates a new guest account with just a password and invite code. Returns a response containing the guest's ID, access token, and refresh token.
+- `convertGuestToUserAccount(email: string, password: string, name?: string): Promise<void>`: Converts current guest account to a regular account with email authentication. Optionally sets the user's name.
 - `signOut(): Promise<void>`: Signs out the current user.
 
 #### Key-Value Storage Methods

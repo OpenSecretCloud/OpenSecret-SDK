@@ -10,8 +10,8 @@ export function setApiUrl(url: string) {
 }
 
 export type LoginResponse = {
-  id: number;
-  email: string;
+  id: string;
+  email?: string;
   access_token: string;
   refresh_token: string;
 };
@@ -20,7 +20,7 @@ export type UserResponse = {
   user: {
     id: string;
     name: string | null;
-    email: string;
+    email?: string;
     email_verified: boolean;
     login_method: string;
     created_at: string;
@@ -40,30 +40,56 @@ export type KVListItem = {
   updated_at: number;
 };
 
-export async function fetchLogin(email: string, password: string): Promise<LoginResponse> {
-  const loginData = { email, password };
+export async function fetchLogin(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  return encryptedApiCall<{ email: string; password: string }, LoginResponse>(
+    `${API_URL}/login`,
+    "POST",
+    { email, password }
+  );
+}
 
-  return encryptedApiCall<typeof loginData, LoginResponse>(`${API_URL}/login`, "POST", loginData);
+export async function fetchGuestLogin(
+  id: string,
+  password: string
+): Promise<LoginResponse> {
+  return encryptedApiCall<{ id: string; password: string }, LoginResponse>(
+    `${API_URL}/login`,
+    "POST",
+    { id, password }
+  );
 }
 
 export async function fetchSignUp(
-  name: string,
   email: string,
+  password: string,
+  inviteCode: string,
+  name?: string | null
+): Promise<LoginResponse> {
+  return encryptedApiCall<
+    { email: string; password: string; inviteCode: string; name?: string | null },
+    LoginResponse
+  >(`${API_URL}/register`, "POST", {
+    email,
+    password,
+    inviteCode: inviteCode.toLowerCase(),
+    name
+  });
+}
+
+export async function fetchGuestSignUp(
   password: string,
   inviteCode: string
 ): Promise<LoginResponse> {
-  const signUpData = {
-    name,
-    email,
+  return encryptedApiCall<
+    { password: string; inviteCode: string },
+    LoginResponse
+  >(`${API_URL}/register`, "POST", {
     password,
     inviteCode: inviteCode.toLowerCase()
-  };
-
-  return encryptedApiCall<typeof signUpData, LoginResponse>(
-    `${API_URL}/register`,
-    "POST",
-    signUpData
-  );
+  });
 }
 
 export async function refreshToken(): Promise<RefreshResponse> {
@@ -406,5 +432,24 @@ export async function fetchPublicKey(algorithm: SigningAlgorithm): Promise<Publi
     "GET",
     undefined,
     "Failed to fetch public key"
+  );
+}
+
+export async function convertGuestToEmailAccount(
+  email: string,
+  password: string,
+  name?: string
+): Promise<void> {
+  const conversionData = {
+    email,
+    password,
+    name
+  };
+
+  return authenticatedApiCall<typeof conversionData, void>(
+    `${API_URL}/protected/convert_guest`,
+    "POST",
+    conversionData,
+    "Failed to convert guest account"
   );
 }
