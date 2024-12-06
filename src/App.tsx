@@ -6,6 +6,60 @@ import type { KVListItem } from "./lib";
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
 import { AI } from "./AI";
 
+function TokenGenerator() {
+  const [audience, setAudience] = useState("http://localhost:3001");
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
+  const os = useOpenSecret();
+
+  const generateToken = async () => {
+    try {
+      setError("");
+      const response = await os.generateThirdPartyToken(audience);
+      setToken(response.token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate token");
+    }
+  };
+
+  return (
+    <div>
+      <div className="auth-form">
+        <input
+          type="url"
+          value={audience}
+          onChange={(e) => setAudience(e.target.value)}
+          placeholder="Enter audience URL"
+        />
+        <button onClick={generateToken}>Generate Token</button>
+      </div>
+      {error && (
+        <div className="api-message" style={{ color: "red" }}>
+          {error}
+        </div>
+      )}
+      {token && (
+        <div className="data-display" style={{ marginTop: "1rem" }}>
+          <h4>Generated Token:</h4>
+          <textarea 
+            readOnly 
+            value={token} 
+            rows={4}
+            className="json-input"
+            style={{ width: "100%" }}
+          />
+          <button 
+            onClick={() => navigator.clipboard.writeText(token)}
+            style={{ marginTop: "0.5rem" }}
+          >
+            Copy to Clipboard
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const os = useOpenSecret();
   const [listData, setListData] = useState<KVListItem[]>([]);
@@ -503,6 +557,12 @@ function App() {
         <h2>AI Chat Demo</h2>
         <p>Try out the AI chat functionality with encrypted communication.</p>
         <AI />
+      </section>
+
+      <section>
+        <h2>Third Party Token</h2>
+        <p>Generate JWT tokens for authorized third-party services (URL-based).</p>
+        <TokenGenerator />
       </section>
 
     </main>

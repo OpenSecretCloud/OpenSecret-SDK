@@ -7,7 +7,8 @@ import {
   fetchLogout,
   refreshToken,
   fetchUser,
-  convertGuestToEmailAccount
+  convertGuestToEmailAccount,
+  generateThirdPartyToken
 } from "./api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -148,4 +149,41 @@ test("Guest logout doesn't error", async () => {
   const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, TEST_INVITE_CODE!);
   const { refresh_token } = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
   await fetchLogout(refresh_token);
+});
+
+test("Third party token generation", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Test successful token generation with valid localhost audience
+  const validAudience = "http://localhost:3001";
+  const response = await generateThirdPartyToken(validAudience);
+  expect(response.token).toBeDefined();
+  expect(typeof response.token).toBe("string");
+  expect(response.token.length).toBeGreaterThan(0);
+
+  // Test successful token generation with valid audience
+  const validOpenSecretAudience = "https://billing.opensecret.cloud";
+  const opensSecretResponse = await generateThirdPartyToken(validOpenSecretAudience);
+  expect(opensSecretResponse.token).toBeDefined();
+  expect(typeof opensSecretResponse.token).toBe("string");
+  expect(opensSecretResponse.token.length).toBeGreaterThan(0);
+
+  // Test invalid audience URL
+  try {
+    await generateThirdPartyToken("not-a-url");
+    throw new Error("Should not accept invalid URL");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+
+  // Test not authorized URL
+  try {
+    await generateThirdPartyToken("https://google.com");
+    throw new Error("Should not accept any random URL");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
 });

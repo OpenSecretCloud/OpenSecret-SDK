@@ -5,8 +5,9 @@ import { getAttestation } from "./getAttestation";
 import { authenticate } from "./attestation";
 import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, ParsedAttestationView } from "./attestationForView";
 import type { AttestationDocument } from "./attestation";
-import type { LoginResponse } from "./api";
+import type { LoginResponse, ThirdPartyTokenResponse } from "./api";
 import { PcrConfig } from "./pcr";
+import { generateThirdPartyToken } from "./api";
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -277,6 +278,23 @@ export type OpenSecretContextType = {
    * 3. Parses it for viewing
    */
   getAttestationDocument: () => Promise<ParsedAttestationView>;
+
+  /**
+   * Generates a JWT token for use with authorized third-party services
+   * @param audience - The URL of the authorized service (e.g. "https://billing.opensecret.cloud")
+   * @returns A promise resolving to the token response
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The audience URL is invalid
+   * - The audience URL is not authorized
+   * 
+   * @description
+   * - Generates a signed JWT token for use with specific authorized third-party services
+   * - The audience must be an authorized URL (e.g. billing.opensecret.cloud)
+   * - Requires an active authentication session
+   * - Token can be used to authenticate with the specified service
+   */
+  generateThirdPartyToken: (audience: string) => Promise<ThirdPartyTokenResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -324,7 +342,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
   getAttestationDocument: async () => {
     throw new Error("getAttestationDocument called outside of OpenSecretProvider");
-  }
+  },
+  generateThirdPartyToken: async () => ({ token: "" })
 });
 
 /**
@@ -596,7 +615,8 @@ export function OpenSecretProvider({
     parseAttestationForView,
     awsRootCertDer: AWS_ROOT_CERT_DER,
     expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
-    getAttestationDocument
+    getAttestationDocument,
+    generateThirdPartyToken: api.generateThirdPartyToken
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
