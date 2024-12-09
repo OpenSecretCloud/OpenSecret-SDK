@@ -290,7 +290,7 @@ export type OpenSecretContextType = {
    * 
    * @description
    * - Generates a signed JWT token for use with specific authorized third-party services
-   * - The audience must be an authorized URL (e.g. billing.opensecret.cloud)
+   * - The audience must be an pre-authorized URL registered by the developer (e.g. api.devservice.com)
    * - Requires an active authentication session
    * - Token can be used to authenticate with the specified service
    */
