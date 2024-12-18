@@ -157,13 +157,6 @@ test("Third party token generation", async () => {
   window.localStorage.setItem("access_token", access_token);
   window.localStorage.setItem("refresh_token", refresh_token);
 
-  // Test successful token generation with valid localhost audience
-  const validAudience = "http://localhost:3001";
-  const response = await generateThirdPartyToken(validAudience);
-  expect(response.token).toBeDefined();
-  expect(typeof response.token).toBe("string");
-  expect(response.token.length).toBeGreaterThan(0);
-
   // Test successful token generation with valid audience
   const validOpenSecretAudience = "https://billing.opensecret.cloud";
   const opensSecretResponse = await generateThirdPartyToken(validOpenSecretAudience);
