@@ -83,7 +83,7 @@ test("Guest signup and login flow", async () => {
   expect(userResponse.user.email).toBeNull();
 
   // Generate random email and password for conversion
-  const newEmail = `test${Math.random().toString(36).substring(2)}@example.com`;
+  const newEmail = `tony+test${Math.random().toString(36).substring(2)}@opensecret.cloud`;
   const newPassword = Math.random().toString(36).substring(2);
 
   // Convert guest to email account
@@ -158,7 +158,7 @@ test("Third party token generation", async () => {
   window.localStorage.setItem("refresh_token", refresh_token);
 
   // Test successful token generation with valid audience
-  const validOpenSecretAudience = "https://billing.opensecret.cloud";
+  const validOpenSecretAudience = "https://billing-dev.opensecret.cloud";
   const opensSecretResponse = await generateThirdPartyToken(validOpenSecretAudience);
   expect(opensSecretResponse.token).toBeDefined();
   expect(typeof opensSecretResponse.token).toBe("string");
