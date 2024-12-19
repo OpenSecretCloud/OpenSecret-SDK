@@ -7,7 +7,6 @@ import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, Pa
 import type { AttestationDocument } from "./attestation";
 import type { LoginResponse, ThirdPartyTokenResponse } from "./api";
 import { PcrConfig } from "./pcr";
-import { generateThirdPartyToken } from "./api";
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -575,6 +574,7 @@ export function OpenSecretProvider({
     if (!response.ok) {
       throw new Error("Failed to fetch attestation document");
     }
+
     const data = await response.json();
     const verifiedDocument = await authenticate(data.attestation_document, AWS_ROOT_CERT_DER, nonce);
     return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
