@@ -7,7 +7,8 @@ import {
   fetchLogout,
   refreshToken,
   fetchUser,
-  convertGuestToEmailAccount
+  convertGuestToEmailAccount,
+  generateThirdPartyToken
 } from "./api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -82,7 +83,7 @@ test("Guest signup and login flow", async () => {
   expect(userResponse.user.email).toBeNull();
 
   // Generate random email and password for conversion
-  const newEmail = `test${Math.random().toString(36).substring(2)}@example.com`;
+  const newEmail = `tony+test${Math.random().toString(36).substring(2)}@opensecret.cloud`;
   const newPassword = Math.random().toString(36).substring(2);
 
   // Convert guest to email account
@@ -148,4 +149,34 @@ test("Guest logout doesn't error", async () => {
   const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, TEST_INVITE_CODE!);
   const { refresh_token } = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
   await fetchLogout(refresh_token);
+});
+
+test("Third party token generation", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Test successful token generation with valid audience
+  const validOpenSecretAudience = "https://billing-dev.opensecret.cloud";
+  const opensSecretResponse = await generateThirdPartyToken(validOpenSecretAudience);
+  expect(opensSecretResponse.token).toBeDefined();
+  expect(typeof opensSecretResponse.token).toBe("string");
+  expect(opensSecretResponse.token.length).toBeGreaterThan(0);
+
+  // Test invalid audience URL
+  try {
+    await generateThirdPartyToken("not-a-url");
+    throw new Error("Should not accept invalid URL");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+
+  // Test not authorized URL
+  try {
+    await generateThirdPartyToken("https://google.com");
+    throw new Error("Should not accept any random URL");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
 });

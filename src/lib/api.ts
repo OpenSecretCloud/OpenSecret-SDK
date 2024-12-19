@@ -453,3 +453,20 @@ export async function convertGuestToEmailAccount(
     "Failed to convert guest account"
   );
 }
+
+export type ThirdPartyTokenRequest = {
+  audience: string;
+};
+
+export type ThirdPartyTokenResponse = {
+  token: string;
+};
+
+export async function generateThirdPartyToken(audience: string): Promise<ThirdPartyTokenResponse> {
+  return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
+    `${API_URL}/protected/third_party_token`,
+    "POST",
+    { audience },
+    "Failed to generate third party token"
+  );
+}
