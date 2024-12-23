@@ -9,6 +9,22 @@ export interface Attestation {
   sessionId: string | null;
 }
 
+function generateNaclKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array } {
+  const testNaclPublicKey = import.meta.env.VITE_TEST_NACL_PUBLIC_KEY;
+  const testNaclSecretKey = import.meta.env.VITE_TEST_NACL_SECRET_KEY;
+
+  // If test keys are provided, use them
+  if (testNaclPublicKey && testNaclSecretKey) {
+    return {
+      publicKey: decode(testNaclPublicKey),
+      secretKey: decode(testNaclSecretKey),
+    };
+  }
+
+  // Otherwise, generate a new key pair
+  return nacl.box.keyPair();
+}
+
 export async function getAttestation(forceRefresh?: boolean): Promise<Attestation> {
   // Check if we already have a sessionKey and sessionId in sessionstorage
   const sessionKey = sessionStorage.getItem("sessionKey");
@@ -25,13 +41,15 @@ export async function getAttestation(forceRefresh?: boolean): Promise<Attestatio
     }
 
     // Need to get a new attestation
-    const attestationNonce = window.crypto.randomUUID();
+    // (Will use test nonce if provided)
+    const attestationNonce = import.meta.env.VITE_TEST_ATTESTATION_NONCE || window.crypto.randomUUID();
+
     console.log("Generated attestation nonce:", attestationNonce);
     const document = await verifyAttestation(attestationNonce);
 
     if (document && document.public_key) {
       console.log("Attestation document verification succeeded");
-      const clientKeyPair = nacl.box.keyPair();
+      const clientKeyPair = generateNaclKeyPair();
       console.log("Generated client key pair");
       const serverPublicKey = new Uint8Array(document.public_key);
 
