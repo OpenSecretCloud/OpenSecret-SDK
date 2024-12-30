@@ -144,7 +144,9 @@ To build the library, run the following command:
 bun run build
 ```
 
-To pack the library, run the following command:
+Currently this build step requires `npx` because of [a Bun incompatibility with `vite-plugin-dts`](https://github.com/OpenSecretCloud/OpenSecret-SDK/issues/16).
+
+To pack the library (for publishing) run the following command:
 
 ```bash
 bun run pack
