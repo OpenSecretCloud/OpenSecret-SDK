@@ -389,7 +389,13 @@ export async function handleGoogleCallback(
 }
 
 export type PrivateKeyResponse = {
+  /** 12-word BIP39 mnemonic phrase */
   mnemonic: string;
+};
+
+export type PrivateKeyBytesResponse = {
+  /** 32-byte hex string (64 characters) representing the private key */
+  private_key: string;
 };
 
 export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
@@ -401,34 +407,114 @@ export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
   );
 }
 
+/**
+ * Fetches private key bytes for a given derivation path
+ * @param derivationPath - Optional BIP32 derivation path
+ * 
+ * Supports both absolute and relative paths with hardened derivation:
+ * - Absolute path: "m/44'/0'/0'/0/0"
+ * - Relative path: "0'/0'/0'/0/0"
+ * - Hardened notation: "44'" or "44h"
+ * 
+ * Common paths:
+ * - BIP44 (Legacy): m/44'/0'/0'/0/0
+ * - BIP49 (SegWit): m/49'/0'/0'/0/0
+ * - BIP84 (Native SegWit): m/84'/0'/0'/0/0
+ * - BIP86 (Taproot): m/86'/0'/0'/0/0
+ */
+export async function fetchPrivateKeyBytes(derivationPath?: string): Promise<PrivateKeyBytesResponse> {
+  const url = derivationPath 
+    ? `${API_URL}/protected/private_key_bytes?derivation_path=${encodeURIComponent(derivationPath)}`
+    : `${API_URL}/protected/private_key_bytes`;
+  
+  return authenticatedApiCall<void, PrivateKeyBytesResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to fetch private key bytes"
+  );
+}
+
 export type SignMessageResponse = {
+  /** Signature in hex format */
   signature: string;
+  /** Message hash in hex format */
   message_hash: string;
 };
 
 type SigningAlgorithm = "schnorr" | "ecdsa"
 
-export async function signMessage(message_bytes: Uint8Array, algorithm: SigningAlgorithm): Promise<SignMessageResponse> {
+export type SignMessageRequest = {
+  /** Base64-encoded message to sign */
+  message_base64: string;
+  /** Signing algorithm to use (schnorr or ecdsa) */
+  algorithm: SigningAlgorithm;
+  /** Optional BIP32 derivation path (e.g., "m/44'/0'/0'/0/0") */
+  derivation_path?: string;
+};
+
+/**
+ * Signs a message using the specified algorithm and derivation path
+ * @param message_bytes - Message to sign as Uint8Array
+ * @param algorithm - Signing algorithm (schnorr or ecdsa)
+ * @param derivationPath - Optional BIP32 derivation path
+ * 
+ * Example message preparation:
+ * ```typescript
+ * // From string
+ * const messageBytes = new TextEncoder().encode("Hello, World!");
+ * 
+ * // From hex
+ * const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
+ * ```
+ */
+export async function signMessage(
+  message_bytes: Uint8Array, 
+  algorithm: SigningAlgorithm,
+  derivationPath?: string
+): Promise<SignMessageResponse> {
   const message_base64 = encode(message_bytes);
-  return authenticatedApiCall<{message_base64: string, algorithm: SigningAlgorithm}, SignMessageResponse>(
+  return authenticatedApiCall<SignMessageRequest, SignMessageResponse>(
     `${API_URL}/protected/sign_message`,
     "POST",
     { 
       message_base64,
-      algorithm
+      algorithm,
+      derivation_path: derivationPath
     },
     "Failed to sign message"
   );
 }
 
 export type PublicKeyResponse = {
+  /** Public key in hex format */
   public_key: string;
+  /** The algorithm used (schnorr or ecdsa) */
   algorithm: SigningAlgorithm;
 };
 
-export async function fetchPublicKey(algorithm: SigningAlgorithm): Promise<PublicKeyResponse> {
+/**
+ * Retrieves the public key for a given algorithm and derivation path
+ * @param algorithm - Signing algorithm (schnorr or ecdsa)
+ * @param derivationPath - Optional BIP32 derivation path
+ * 
+ * The derivation path determines which child key pair is used,
+ * allowing different public keys to be generated from the same master key.
+ * This is useful for:
+ * - Separating keys by purpose (e.g., different chains or applications)
+ * - Generating deterministic addresses
+ * - Supporting different address formats (Legacy, SegWit, Native SegWit, Taproot)
+ */
+export async function fetchPublicKey(
+  algorithm: SigningAlgorithm,
+  derivationPath?: string
+): Promise<PublicKeyResponse> {
+  const url = derivationPath 
+    ? `${API_URL}/protected/public_key?algorithm=${algorithm}&derivation_path=${encodeURIComponent(derivationPath)}`
+    : `${API_URL}/protected/public_key?algorithm=${algorithm}`;
+
   return authenticatedApiCall<void, PublicKeyResponse>(
-    `${API_URL}/protected/public_key?algorithm=${algorithm}`,
+    url,
     "GET",
     undefined,
     "Failed to fetch public key"

@@ -188,8 +188,29 @@ export type OpenSecretContextType = {
   getPrivateKey: typeof api.fetchPrivateKey;
 
   /**
+   * Retrieves the private key bytes for a given derivation path
+   * @param derivationPath - Optional BIP32 derivation path (e.g. "m/44'/0'/0'/0/0")
+   * @returns A promise resolving to the private key bytes response
+   * @throws {Error} If:
+   * - The private key bytes cannot be retrieved
+   * - The derivation path is invalid
+   * 
+   * @description
+   * - If no derivation path is provided, returns the master private key bytes
+   * - Supports both absolute (starting with "m/") and relative paths
+   * - Supports hardened derivation using either ' or h notation
+   * - Common paths:
+   *   - BIP44 (Legacy): m/44'/0'/0'/0/0
+   *   - BIP49 (SegWit): m/49'/0'/0'/0/0
+   *   - BIP84 (Native SegWit): m/84'/0'/0'/0/0
+   *   - BIP86 (Taproot): m/86'/0'/0'/0/0
+   */
+  getPrivateKeyBytes: typeof api.fetchPrivateKeyBytes;
+
+  /**
    * Retrieves the user's public key for the specified algorithm
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
+   * @param derivationPath - Optional BIP32 derivation path
    * @returns A promise resolving to the public key response
    * @throws {Error} If the public key cannot be retrieved
    */
@@ -199,6 +220,7 @@ export type OpenSecretContextType = {
    * Signs a message using the specified algorithm
    * @param messageBytes - The message to sign as a Uint8Array
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
+   * @param derivationPath - Optional BIP32 derivation path
    * @returns A promise resolving to the signature response
    * @throws {Error} If the message signing fails
    */
@@ -329,6 +351,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
   handleGoogleCallback: async () => { },
   getPrivateKey: api.fetchPrivateKey,
+  getPrivateKeyBytes: api.fetchPrivateKeyBytes,
   getPublicKey: api.fetchPublicKey,
   signMessage: api.signMessage,
   aiCustomFetch: async () => new Response(),
@@ -605,6 +628,7 @@ export function OpenSecretProvider({
     initiateGoogleAuth,
     handleGoogleCallback,
     getPrivateKey: api.fetchPrivateKey,
+    getPrivateKeyBytes: api.fetchPrivateKeyBytes,
     getPublicKey: api.fetchPublicKey,
     signMessage: api.signMessage,
     aiCustomFetch: aiCustomFetch || (async () => new Response()),

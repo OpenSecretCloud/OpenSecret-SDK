@@ -82,13 +82,40 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 - `generateThirdPartyToken(audience: string): Promise<{ token: string }>`: Generates a JWT token for use with pre-authorized third-party services (e.g. "https://api.devservice.com"). Developers must register this URL in advance (coming soon).
 
 #### Cryptographic Methods
-- `getPrivateKey(): Promise<PrivateKeyResponse>`: Retrieves the user's private key mnemonic phrase. This is used for cryptographic operations and should be kept secure.
+- `getPrivateKey(): Promise<{ mnemonic: string }>`: Retrieves the user's private key mnemonic phrase. This is used for cryptographic operations and should be kept secure.
 
-- `getPublicKey(algorithm: 'schnorr' | 'ecdsa'): Promise<PublicKeyResponse>`: Retrieves the user's public key for the specified signing algorithm. Supports two algorithms:
+- `getPrivateKeyBytes(derivationPath?: string): Promise<{ private_key: string }>`: Retrieves the private key bytes for a given BIP32 derivation path. If no path is provided, returns the master private key bytes.
+  - Supports both absolute (starting with "m/") and relative paths
+  - Supports hardened derivation using either ' or h notation
+    Examples:
+    - Absolute path: "m/44'/0'/0'/0/0"
+    - Relative path: "0'/0'/0'/0/0"
+    - Hardened notation: "44'" or "44h"
+  - Common paths:
+    - BIP44 (Legacy): `m/44'/0'/0'/0/0`
+    - BIP49 (SegWit): `m/49'/0'/0'/0/0`
+    - BIP84 (Native SegWit): `m/84'/0'/0'/0/0`
+    - BIP86 (Taproot): `m/86'/0'/0'/0/0`
+
+- `getPublicKey(algorithm: 'schnorr' | 'ecdsa', derivationPath?: string): Promise<PublicKeyResponse>`: Retrieves the user's public key for the specified signing algorithm and optional derivation path. The derivation path determines which child key pair is used, allowing different public keys to be generated from the same master key. This is useful for:
+  - Separating keys by purpose (e.g., different chains or applications)
+  - Generating deterministic addresses
+  - Supporting different address formats (Legacy, SegWit, Native SegWit, Taproot)
+  
+  Supports two algorithms:
   - `'schnorr'`: For Schnorr signatures
   - `'ecdsa'`: For ECDSA signatures
 
-- `signMessage(messageBytes: Uint8Array, algorithm: 'schnorr' | 'ecdsa'): Promise<SignatureResponse>`: Signs a message using the specified algorithm. The message must be provided as a Uint8Array of bytes. Returns a signature that can be verified using the corresponding public key.
+- `signMessage(messageBytes: Uint8Array, algorithm: 'schnorr' | 'ecdsa', derivationPath?: string): Promise<SignatureResponse>`: Signs a message using the specified algorithm and optional derivation path. The message must be provided as a Uint8Array of bytes. Returns a signature that can be verified using the corresponding public key.
+  
+  Example message preparation:
+  ```typescript
+  // From string
+  const messageBytes = new TextEncoder().encode("Hello, World!");
+  
+  // From hex
+  const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
+  ```
 
 ### AI Integration
 

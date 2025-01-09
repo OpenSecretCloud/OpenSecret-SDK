@@ -71,6 +71,7 @@ function App() {
     message: string;
   } | null>(null);
   const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
+  const [derivationPath, setDerivationPath] = useState<string>("");
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -261,7 +262,7 @@ function App() {
     
     try {
       const messageBytes = new TextEncoder().encode(message);
-      const response = await os.signMessage(messageBytes, algorithm);
+      const response = await os.signMessage(messageBytes, algorithm, derivationPath || undefined);
       
       setLastSignature({
         signature: response.signature,
@@ -489,8 +490,54 @@ function App() {
           }}
           style={{ marginBottom: "1rem" }}
         >
-          Show Private Key
+          Show Private Key Mnemonic
         </button>
+
+        <div>
+          <h3>Private Key Bytes</h3>
+          <p>Get private key bytes for a specific BIP32 derivation path.</p>
+          <details>
+            <summary>Common derivation paths</summary>
+            <ul>
+              <li>BIP44 (Legacy): m/44'/0'/0'/0/0</li>
+              <li>BIP49 (SegWit): m/49'/0'/0'/0/0</li>
+              <li>BIP84 (Native SegWit): m/84'/0'/0'/0/0</li>
+              <li>BIP86 (Taproot): m/86'/0'/0'/0/0</li>
+            </ul>
+            <p><small>
+              Note: Supports both absolute (starting with "m/") and relative paths.
+              Supports hardened derivation using either ' or h notation.
+            </small></p>
+            <p><small>
+              Examples:
+              <ul>
+                <li>Absolute path: "m/44'/0'/0'/0/0"</li>
+                <li>Relative path: "0'/0'/0'/0/0"</li>
+                <li>Hardened notation: "44'" or "44h"</li>
+              </ul>
+            </small></p>
+          </details>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const derivationPath = formData.get("derivationPath") as string;
+            
+            try {
+              const response = await os.getPrivateKeyBytes(derivationPath || undefined);
+              alert(`Private key bytes (hex):\n\n${response.private_key}`);
+            } catch (error) {
+              console.error("Failed to get private key bytes:", error);
+              alert("Failed to get private key bytes: " + (error as Error).message);
+            }
+          }} className="auth-form">
+            <input 
+              type="text" 
+              name="derivationPath" 
+              placeholder="Derivation path (e.g. m/44'/0'/0'/0/0)" 
+            />
+            <button type="submit">Get Private Key Bytes</button>
+          </form>
+        </div>
       </section>
 
       <section>
@@ -511,7 +558,50 @@ function App() {
           </label>
         </div>
 
-        <button onClick={handleGetPublicKey} style={{ marginBottom: "1rem" }}>Get Public Key</button>
+        <div style={{ marginBottom: "1rem" }}>
+          <details style={{ marginBottom: "0.5rem" }}>
+            <summary>About derivation paths</summary>
+            <p><small>
+              The derivation path determines which private key is used for signing.
+              Different paths generate different key pairs from the same master key,
+              useful for separating keys by purpose or application.
+            </small></p>
+            <p><small>Common paths and their uses:</small></p>
+            <ul>
+              <li><small>BIP44 (Legacy): m/44'/0'/0'/0/0 - For legacy Bitcoin addresses</small></li>
+              <li><small>BIP49 (SegWit): m/49'/0'/0'/0/0 - For SegWit addresses</small></li>
+              <li><small>BIP84 (Native SegWit): m/84'/0'/0'/0/0 - For Native SegWit</small></li>
+              <li><small>BIP86 (Taproot): m/86'/0'/0'/0/0 - For Taproot addresses</small></li>
+            </ul>
+            <p><small>
+              Path format examples:
+              <ul>
+                <li>Absolute: "m/44'/0'/0'/0/0"</li>
+                <li>Relative: "0'/0'/0'/0/0"</li>
+                <li>Hardened: "44'" or "44h"</li>
+              </ul>
+              Leave empty to use the master key.
+            </small></p>
+          </details>
+          <input 
+            type="text" 
+            value={derivationPath}
+            onChange={(e) => setDerivationPath(e.target.value)}
+            placeholder="Derivation path (optional)"
+            style={{ marginRight: "0.5rem", padding: "0.5rem" }}
+          />
+          <button onClick={async () => {
+            try {
+              const response = await os.getPublicKey(algorithm, derivationPath || undefined);
+              setPublicKey(response.public_key);
+              setVerificationResult(null);
+            } catch (error) {
+              console.error("Failed to get public key:", error);
+              alert("Failed to get public key: " + (error as Error).message);
+            }
+          }}>Get Public Key</button>
+        </div>
+
         {publicKey && (
           <div className="data-display" style={{ wordBreak: "break-all", marginBottom: "1rem" }}>
             <strong>Public Key:</strong> {publicKey}
@@ -519,6 +609,19 @@ function App() {
         )}
 
         <form onSubmit={handleSignMessage} className="auth-form">
+          <details style={{ marginBottom: "0.5rem" }}>
+            <summary>About message signing</summary>
+            <p><small>
+              Messages are converted to bytes before signing. Examples:
+            </small></p>
+            <pre style={{ fontSize: "small" }}>
+{`// From string
+const messageBytes = new TextEncoder().encode("Hello, World!");
+
+// From hex
+const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));`}
+            </pre>
+          </details>
           <textarea 
             name="message" 
             placeholder="Enter message to sign" 
