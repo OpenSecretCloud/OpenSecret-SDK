@@ -7,7 +7,7 @@ import {
   fetchLogout,
   refreshToken,
   fetchUser,
-  convertGuestToEmailAccount,
+  // convertGuestToEmailAccount,
   generateThirdPartyToken
 } from "./api";
 

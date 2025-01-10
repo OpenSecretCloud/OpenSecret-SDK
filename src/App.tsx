@@ -244,17 +244,6 @@ function App() {
     }
   };
 
-  const handleGetPublicKey = async () => {
-    try {
-      const response = await os.getPublicKey(algorithm);
-      setPublicKey(response.public_key);
-      setVerificationResult(null); // Reset verification when changing keys
-    } catch (error) {
-      console.error("Failed to get public key:", error);
-      alert("Failed to get public key: " + (error as Error).message);
-    }
-  };
-
   const handleSignMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
