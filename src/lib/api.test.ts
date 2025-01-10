@@ -82,6 +82,7 @@ test("Guest signup and login flow", async () => {
   expect(userResponse.user.id).toBe(guestSignup.id);
   expect(userResponse.user.email).toBeNull();
 
+  /* Commenting out guest conversion tests due to email sending
   // Generate random email and password for conversion
   const newEmail = `tony+test${Math.random().toString(36).substring(2)}@opensecret.cloud`;
   const newPassword = Math.random().toString(36).substring(2);
@@ -123,6 +124,7 @@ test("Guest signup and login flow", async () => {
   } catch (error: any) {
     expect(error.message).toBe("Invalid email, password, or login method");
   }
+  */
 });
 
 test("Guest refresh token works", async () => {
