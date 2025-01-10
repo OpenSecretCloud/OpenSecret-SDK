@@ -179,6 +179,12 @@ To pack the library (for publishing) run the following command:
 bun run pack
 ```
 
+To deploy: 
+
+```bash
+NPM_CONFIG_TOKEN=$NPM_CONFIG_TOKEN bun publish --access public
+```
+
 ## License
 
 This project is licensed under the MIT License.
