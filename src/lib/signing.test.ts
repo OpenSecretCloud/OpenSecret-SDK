@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fetchLogin, signMessage, fetchPublicKey } from "./api";
+import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from "./api";
 import { bytesToHex } from "./test/utils";
 import { sha256 } from '@noble/hashes/sha256';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
@@ -87,6 +87,123 @@ test("Sign message with ECDSA returns valid signature", async () => {
     public_key
   );
   expect(isValid).toBe(true);
+});
+
+test("Private key endpoints with derivation paths", async () => {
+  await setupTestUser();
+
+  // Test getting private key bytes without derivation path
+  const masterKeyResponse = await fetchPrivateKeyBytes();
+  expect(masterKeyResponse.private_key).toBeDefined();
+  expect(typeof masterKeyResponse.private_key).toBe("string");
+  expect(masterKeyResponse.private_key.length).toBe(64); // 32 bytes in hex = 64 chars
+  expect(masterKeyResponse.private_key).toMatch(/^[0-9a-f]{64}$/i); // Validate hex format
+
+  // Test getting private key bytes with valid derivation paths
+  const validPaths = [
+    "m/44'/0'/0'/0/0",    // BIP44
+    "m/84'/0'/0'/0/0",    // BIP84
+    "m/49'/0'/0'/0/0",    // BIP49
+    "m/44'/1'/0'/0/0",    // BIP44 testnet
+    "m/44'/60'/0'/0/0",   // BIP44 Ethereum
+    "44'/0'/0'/0/0",      // Relative path
+    "0/0",                // Simple relative path
+    "1/2",                // Relative path with different indices
+    "m",                  // Master key
+    ""                    // Empty path (master key)
+  ];
+
+  for (const path of validPaths) {
+    const response = await fetchPrivateKeyBytes(path);
+    expect(response.private_key).toBeDefined();
+    expect(typeof response.private_key).toBe("string");
+    expect(response.private_key.length).toBe(64);
+    expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
+
+    // Get corresponding public key
+    const pubKeyResponse = await fetchPublicKey("schnorr", path);
+    expect(pubKeyResponse.public_key).toBeDefined();
+
+    // Sign and verify with derived key
+    const message = new TextEncoder().encode("Test message");
+    const signResponse = await signMessage(message, "schnorr", path);
+    const isValid = schnorr.verify(
+      signResponse.signature,
+      signResponse.message_hash,
+      pubKeyResponse.public_key
+    );
+    expect(isValid).toBe(true);
+  }
+
+  // Test invalid derivation path
+  try {
+    await fetchPrivateKeyBytes("invalid/path");
+    throw new Error("Should not accept invalid derivation path");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+
+  // Test signing with derivation path
+  const message = new TextEncoder().encode("Hello, World!");
+  const signResponse = await signMessage(message, "schnorr", "m/44'/0'/0'/0/0");
+  expect(signResponse.signature).toBeDefined();
+  expect(signResponse.message_hash).toBeDefined();
+
+  // Test getting public key with derivation path
+  const pubKeyResponse = await fetchPublicKey("schnorr", "m/44'/0'/0'/0/0");
+  expect(pubKeyResponse.public_key).toBeDefined();
+  expect(pubKeyResponse.algorithm).toBe("schnorr");
+
+  // Test ECDSA signing with derivation path
+  const ecdsaSignResponse = await signMessage(message, "ecdsa", "m/44'/0'/0'/0/0");
+  expect(ecdsaSignResponse.signature).toBeDefined();
+  expect(ecdsaSignResponse.message_hash).toBeDefined();
+
+  // Test getting ECDSA public key with derivation path
+  const ecdsaPubKeyResponse = await fetchPublicKey("ecdsa", "m/44'/0'/0'/0/0");
+  expect(ecdsaPubKeyResponse.public_key).toBeDefined();
+  expect(ecdsaPubKeyResponse.algorithm).toBe("ecdsa");
+
+  // Verify that different derivation paths produce different keys
+  const path1Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/0");
+  const path2Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/1");
+  expect(path1Response.private_key).not.toBe(path2Response.private_key);
+
+  // Test hardened derivation with different coin types
+  const coinTypes = ["0'", "1'", "60'", "145'"]; // Bitcoin, Testnet, Ethereum, Bitcoin Cash
+  const hardenedKeys = await Promise.all(
+    coinTypes.map(coin => fetchPrivateKeyBytes(`m/44'/${coin}/0'/0/0`))
+  );
+  
+  // Verify all hardened keys are different
+  const uniqueKeys = new Set(hardenedKeys.map(k => k.private_key));
+  expect(uniqueKeys.size).toBe(coinTypes.length);
+
+  // Test relative path edge cases
+  const relativePathTests = [
+    "0",           // Single level
+    "0/0/0",      // Multiple levels
+    "2147483647", // Max index
+    "0'/1/2",     // Mix of hardened and non-hardened
+    "0h/1/2"      // Alternative hardened notation
+  ];
+
+  for (const path of relativePathTests) {
+    const response = await fetchPrivateKeyBytes(path);
+    expect(response.private_key).toBeDefined();
+    expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
+
+    // Verify corresponding public key works
+    const pubKey = await fetchPublicKey("schnorr", path);
+    const msg = new TextEncoder().encode("Test relative path");
+    const sig = await signMessage(msg, "schnorr", path);
+    const isValid = schnorr.verify(
+      sig.signature,
+      sig.message_hash,
+      pubKey.public_key
+    );
+    expect(isValid).toBe(true);
+  }
 });
 
 test("Sign message fails without authentication", async () => {
