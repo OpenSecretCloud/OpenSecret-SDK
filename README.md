@@ -2,6 +2,8 @@
 
 This is a React SDK for the [OpenSecret](https://opensecret.cloud) platform.
 
+🚧 We're currently in preview mode, please contact us at team@opensecret.cloud for the preview URL and getting started info 🚧
+
 ## Installation
 
 ```bash
@@ -17,7 +19,7 @@ import { OpenSecretProvider } from "@opensecret/react";
 
 function App() {
   return (
-    <OpenSecretProvider apiUrl="https://preview-enclave.opensecret.cloud">
+    <OpenSecretProvider apiUrl="{URL}">
       <App />
     </OpenSecretProvider>
   );
@@ -53,7 +55,7 @@ function App() {
 The `OpenSecretProvider` component is the main entry point for the SDK. It requires a single prop, `apiUrl`, which should be set to the URL of your OpenSecret backend.
 
 ```tsx
-<OpenSecretProvider apiUrl="https://preview-enclave.opensecret.cloud">
+<OpenSecretProvider apiUrl="{URL}">
   <App />
 </OpenSecretProvider>
 ```
