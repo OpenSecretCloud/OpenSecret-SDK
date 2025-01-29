@@ -25,7 +25,7 @@ function generateNaclKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array }
   return nacl.box.keyPair();
 }
 
-export async function getAttestation(forceRefresh?: boolean): Promise<Attestation> {
+export async function getAttestation(forceRefresh?: boolean, apiUrl?: string): Promise<Attestation> {
   // Check if we already have a sessionKey and sessionId in sessionstorage
   const sessionKey = sessionStorage.getItem("sessionKey");
   const sessionId = sessionStorage.getItem("sessionId");
@@ -42,10 +42,10 @@ export async function getAttestation(forceRefresh?: boolean): Promise<Attestatio
 
     // Need to get a new attestation
     // (Will use test nonce if provided)
-    const attestationNonce = import.meta.env.VITE_TEST_ATTESTATION_NONCE || window.crypto.randomUUID();
+    const attestationNonce = window.crypto.randomUUID();
 
     console.log("Generated attestation nonce:", attestationNonce);
-    const document = await verifyAttestation(attestationNonce);
+    const document = await verifyAttestation(attestationNonce, apiUrl);
 
     if (document && document.public_key) {
       console.log("Attestation document verification succeeded");

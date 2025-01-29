@@ -3,8 +3,6 @@ import { authenticatedApiCall, encryptedApiCall } from "./encryptedApi";
 
 let API_URL = "http://localhost:3000";
 
-console.log("API_URL:", API_URL);
-
 export function setApiUrl(url: string) {
   API_URL = url;
 }
