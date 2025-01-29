@@ -257,19 +257,22 @@ async function fakeAuthenticate(
   return zodParsed;
 }
 
-export async function verifyAttestation(nonce: string): Promise<AttestationDocument> {
+export async function verifyAttestation(nonce: string, apiUrl?: string): Promise<AttestationDocument> {
   try {
     const attestationDocumentBase64 = await fetchAttestationDocument(nonce);
 
-        // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
-        const API_URL = import.meta.env.VITE_OPEN_SECRET_API_URL;
-        if (API_URL === "http://127.0.0.1:3000" || API_URL === "http://localhost:3000" || API_URL === "http://0.0.0.0:3000" ) {
-          console.log("DEV MODE: Using fake attestation document");
-          const fakeDocument = await fakeAuthenticate(attestationDocumentBase64);
-          return fakeDocument as AttestationDocument;
-        }
+    // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
+    if (apiUrl && (
+      apiUrl === "http://127.0.0.1:3000" ||
+      apiUrl === "http://localhost:3000" ||
+      apiUrl === "http://0.0.0.0:3000"
+    )) {
+      console.log("DEV MODE: Using fake attestation document");
+      const fakeDocument = await fakeAuthenticate(attestationDocumentBase64);
+      return fakeDocument as AttestationDocument;
+    }
 
-        // The real thing!
+    // The real thing!
     const verifiedDocument = await authenticate(attestationDocumentBase64, awsRootCertDer, nonce);
     return verifiedDocument;
   } catch (error) {
