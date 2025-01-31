@@ -31,6 +31,31 @@ beforeEach(async () => {
   window.localStorage.clear();
 });
 
+async function ensureAuthenticated() {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) {
+    window.localStorage.clear();
+    await setupTestUser();
+    await new Promise(resolve => setTimeout(resolve, 200)); // Wait for token to be properly set
+  }
+}
+
+async function retryWithAuth<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await ensureAuthenticated();
+      return await fn();
+    } catch (error: any) {
+      if (error.message === "No access token available" && i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait longer between retries
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Max retries reached");
+}
+
 test("Sign message with Schnorr returns valid signature", async () => {
   await setupTestUser();
 
@@ -108,16 +133,14 @@ test("Sign message with ECDSA returns valid signature", async () => {
 });
 
 test("Private key endpoints with derivation paths", async () => {
-  // Clear any existing tokens and set up fresh ones
-  window.localStorage.clear();
-  await setupTestUser();
+  await ensureAuthenticated();
 
   // Test getting private key bytes without derivation path
-  const masterKeyResponse = await fetchPrivateKeyBytes();
+  const masterKeyResponse = await retryWithAuth(() => fetchPrivateKeyBytes());
   expect(masterKeyResponse.private_key).toBeDefined();
   expect(typeof masterKeyResponse.private_key).toBe("string");
-  expect(masterKeyResponse.private_key.length).toBe(64); // 32 bytes in hex = 64 chars
-  expect(masterKeyResponse.private_key).toMatch(/^[0-9a-f]{64}$/i); // Validate hex format
+  expect(masterKeyResponse.private_key.length).toBe(64);
+  expect(masterKeyResponse.private_key).toMatch(/^[0-9a-f]{64}$/i);
 
   // Test getting private key bytes with valid derivation paths
   const validPaths = [
@@ -134,70 +157,75 @@ test("Private key endpoints with derivation paths", async () => {
   ];
 
   for (const path of validPaths) {
-    const response = await fetchPrivateKeyBytes(path);
-    expect(response.private_key).toBeDefined();
-    expect(typeof response.private_key).toBe("string");
-    expect(response.private_key.length).toBe(64);
-    expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
+    await retryWithAuth(async () => {
+      const response = await fetchPrivateKeyBytes(path);
+      expect(response.private_key).toBeDefined();
+      expect(typeof response.private_key).toBe("string");
+      expect(response.private_key.length).toBe(64);
+      expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
 
-    // Get corresponding public key
-    const pubKeyResponse = await fetchPublicKey("schnorr", path);
-    expect(pubKeyResponse.public_key).toBeDefined();
+      // Get corresponding public key
+      const pubKeyResponse = await fetchPublicKey("schnorr", path);
+      expect(pubKeyResponse.public_key).toBeDefined();
 
-    // Sign and verify with derived key
-    const message = new TextEncoder().encode("Test message");
-    const signResponse = await signMessage(message, "schnorr", path);
-    const isValid = schnorr.verify(
-      signResponse.signature,
-      signResponse.message_hash,
-      pubKeyResponse.public_key
-    );
-    expect(isValid).toBe(true);
+      // Sign and verify with derived key
+      const message = new TextEncoder().encode("Test message");
+      const signResponse = await signMessage(message, "schnorr", path);
+      const isValid = schnorr.verify(
+        signResponse.signature,
+        signResponse.message_hash,
+        pubKeyResponse.public_key
+      );
+      expect(isValid).toBe(true);
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+    });
   }
 
   // Test invalid derivation path
-  try {
-    await fetchPrivateKeyBytes("invalid/path");
-    throw new Error("Should not accept invalid derivation path");
-  } catch (error: any) {
-    expect(error.message).toBe("Bad Request");
-  }
+  await expect(fetchPrivateKeyBytes("invalid/path"))
+    .rejects
+    .toThrow("Bad Request");
 
   // Test signing with derivation path
-  const message = new TextEncoder().encode("Hello, World!");
-  const signResponse = await signMessage(message, "schnorr", "m/44'/0'/0'/0/0");
-  expect(signResponse.signature).toBeDefined();
-  expect(signResponse.message_hash).toBeDefined();
+  await retryWithAuth(async () => {
+    const message = new TextEncoder().encode("Hello, World!");
+    const signResponse = await signMessage(message, "schnorr", "m/44'/0'/0'/0/0");
+    expect(signResponse.signature).toBeDefined();
+    expect(signResponse.message_hash).toBeDefined();
 
-  // Test getting public key with derivation path
-  const pubKeyResponse = await fetchPublicKey("schnorr", "m/44'/0'/0'/0/0");
-  expect(pubKeyResponse.public_key).toBeDefined();
-  expect(pubKeyResponse.algorithm).toBe("schnorr");
+    // Test getting public key with derivation path
+    const pubKeyResponse = await fetchPublicKey("schnorr", "m/44'/0'/0'/0/0");
+    expect(pubKeyResponse.public_key).toBeDefined();
+    expect(pubKeyResponse.algorithm).toBe("schnorr");
 
-  // Test ECDSA signing with derivation path
-  const ecdsaSignResponse = await signMessage(message, "ecdsa", "m/44'/0'/0'/0/0");
-  expect(ecdsaSignResponse.signature).toBeDefined();
-  expect(ecdsaSignResponse.message_hash).toBeDefined();
+    // Test ECDSA signing with derivation path
+    const ecdsaSignResponse = await signMessage(message, "ecdsa", "m/44'/0'/0'/0/0");
+    expect(ecdsaSignResponse.signature).toBeDefined();
+    expect(ecdsaSignResponse.message_hash).toBeDefined();
 
-  // Test getting ECDSA public key with derivation path
-  const ecdsaPubKeyResponse = await fetchPublicKey("ecdsa", "m/44'/0'/0'/0/0");
-  expect(ecdsaPubKeyResponse.public_key).toBeDefined();
-  expect(ecdsaPubKeyResponse.algorithm).toBe("ecdsa");
+    // Test getting ECDSA public key with derivation path
+    const ecdsaPubKeyResponse = await fetchPublicKey("ecdsa", "m/44'/0'/0'/0/0");
+    expect(ecdsaPubKeyResponse.public_key).toBeDefined();
+    expect(ecdsaPubKeyResponse.algorithm).toBe("ecdsa");
+  });
 
   // Verify that different derivation paths produce different keys
-  const path1Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/0");
-  const path2Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/1");
-  expect(path1Response.private_key).not.toBe(path2Response.private_key);
+  await retryWithAuth(async () => {
+    const path1Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/0");
+    const path2Response = await fetchPrivateKeyBytes("m/44'/0'/0'/0/1");
+    expect(path1Response.private_key).not.toBe(path2Response.private_key);
+  });
 
   // Test hardened derivation with different coin types
-  const coinTypes = ["0'", "1'", "60'", "145'"]; // Bitcoin, Testnet, Ethereum, Bitcoin Cash
-  const hardenedKeys = await Promise.all(
-    coinTypes.map(coin => fetchPrivateKeyBytes(`m/44'/${coin}/0'/0/0`))
-  );
-  
-  // Verify all hardened keys are different
-  const uniqueKeys = new Set(hardenedKeys.map(k => k.private_key));
-  expect(uniqueKeys.size).toBe(coinTypes.length);
+  await retryWithAuth(async () => {
+    const coinTypes = ["0'", "1'", "60'", "145'"];
+    const hardenedKeys = await Promise.all(
+      coinTypes.map(coin => fetchPrivateKeyBytes(`m/44'/${coin}/0'/0/0`))
+    );
+    const uniqueKeys = new Set(hardenedKeys.map(k => k.private_key));
+    expect(uniqueKeys.size).toBe(coinTypes.length);
+  });
 
   // Test relative path edge cases
   const relativePathTests = [
@@ -209,20 +237,22 @@ test("Private key endpoints with derivation paths", async () => {
   ];
 
   for (const path of relativePathTests) {
-    const response = await fetchPrivateKeyBytes(path);
-    expect(response.private_key).toBeDefined();
-    expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
+    await retryWithAuth(async () => {
+      const response = await fetchPrivateKeyBytes(path);
+      expect(response.private_key).toBeDefined();
+      expect(response.private_key).toMatch(/^[0-9a-f]{64}$/i);
 
-    // Verify corresponding public key works
-    const pubKey = await fetchPublicKey("schnorr", path);
-    const msg = new TextEncoder().encode("Test relative path");
-    const sig = await signMessage(msg, "schnorr", path);
-    const isValid = schnorr.verify(
-      sig.signature,
-      sig.message_hash,
-      pubKey.public_key
-    );
-    expect(isValid).toBe(true);
+      // Verify corresponding public key works
+      const pubKey = await fetchPublicKey("schnorr", path);
+      const msg = new TextEncoder().encode("Test relative path");
+      const sig = await signMessage(msg, "schnorr", path);
+      const isValid = schnorr.verify(
+        sig.signature,
+        sig.message_hash,
+        pubKey.public_key
+      );
+      expect(isValid).toBe(true);
+    });
   }
 });
 
