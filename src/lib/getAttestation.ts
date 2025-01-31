@@ -45,7 +45,7 @@ export async function getAttestation(forceRefresh?: boolean, apiUrl?: string): P
     const attestationNonce = window.crypto.randomUUID();
 
     console.log("Generated attestation nonce:", attestationNonce);
-    const document = await verifyAttestation(attestationNonce, apiUrl);
+    const document = await verifyAttestation(attestationNonce);
 
     if (document && document.public_key) {
       console.log("Attestation document verification succeeded");
