@@ -1,10 +1,14 @@
 import { encode } from "@stablelib/base64";
 import { authenticatedApiCall, encryptedApiCall } from "./encryptedApi";
 
-let API_URL = "http://localhost:3000";
+let apiUrl = "";
 
 export function setApiUrl(url: string) {
-  API_URL = url;
+  apiUrl = url;
+}
+
+export function getApiUrl(): string {
+  return apiUrl;
 }
 
 export type LoginResponse = {
@@ -43,7 +47,7 @@ export async function fetchLogin(
   password: string
 ): Promise<LoginResponse> {
   return encryptedApiCall<{ email: string; password: string }, LoginResponse>(
-    `${API_URL}/login`,
+    `${apiUrl}/login`,
     "POST",
     { email, password }
   );
@@ -54,7 +58,7 @@ export async function fetchGuestLogin(
   password: string
 ): Promise<LoginResponse> {
   return encryptedApiCall<{ id: string; password: string }, LoginResponse>(
-    `${API_URL}/login`,
+    `${apiUrl}/login`,
     "POST",
     { id, password }
   );
@@ -69,7 +73,7 @@ export async function fetchSignUp(
   return encryptedApiCall<
     { email: string; password: string; inviteCode: string; name?: string | null },
     LoginResponse
-  >(`${API_URL}/register`, "POST", {
+  >(`${apiUrl}/register`, "POST", {
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
@@ -84,7 +88,7 @@ export async function fetchGuestSignUp(
   return encryptedApiCall<
     { password: string; inviteCode: string },
     LoginResponse
-  >(`${API_URL}/register`, "POST", {
+  >(`${apiUrl}/register`, "POST", {
     password,
     inviteCode: inviteCode.toLowerCase()
   });
@@ -98,7 +102,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
   try {
     const response = await encryptedApiCall<typeof refreshData, RefreshResponse>(
-      `${API_URL}/refresh`,
+      `${apiUrl}/refresh`,
       "POST",
       refreshData,
       undefined,
@@ -116,7 +120,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
 export async function fetchUser(): Promise<UserResponse> {
   return authenticatedApiCall<void, UserResponse>(
-    `${API_URL}/protected/user`,
+    `${apiUrl}/protected/user`,
     "GET",
     undefined,
     "Failed to fetch user"
@@ -125,7 +129,7 @@ export async function fetchUser(): Promise<UserResponse> {
 
 export async function fetchPut(key: string, value: string): Promise<string> {
   return authenticatedApiCall<string, string>(
-    `${API_URL}/protected/kv/${key}`,
+    `${apiUrl}/protected/kv/${key}`,
     "PUT",
     value,
     "Failed to put key-value pair"
@@ -134,7 +138,7 @@ export async function fetchPut(key: string, value: string): Promise<string> {
 
 export async function fetchDelete(key: string): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${API_URL}/protected/kv/${key}`,
+    `${apiUrl}/protected/kv/${key}`,
     "DELETE",
     undefined,
     "Failed to delete key-value pair"
@@ -144,7 +148,7 @@ export async function fetchDelete(key: string): Promise<void> {
 export async function fetchGet(key: string): Promise<string | undefined> {
   try {
     const data = await authenticatedApiCall<void, string>(
-      `${API_URL}/protected/kv/${key}`,
+      `${apiUrl}/protected/kv/${key}`,
       "GET",
       undefined,
       "Failed to get key-value pair"
@@ -158,7 +162,7 @@ export async function fetchGet(key: string): Promise<string | undefined> {
 
 export async function fetchList(): Promise<KVListItem[]> {
   return authenticatedApiCall<void, KVListItem[]>(
-    `${API_URL}/protected/kv`,
+    `${apiUrl}/protected/kv`,
     "GET",
     undefined,
     "Failed to list key-value pairs"
@@ -167,12 +171,12 @@ export async function fetchList(): Promise<KVListItem[]> {
 
 export async function fetchLogout(refresh_token: string): Promise<void> {
   const refreshData = { refresh_token };
-  return encryptedApiCall<typeof refreshData, void>(`${API_URL}/logout`, "POST", refreshData);
+  return encryptedApiCall<typeof refreshData, void>(`${apiUrl}/logout`, "POST", refreshData);
 }
 
 export async function verifyEmail(code: string): Promise<void> {
   return encryptedApiCall<void, void>(
-    `${API_URL}/verify-email/${code}`,
+    `${apiUrl}/verify-email/${code}`,
     "GET",
     undefined,
     undefined,
@@ -182,7 +186,7 @@ export async function verifyEmail(code: string): Promise<void> {
 
 export async function requestNewVerificationCode(): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${API_URL}/protected/request_verification`,
+    `${apiUrl}/protected/request_verification`,
     "POST",
     undefined,
     "Failed to request new verification code"
@@ -190,7 +194,7 @@ export async function requestNewVerificationCode(): Promise<void> {
 }
 
 export async function fetchAttestationDocument(nonce: string): Promise<string> {
-  const response = await fetch(`${API_URL}/attestation/${nonce}`);
+  const response = await fetch(`${apiUrl}/attestation/${nonce}`);
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
@@ -202,7 +206,7 @@ export async function keyExchange(
   clientPublicKey: string,
   nonce: string
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
-  const response = await fetch(`${API_URL}/key_exchange`, {
+  const response = await fetch(`${apiUrl}/key_exchange`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -220,7 +224,7 @@ export async function keyExchange(
 export async function requestPasswordReset(email: string, hashedSecret: string): Promise<void> {
   const resetData = { email, hashed_secret: hashedSecret };
   return encryptedApiCall<typeof resetData, void>(
-    `${API_URL}/password-reset/request`,
+    `${apiUrl}/password-reset/request`,
     "POST",
     resetData,
     undefined,
@@ -241,7 +245,7 @@ export async function confirmPasswordReset(
     new_password: newPassword
   };
   return encryptedApiCall<typeof confirmData, void>(
-    `${API_URL}/password-reset/confirm`,
+    `${apiUrl}/password-reset/confirm`,
     "POST",
     confirmData,
     undefined,
@@ -255,7 +259,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
     new_password: newPassword
   };
   return authenticatedApiCall<typeof changePasswordData, void>(
-    `${API_URL}/protected/change_password`,
+    `${apiUrl}/protected/change_password`,
     "POST",
     changePasswordData,
     "Failed to change password"
@@ -265,7 +269,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function initiateGitHubAuth(inviteCode?: string): Promise<GithubAuthResponse> {
   try {
     return await encryptedApiCall<{ invite_code?: string }, GithubAuthResponse>(
-      `${API_URL}/auth/github`,
+      `${apiUrl}/auth/github`,
       "POST",
       inviteCode ? { invite_code: inviteCode } : {},
       undefined,
@@ -289,7 +293,7 @@ export async function handleGitHubCallback(
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     return await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${API_URL}/auth/github/callback`,
+      `${apiUrl}/auth/github/callback`,
       "POST",
       callbackData,
       undefined,
@@ -332,7 +336,7 @@ export type GoogleAuthResponse = {
 export async function initiateGoogleAuth(inviteCode?: string): Promise<GoogleAuthResponse> {
   try {
     return await encryptedApiCall<{ invite_code?: string }, GoogleAuthResponse>(
-      `${API_URL}/auth/google`,
+      `${apiUrl}/auth/google`,
       "POST",
       inviteCode ? { invite_code: inviteCode } : {},
       undefined,
@@ -356,7 +360,7 @@ export async function handleGoogleCallback(
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     return await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${API_URL}/auth/google/callback`,
+      `${apiUrl}/auth/google/callback`,
       "POST",
       callbackData,
       undefined,
@@ -398,7 +402,7 @@ export type PrivateKeyBytesResponse = {
 
 export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
   return authenticatedApiCall<void, PrivateKeyResponse>(
-    `${API_URL}/protected/private_key`,
+    `${apiUrl}/protected/private_key`,
     "GET",
     undefined,
     "Failed to fetch private key"
@@ -422,8 +426,8 @@ export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
  */
 export async function fetchPrivateKeyBytes(derivationPath?: string): Promise<PrivateKeyBytesResponse> {
   const url = derivationPath 
-    ? `${API_URL}/protected/private_key_bytes?derivation_path=${encodeURIComponent(derivationPath)}`
-    : `${API_URL}/protected/private_key_bytes`;
+    ? `${apiUrl}/protected/private_key_bytes?derivation_path=${encodeURIComponent(derivationPath)}`
+    : `${apiUrl}/protected/private_key_bytes`;
   
   return authenticatedApiCall<void, PrivateKeyBytesResponse>(
     url,
@@ -473,7 +477,7 @@ export async function signMessage(
 ): Promise<SignMessageResponse> {
   const message_base64 = encode(message_bytes);
   return authenticatedApiCall<SignMessageRequest, SignMessageResponse>(
-    `${API_URL}/protected/sign_message`,
+    `${apiUrl}/protected/sign_message`,
     "POST",
     { 
       message_base64,
@@ -508,8 +512,8 @@ export async function fetchPublicKey(
   derivationPath?: string
 ): Promise<PublicKeyResponse> {
   const url = derivationPath 
-    ? `${API_URL}/protected/public_key?algorithm=${algorithm}&derivation_path=${encodeURIComponent(derivationPath)}`
-    : `${API_URL}/protected/public_key?algorithm=${algorithm}`;
+    ? `${apiUrl}/protected/public_key?algorithm=${algorithm}&derivation_path=${encodeURIComponent(derivationPath)}`
+    : `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
 
   return authenticatedApiCall<void, PublicKeyResponse>(
     url,
@@ -531,7 +535,7 @@ export async function convertGuestToEmailAccount(
   };
 
   return authenticatedApiCall<typeof conversionData, void>(
-    `${API_URL}/protected/convert_guest`,
+    `${apiUrl}/protected/convert_guest`,
     "POST",
     conversionData,
     "Failed to convert guest account"
@@ -548,7 +552,7 @@ export type ThirdPartyTokenResponse = {
 
 export async function generateThirdPartyToken(audience: string): Promise<ThirdPartyTokenResponse> {
   return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
-    `${API_URL}/protected/third_party_token`,
+    `${apiUrl}/protected/third_party_token`,
     "POST",
     { audience },
     "Failed to generate third party token"

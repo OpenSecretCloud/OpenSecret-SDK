@@ -2,7 +2,7 @@ import { X509Certificate, X509ChainBuilder } from "@peculiar/x509";
 import { decode, encode } from "@stablelib/base64";
 import * as cbor from "cbor2";
 import { z } from "zod";
-import { fetchAttestationDocument } from "./api";
+import { fetchAttestationDocument, getApiUrl } from "./api";
 import awsRootCertDer from "../assets/aws_root.der";
 
 // Assert that the root cert is not empty
@@ -257,9 +257,12 @@ async function fakeAuthenticate(
   return zodParsed;
 }
 
-export async function verifyAttestation(nonce: string, apiUrl?: string): Promise<AttestationDocument> {
+export async function verifyAttestation(nonce: string): Promise<AttestationDocument> {
   try {
     const attestationDocumentBase64 = await fetchAttestationDocument(nonce);
+
+    // Get the API URL from the API layer where it's already set
+    const apiUrl = getApiUrl();
 
     // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
     if (apiUrl && (
