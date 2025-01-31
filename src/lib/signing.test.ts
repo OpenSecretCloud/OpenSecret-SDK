@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test, beforeEach } from "bun:test";
 import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from "./api";
 import { bytesToHex } from "./test/utils";
 import { sha256 } from '@noble/hashes/sha256';
@@ -8,10 +8,28 @@ const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 
 async function setupTestUser() {
+  // Clear any existing tokens first
+  window.localStorage.clear();
+  
+  // Get fresh tokens
   const { access_token, refresh_token } = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   window.localStorage.setItem("access_token", access_token);
   window.localStorage.setItem("refresh_token", refresh_token);
+  
+  // Add a small delay to ensure tokens are properly set
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Verify tokens were set correctly
+  const storedToken = window.localStorage.getItem("access_token");
+  if (!storedToken) {
+    throw new Error("Failed to set access token");
+  }
 }
+
+// Clean up before each test
+beforeEach(async () => {
+  window.localStorage.clear();
+});
 
 test("Sign message with Schnorr returns valid signature", async () => {
   await setupTestUser();
@@ -90,6 +108,8 @@ test("Sign message with ECDSA returns valid signature", async () => {
 });
 
 test("Private key endpoints with derivation paths", async () => {
+  // Clear any existing tokens and set up fresh ones
+  window.localStorage.clear();
   await setupTestUser();
 
   // Test getting private key bytes without derivation path
