@@ -14,9 +14,8 @@ import {
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 const TEST_NAME = process.env.VITE_TEST_NAME;
-const TEST_INVITE_CODE = process.env.VITE_TEST_INVITE_CODE;
 
-if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_NAME || !TEST_INVITE_CODE) {
+if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_NAME) {
   throw new Error("Test credentials must be set in .env.local");
 }
 
@@ -27,7 +26,7 @@ async function tryEmailLogin() {
   } catch (error) {
     console.warn(error);
     console.log("Login failed, attempting signup");
-    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, TEST_INVITE_CODE!, TEST_NAME!);
+    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", TEST_NAME!);
     return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   }
 }
@@ -62,7 +61,7 @@ test("Logout doesn't error", async () => {
 
 test("Guest signup and login flow", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, TEST_INVITE_CODE!);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
   expect(guestSignup.id).toBeDefined();
   expect(guestSignup.email).toBeNull();
   expect(guestSignup.access_token).toBeDefined();
@@ -129,7 +128,7 @@ test("Guest signup and login flow", async () => {
 
 test("Guest refresh token works", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, TEST_INVITE_CODE!);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
   const guestLogin = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
 
   // Set tokens for authenticated requests
@@ -148,7 +147,7 @@ test("Guest refresh token works", async () => {
 
 test("Guest logout doesn't error", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, TEST_INVITE_CODE!);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
   const { refresh_token } = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
   await fetchLogout(refresh_token);
 });
