@@ -6,7 +6,8 @@ import { validatePcr0Hash, type Pcr0ValidationResult, type PcrConfig } from "./p
 
 export const AWS_ROOT_CERT_DER = awsRootCertDer;
 
-export const EXPECTED_ROOT_CERT_HASH = "641a0321a3e244efe456463195d606317ed7cdcc3c1756e09893f3c68f79bb5b";
+export const EXPECTED_ROOT_CERT_HASH =
+  "641a0321a3e244efe456463195d606317ed7cdcc3c1756e09893f3c68f79bb5b";
 
 export type ParsedAttestationView = {
   moduleId: string;
@@ -59,7 +60,7 @@ export async function parseAttestationForView(
     .filter((pcr) => !pcr.value.match(/^0+$/));
 
   // Find PCR0 and validate it
-  const pcr0 = pcrs.find(pcr => pcr.id === 0);
+  const pcr0 = pcrs.find((pcr) => pcr.id === 0);
   const validatedPcr0Hash = pcr0 ? validatePcr0Hash(pcr0.value, pcrConfig) : null;
 
   // Parse certificates - cabundle first, then leaf certificate

@@ -10,4 +10,4 @@ if (!apiUrl) {
 // Set the API URL before tests run
 setApiUrl(apiUrl);
 
-console.log("API URL set to:", apiUrl); 
+console.log("API URL set to:", apiUrl);

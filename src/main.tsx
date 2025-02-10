@@ -6,7 +6,10 @@ import { OpenSecretProvider } from "./lib";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <OpenSecretProvider apiUrl={import.meta.env.VITE_OPEN_SECRET_API_URL}>
+    <OpenSecretProvider
+      apiUrl={import.meta.env.VITE_OPEN_SECRET_API_URL}
+      clientId={import.meta.env.VITE_CLIENT_ID}
+    >
       <App />
     </OpenSecretProvider>
   </StrictMode>

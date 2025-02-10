@@ -12,14 +12,19 @@ npm install @opensecret/react
 
 ## Usage
 
-Wrap your application in the `OpenSecretProvider` component and provide the URL of your OpenSecret backend:
+Wrap your application in the `OpenSecretProvider` component and provide:
+1. The URL of your OpenSecret backend
+2. Your project's client ID (a UUID that identifies your project)
 
 ```tsx
 import { OpenSecretProvider } from "@opensecret/react";
 
 function App() {
   return (
-    <OpenSecretProvider apiUrl="{URL}">
+    <OpenSecretProvider 
+      apiUrl="{URL}"
+      clientId="{PROJECT_UUID}"
+    >
       <App />
     </OpenSecretProvider>
   );
@@ -52,10 +57,15 @@ function App() {
 
 ### `OpenSecretProvider`
 
-The `OpenSecretProvider` component is the main entry point for the SDK. It requires a single prop, `apiUrl`, which should be set to the URL of your OpenSecret backend.
+The `OpenSecretProvider` component is the main entry point for the SDK. It requires two props:
+- `apiUrl`: The URL of your OpenSecret backend
+- `clientId`: A UUID that identifies your project/tenant. This is used to scope user accounts and data to your specific project.
 
 ```tsx
-<OpenSecretProvider apiUrl="{URL}">
+<OpenSecretProvider 
+  apiUrl="{URL}"
+  clientId="{PROJECT_UUID}"
+>
   <App />
 </OpenSecretProvider>
 ```
