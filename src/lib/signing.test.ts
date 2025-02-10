@@ -1,28 +1,33 @@
 import { expect, test, beforeEach } from "bun:test";
 import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from "./api";
 import { bytesToHex } from "./test/utils";
-import { sha256 } from '@noble/hashes/sha256';
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import { sha256 } from "@noble/hashes/sha256";
+import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
+const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
+
+if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID) {
+  throw new Error("Test credentials must be set in .env.local");
+}
 
 async function setupTestUser() {
-  // Clear any existing tokens first
-  window.localStorage.clear();
-  
-  // Get fresh tokens
-  const { access_token, refresh_token } = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
-  window.localStorage.setItem("access_token", access_token);
-  window.localStorage.setItem("refresh_token", refresh_token);
-  
-  // Add a small delay to ensure tokens are properly set
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Verify tokens were set correctly
-  const storedToken = window.localStorage.getItem("access_token");
-  if (!storedToken) {
-    throw new Error("Failed to set access token");
+  try {
+    // Try to login
+    const { access_token } = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    window.localStorage.setItem("access_token", access_token);
+
+    // Add a small delay to ensure tokens are properly set
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify tokens were set correctly
+    const storedToken = window.localStorage.getItem("access_token");
+    if (!storedToken) {
+      throw new Error("Failed to set access token");
+    }
+  } catch (error: any) {
+    throw new Error("Failed to set up test user: " + error.message);
   }
 }
 
@@ -36,7 +41,7 @@ async function ensureAuthenticated() {
   if (!token) {
     window.localStorage.clear();
     await setupTestUser();
-    await new Promise(resolve => setTimeout(resolve, 200)); // Wait for token to be properly set
+    await new Promise((resolve) => setTimeout(resolve, 200)); // Wait for token to be properly set
   }
 }
 
@@ -47,7 +52,7 @@ async function retryWithAuth<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T
       return await fn();
     } catch (error: any) {
       if (error.message === "No access token available" && i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait longer between retries
+        await new Promise((resolve) => setTimeout(resolve, 500)); // Wait longer between retries
         continue;
       }
       throw error;
@@ -68,7 +73,7 @@ test("Sign message with Schnorr returns valid signature", async () => {
   // Then sign a message
   const message = new TextEncoder().encode("Hello, World!");
   const response = await signMessage(message, "schnorr");
-  
+
   // Verify we got all fields
   expect(response.signature).toBeDefined();
   expect(response.message_hash).toBeDefined();
@@ -86,11 +91,7 @@ test("Sign message with Schnorr returns valid signature", async () => {
   expect(bytesToHex(localHash)).toBe(response.message_hash.toLowerCase());
 
   // Verify the signature
-  const isValid = schnorr.verify(
-    response.signature,
-    response.message_hash,
-    public_key
-  );
+  const isValid = schnorr.verify(response.signature, response.message_hash, public_key);
   expect(isValid).toBe(true);
 });
 
@@ -106,7 +107,7 @@ test("Sign message with ECDSA returns valid signature", async () => {
   // Then sign a message
   const message = new TextEncoder().encode("Hello, World!");
   const response = await signMessage(message, "ecdsa");
-  
+
   // Verify we got all fields
   expect(response.signature).toBeDefined();
   expect(response.message_hash).toBeDefined();
@@ -124,11 +125,7 @@ test("Sign message with ECDSA returns valid signature", async () => {
   expect(bytesToHex(localHash)).toBe(response.message_hash.toLowerCase());
 
   // Verify the signature using noble/curves
-  const isValid = secp256k1.verify(
-    response.signature,
-    response.message_hash,
-    public_key
-  );
+  const isValid = secp256k1.verify(response.signature, response.message_hash, public_key);
   expect(isValid).toBe(true);
 });
 
@@ -144,16 +141,16 @@ test("Private key endpoints with derivation paths", async () => {
 
   // Test getting private key bytes with valid derivation paths
   const validPaths = [
-    "m/44'/0'/0'/0/0",    // BIP44
-    "m/84'/0'/0'/0/0",    // BIP84
-    "m/49'/0'/0'/0/0",    // BIP49
-    "m/44'/1'/0'/0/0",    // BIP44 testnet
-    "m/44'/60'/0'/0/0",   // BIP44 Ethereum
-    "44'/0'/0'/0/0",      // Relative path
-    "0/0",                // Simple relative path
-    "1/2",                // Relative path with different indices
-    "m",                  // Master key
-    ""                    // Empty path (master key)
+    "m/44'/0'/0'/0/0", // BIP44
+    "m/84'/0'/0'/0/0", // BIP84
+    "m/49'/0'/0'/0/0", // BIP49
+    "m/44'/1'/0'/0/0", // BIP44 testnet
+    "m/44'/60'/0'/0/0", // BIP44 Ethereum
+    "44'/0'/0'/0/0", // Relative path
+    "0/0", // Simple relative path
+    "1/2", // Relative path with different indices
+    "m", // Master key
+    "" // Empty path (master key)
   ];
 
   for (const path of validPaths) {
@@ -178,14 +175,12 @@ test("Private key endpoints with derivation paths", async () => {
       );
       expect(isValid).toBe(true);
 
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     });
   }
 
   // Test invalid derivation path
-  await expect(fetchPrivateKeyBytes("invalid/path"))
-    .rejects
-    .toThrow("Bad Request");
+  await expect(fetchPrivateKeyBytes("invalid/path")).rejects.toThrow("Bad Request");
 
   // Test signing with derivation path
   await retryWithAuth(async () => {
@@ -221,19 +216,19 @@ test("Private key endpoints with derivation paths", async () => {
   await retryWithAuth(async () => {
     const coinTypes = ["0'", "1'", "60'", "145'"];
     const hardenedKeys = await Promise.all(
-      coinTypes.map(coin => fetchPrivateKeyBytes(`m/44'/${coin}/0'/0/0`))
+      coinTypes.map((coin) => fetchPrivateKeyBytes(`m/44'/${coin}/0'/0/0`))
     );
-    const uniqueKeys = new Set(hardenedKeys.map(k => k.private_key));
+    const uniqueKeys = new Set(hardenedKeys.map((k) => k.private_key));
     expect(uniqueKeys.size).toBe(coinTypes.length);
   });
 
   // Test relative path edge cases
   const relativePathTests = [
-    "0",           // Single level
-    "0/0/0",      // Multiple levels
+    "0", // Single level
+    "0/0/0", // Multiple levels
     "2147483647", // Max index
-    "0'/1/2",     // Mix of hardened and non-hardened
-    "0h/1/2"      // Alternative hardened notation
+    "0'/1/2", // Mix of hardened and non-hardened
+    "0h/1/2" // Alternative hardened notation
   ];
 
   for (const path of relativePathTests) {
@@ -246,22 +241,18 @@ test("Private key endpoints with derivation paths", async () => {
       const pubKey = await fetchPublicKey("schnorr", path);
       const msg = new TextEncoder().encode("Test relative path");
       const sig = await signMessage(msg, "schnorr", path);
-      const isValid = schnorr.verify(
-        sig.signature,
-        sig.message_hash,
-        pubKey.public_key
-      );
+      const isValid = schnorr.verify(sig.signature, sig.message_hash, pubKey.public_key);
       expect(isValid).toBe(true);
     });
   }
 });
 
 test("Sign message fails without authentication", async () => {
-  window.localStorage.removeItem('access_token');
-  window.localStorage.removeItem('refresh_token');
+  window.localStorage.removeItem("access_token");
+  window.localStorage.removeItem("refresh_token");
 
   const message = new TextEncoder().encode("Hello, World!");
-  await expect(signMessage(message, "schnorr")).rejects.toThrow('No access token available');
+  await expect(signMessage(message, "schnorr")).rejects.toThrow("No access token available");
 });
 
 test("Different messages produce different signatures and hashes", async () => {
@@ -269,39 +260,30 @@ test("Different messages produce different signatures and hashes", async () => {
 
   // Get the public key once
   const { public_key } = await fetchPublicKey("schnorr");
-  
+
   const message1 = new TextEncoder().encode("Hello, World!");
   const message2 = new TextEncoder().encode("Different message");
-  
+
   const response1 = await signMessage(message1, "schnorr");
   const response2 = await signMessage(message2, "schnorr");
-  
+
   // Different signatures and hashes
   expect(response1.signature).not.toBe(response2.signature);
   expect(response1.message_hash).not.toBe(response2.message_hash);
 
   // Verify both signatures
-  const isValid1 = schnorr.verify(
-    response1.signature,
-    response1.message_hash,
-    public_key
-  );
+  const isValid1 = schnorr.verify(response1.signature, response1.message_hash, public_key);
   expect(isValid1).toBe(true);
 
-  const isValid2 = schnorr.verify(
-    response2.signature,
-    response2.message_hash,
-    public_key
-  );
+  const isValid2 = schnorr.verify(response2.signature, response2.message_hash, public_key);
   expect(isValid2).toBe(true);
 });
 
 test("Public key remains constant", async () => {
   await setupTestUser();
-  
+
   const response1 = await fetchPublicKey("schnorr");
   const response2 = await fetchPublicKey("schnorr");
-  
+
   expect(response1.public_key).toBe(response2.public_key);
 });
-
