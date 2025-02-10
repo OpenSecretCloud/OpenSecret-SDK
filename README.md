@@ -12,14 +12,19 @@ npm install @opensecret/react
 
 ## Usage
 
-Wrap your application in the `OpenSecretProvider` component and provide the URL of your OpenSecret backend:
+Wrap your application in the `OpenSecretProvider` component and provide:
+1. The URL of your OpenSecret backend
+2. Your project's client ID (a UUID that identifies your project)
 
 ```tsx
 import { OpenSecretProvider } from "@opensecret/react";
 
 function App() {
   return (
-    <OpenSecretProvider apiUrl="{URL}">
+    <OpenSecretProvider 
+      apiUrl="{URL}"
+      clientId="{PROJECT_UUID}"
+    >
       <App />
     </OpenSecretProvider>
   );
@@ -52,10 +57,15 @@ function App() {
 
 ### `OpenSecretProvider`
 
-The `OpenSecretProvider` component is the main entry point for the SDK. It requires a single prop, `apiUrl`, which should be set to the URL of your OpenSecret backend.
+The `OpenSecretProvider` component is the main entry point for the SDK. It requires two props:
+- `apiUrl`: The URL of your OpenSecret backend
+- `clientId`: A UUID that identifies your project/tenant. This is used to scope user accounts and data to your specific project.
 
 ```tsx
-<OpenSecretProvider apiUrl="{URL}">
+<OpenSecretProvider 
+  apiUrl="{URL}"
+  clientId="{PROJECT_UUID}"
+>
   <App />
 </OpenSecretProvider>
 ```
@@ -67,9 +77,9 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 #### Authentication Methods
 - `signIn(email: string, password: string): Promise<void>`: Signs in a user with the provided email and password.
 - `signUp(email: string, password: string, inviteCode: string, name?: string): Promise<void>`: Signs up a new user with the provided email, password, invite code, and optional name.
-- `signInGuest(id: string, password: string): Promise<void>`: Signs in a guest user with their ID and password.
-- `signUpGuest(password: string, inviteCode: string): Promise<LoginResponse>`: Creates a new guest account with just a password and invite code. Returns a response containing the guest's ID, access token, and refresh token.
-- `convertGuestToUserAccount(email: string, password: string, name?: string): Promise<void>`: Converts current guest account to a regular account with email authentication. Optionally sets the user's name.
+- `signInGuest(id: string, password: string): Promise<void>`: Signs in a guest user with their ID and password. Guest accounts are scoped to the project specified by `clientId`.
+- `signUpGuest(password: string, inviteCode: string): Promise<LoginResponse>`: Creates a new guest account with just a password and invite code. Returns a response containing the guest's ID, access token, and refresh token. The guest account will be associated with the project specified by `clientId`.
+- `convertGuestToUserAccount(email: string, password: string, name?: string): Promise<void>`: Converts current guest account to a regular account with email authentication. Optionally sets the user's name. The account remains associated with the same project it was created under.
 - `signOut(): Promise<void>`: Signs out the current user.
 
 #### Key-Value Storage Methods

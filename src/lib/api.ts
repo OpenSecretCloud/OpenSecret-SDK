@@ -44,23 +44,25 @@ export type KVListItem = {
 
 export async function fetchLogin(
   email: string,
-  password: string
+  password: string,
+  client_id: string
 ): Promise<LoginResponse> {
-  return encryptedApiCall<{ email: string; password: string }, LoginResponse>(
+  return encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
-    { email, password }
+    { email, password, client_id }
   );
 }
 
 export async function fetchGuestLogin(
   id: string,
-  password: string
+  password: string,
+  client_id: string
 ): Promise<LoginResponse> {
-  return encryptedApiCall<{ id: string; password: string }, LoginResponse>(
+  return encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
-    { id, password }
+    { id, password, client_id }
   );
 }
 
@@ -68,29 +70,39 @@ export async function fetchSignUp(
   email: string,
   password: string,
   inviteCode: string,
+  client_id: string,
   name?: string | null
 ): Promise<LoginResponse> {
   return encryptedApiCall<
-    { email: string; password: string; inviteCode: string; name?: string | null },
+    {
+      email: string;
+      password: string;
+      inviteCode: string;
+      name?: string | null;
+      client_id: string;
+    },
     LoginResponse
   >(`${apiUrl}/register`, "POST", {
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
+    client_id,
     name
   });
 }
 
 export async function fetchGuestSignUp(
   password: string,
-  inviteCode: string
+  inviteCode: string,
+  client_id: string
 ): Promise<LoginResponse> {
   return encryptedApiCall<
-    { password: string; inviteCode: string },
+    { password: string; inviteCode: string; client_id: string },
     LoginResponse
   >(`${apiUrl}/register`, "POST", {
     password,
-    inviteCode: inviteCode.toLowerCase()
+    inviteCode: inviteCode.toLowerCase(),
+    client_id
   });
 }
 
@@ -221,8 +233,16 @@ export async function keyExchange(
   return response.json();
 }
 
-export async function requestPasswordReset(email: string, hashedSecret: string): Promise<void> {
-  const resetData = { email, hashed_secret: hashedSecret };
+export async function requestPasswordReset(
+  email: string,
+  hashedSecret: string,
+  client_id: string
+): Promise<void> {
+  const resetData = {
+    email,
+    hashed_secret: hashedSecret,
+    client_id
+  };
   return encryptedApiCall<typeof resetData, void>(
     `${apiUrl}/password-reset/request`,
     "POST",
@@ -236,13 +256,15 @@ export async function confirmPasswordReset(
   email: string,
   alphanumericCode: string,
   plaintextSecret: string,
-  newPassword: string
+  newPassword: string,
+  client_id: string
 ): Promise<void> {
   const confirmData = {
     email,
     alphanumeric_code: alphanumericCode,
     plaintext_secret: plaintextSecret,
-    new_password: newPassword
+    new_password: newPassword,
+    client_id
   };
   return encryptedApiCall<typeof confirmData, void>(
     `${apiUrl}/password-reset/confirm`,
@@ -266,12 +288,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
   );
 }
 
-export async function initiateGitHubAuth(inviteCode?: string): Promise<GithubAuthResponse> {
+export async function initiateGitHubAuth(
+  client_id: string,
+  inviteCode?: string
+): Promise<GithubAuthResponse> {
   try {
-    return await encryptedApiCall<{ invite_code?: string }, GithubAuthResponse>(
+    return await encryptedApiCall<{ invite_code?: string; client_id: string }, GithubAuthResponse>(
       `${apiUrl}/auth/github`,
       "POST",
-      inviteCode ? { invite_code: inviteCode } : {},
+      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
       undefined,
       "Failed to initiate GitHub auth"
     );
@@ -333,12 +358,15 @@ export type GoogleAuthResponse = {
   csrf_token: string;
 };
 
-export async function initiateGoogleAuth(inviteCode?: string): Promise<GoogleAuthResponse> {
+export async function initiateGoogleAuth(
+  client_id: string,
+  inviteCode?: string
+): Promise<GoogleAuthResponse> {
   try {
-    return await encryptedApiCall<{ invite_code?: string }, GoogleAuthResponse>(
+    return await encryptedApiCall<{ invite_code?: string; client_id: string }, GoogleAuthResponse>(
       `${apiUrl}/auth/google`,
       "POST",
-      inviteCode ? { invite_code: inviteCode } : {},
+      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
       undefined,
       "Failed to initiate Google auth"
     );
@@ -412,23 +440,25 @@ export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
 /**
  * Fetches private key bytes for a given derivation path
  * @param derivationPath - Optional BIP32 derivation path
- * 
+ *
  * Supports both absolute and relative paths with hardened derivation:
  * - Absolute path: "m/44'/0'/0'/0/0"
  * - Relative path: "0'/0'/0'/0/0"
  * - Hardened notation: "44'" or "44h"
- * 
+ *
  * Common paths:
  * - BIP44 (Legacy): m/44'/0'/0'/0/0
  * - BIP49 (SegWit): m/49'/0'/0'/0/0
  * - BIP84 (Native SegWit): m/84'/0'/0'/0/0
  * - BIP86 (Taproot): m/86'/0'/0'/0/0
  */
-export async function fetchPrivateKeyBytes(derivationPath?: string): Promise<PrivateKeyBytesResponse> {
-  const url = derivationPath 
+export async function fetchPrivateKeyBytes(
+  derivationPath?: string
+): Promise<PrivateKeyBytesResponse> {
+  const url = derivationPath
     ? `${apiUrl}/protected/private_key_bytes?derivation_path=${encodeURIComponent(derivationPath)}`
     : `${apiUrl}/protected/private_key_bytes`;
-  
+
   return authenticatedApiCall<void, PrivateKeyBytesResponse>(
     url,
     "GET",
@@ -444,7 +474,7 @@ export type SignMessageResponse = {
   message_hash: string;
 };
 
-type SigningAlgorithm = "schnorr" | "ecdsa"
+type SigningAlgorithm = "schnorr" | "ecdsa";
 
 export type SignMessageRequest = {
   /** Base64-encoded message to sign */
@@ -460,18 +490,18 @@ export type SignMessageRequest = {
  * @param message_bytes - Message to sign as Uint8Array
  * @param algorithm - Signing algorithm (schnorr or ecdsa)
  * @param derivationPath - Optional BIP32 derivation path
- * 
+ *
  * Example message preparation:
  * ```typescript
  * // From string
  * const messageBytes = new TextEncoder().encode("Hello, World!");
- * 
+ *
  * // From hex
  * const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
  * ```
  */
 export async function signMessage(
-  message_bytes: Uint8Array, 
+  message_bytes: Uint8Array,
   algorithm: SigningAlgorithm,
   derivationPath?: string
 ): Promise<SignMessageResponse> {
@@ -479,7 +509,7 @@ export async function signMessage(
   return authenticatedApiCall<SignMessageRequest, SignMessageResponse>(
     `${apiUrl}/protected/sign_message`,
     "POST",
-    { 
+    {
       message_base64,
       algorithm,
       derivation_path: derivationPath
@@ -499,7 +529,7 @@ export type PublicKeyResponse = {
  * Retrieves the public key for a given algorithm and derivation path
  * @param algorithm - Signing algorithm (schnorr or ecdsa)
  * @param derivationPath - Optional BIP32 derivation path
- * 
+ *
  * The derivation path determines which child key pair is used,
  * allowing different public keys to be generated from the same master key.
  * This is useful for:
@@ -511,7 +541,7 @@ export async function fetchPublicKey(
   algorithm: SigningAlgorithm,
   derivationPath?: string
 ): Promise<PublicKeyResponse> {
-  const url = derivationPath 
+  const url = derivationPath
     ? `${apiUrl}/protected/public_key?algorithm=${algorithm}&derivation_path=${encodeURIComponent(derivationPath)}`
     : `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
 
@@ -526,12 +556,12 @@ export async function fetchPublicKey(
 export async function convertGuestToEmailAccount(
   email: string,
   password: string,
-  name?: string
+  name?: string | null
 ): Promise<void> {
   const conversionData = {
     email,
     password,
-    name
+    ...(name !== undefined && { name })
   };
 
   return authenticatedApiCall<typeof conversionData, void>(

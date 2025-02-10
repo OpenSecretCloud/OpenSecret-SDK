@@ -3,7 +3,7 @@ import { useState } from "react";
 import React from "react";
 import { useOpenSecret } from "./lib";
 import type { KVListItem } from "./lib";
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { AI } from "./AI";
 
 function TokenGenerator() {
@@ -41,14 +41,14 @@ function TokenGenerator() {
       {token && (
         <div className="data-display" style={{ marginTop: "1rem" }}>
           <h4>Generated Token:</h4>
-          <textarea 
-            readOnly 
-            value={token} 
+          <textarea
+            readOnly
+            value={token}
             rows={4}
             className="json-input"
             style={{ width: "100%" }}
           />
-          <button 
+          <button
             onClick={() => navigator.clipboard.writeText(token)}
             style={{ marginTop: "0.5rem" }}
           >
@@ -248,11 +248,11 @@ function App() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const message = formData.get("message") as string;
-    
+
     try {
       const messageBytes = new TextEncoder().encode(message);
       const response = await os.signMessage(messageBytes, algorithm, derivationPath || undefined);
-      
+
       setLastSignature({
         signature: response.signature,
         messageHash: response.message_hash,
@@ -274,17 +274,9 @@ function App() {
     try {
       let isValid: boolean;
       if (algorithm === "schnorr") {
-        isValid = schnorr.verify(
-          lastSignature.signature,
-          lastSignature.messageHash,
-          publicKey
-        );
+        isValid = schnorr.verify(lastSignature.signature, lastSignature.messageHash, publicKey);
       } else {
-        isValid = secp256k1.verify(
-          lastSignature.signature,
-          lastSignature.messageHash,
-          publicKey
-        );
+        isValid = secp256k1.verify(lastSignature.signature, lastSignature.messageHash, publicKey);
       }
       setVerificationResult(isValid);
     } catch (error) {
@@ -385,25 +377,26 @@ function App() {
         </form>
       </section>
 
-      {(os.auth.user?.user && (os.auth.user.user.email === undefined || os.auth.user.user.email === null)) && (
-        <section>
-          <h2>Convert Guest Account</h2>
-          <p>Convert your guest account to a regular account with email.</p>
-          <form onSubmit={handleGuestConversion} className="auth-form">
-            <input type="email" name="email" placeholder="Email" autoComplete="email" required />
-            <input type="text" name="name" placeholder="Name (optional)" autoComplete="name" />
-            <input
-              type="password"
-              name="password"
-              placeholder="New Password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
-            <button type="submit">Convert to Email Account</button>
-          </form>
-        </section>
-      )}
+      {os.auth.user?.user &&
+        (os.auth.user.user.email === undefined || os.auth.user.user.email === null) && (
+          <section>
+            <h2>Convert Guest Account</h2>
+            <p>Convert your guest account to a regular account with email.</p>
+            <form onSubmit={handleGuestConversion} className="auth-form">
+              <input type="email" name="email" placeholder="Email" autoComplete="email" required />
+              <input type="text" name="name" placeholder="Name (optional)" autoComplete="name" />
+              <input
+                type="password"
+                name="password"
+                placeholder="New Password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+              <button type="submit">Convert to Email Account</button>
+            </form>
+          </section>
+        )}
 
       <section>
         <h2>Get Data</h2>
@@ -466,12 +459,14 @@ function App() {
       <section>
         <h2>Private Key</h2>
         <p>Retrieve your private key mnemonic phrase. Keep this secure and never share it.</p>
-        
-        <button 
+
+        <button
           onClick={async () => {
             try {
               const response = await os.getPrivateKey();
-              alert(`Your mnemonic phrase is:\n\n${response.mnemonic}\n\nPlease store this securely and never share it with anyone.`);
+              alert(
+                `Your mnemonic phrase is:\n\n${response.mnemonic}\n\nPlease store this securely and never share it with anyone.`
+              );
             } catch (error) {
               console.error("Failed to get private key:", error);
               alert("Failed to get private key: " + (error as Error).message);
@@ -493,36 +488,43 @@ function App() {
               <li>BIP84 (Native SegWit): m/84'/0'/0'/0/0</li>
               <li>BIP86 (Taproot): m/86'/0'/0'/0/0</li>
             </ul>
-            <p><small>
-              Note: Supports both absolute (starting with "m/") and relative paths.
-              Supports hardened derivation using either ' or h notation.
-            </small></p>
-            <p><small>
-              Examples:
-              <ul>
-                <li>Absolute path: "m/44'/0'/0'/0/0"</li>
-                <li>Relative path: "0'/0'/0'/0/0"</li>
-                <li>Hardened notation: "44'" or "44h"</li>
-              </ul>
-            </small></p>
+            <p>
+              <small>
+                Note: Supports both absolute (starting with "m/") and relative paths. Supports
+                hardened derivation using either ' or h notation.
+              </small>
+            </p>
+            <p>
+              <small>
+                Examples:
+                <ul>
+                  <li>Absolute path: "m/44'/0'/0'/0/0"</li>
+                  <li>Relative path: "0'/0'/0'/0/0"</li>
+                  <li>Hardened notation: "44'" or "44h"</li>
+                </ul>
+              </small>
+            </p>
           </details>
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const derivationPath = formData.get("derivationPath") as string;
-            
-            try {
-              const response = await os.getPrivateKeyBytes(derivationPath || undefined);
-              alert(`Private key bytes (hex):\n\n${response.private_key}`);
-            } catch (error) {
-              console.error("Failed to get private key bytes:", error);
-              alert("Failed to get private key bytes: " + (error as Error).message);
-            }
-          }} className="auth-form">
-            <input 
-              type="text" 
-              name="derivationPath" 
-              placeholder="Derivation path (e.g. m/44'/0'/0'/0/0)" 
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const derivationPath = formData.get("derivationPath") as string;
+
+              try {
+                const response = await os.getPrivateKeyBytes(derivationPath || undefined);
+                alert(`Private key bytes (hex):\n\n${response.private_key}`);
+              } catch (error) {
+                console.error("Failed to get private key bytes:", error);
+                alert("Failed to get private key bytes: " + (error as Error).message);
+              }
+            }}
+            className="auth-form"
+          >
+            <input
+              type="text"
+              name="derivationPath"
+              placeholder="Derivation path (e.g. m/44'/0'/0'/0/0)"
             />
             <button type="submit">Get Private Key Bytes</button>
           </form>
@@ -532,12 +534,12 @@ function App() {
       <section>
         <h2>Cryptographic Signing</h2>
         <p>Demonstrate message signing and verification using your key pair.</p>
-        
+
         <div style={{ marginBottom: "1rem" }}>
           <label>
             Algorithm:
-            <select 
-              value={algorithm} 
+            <select
+              value={algorithm}
               onChange={(e) => setAlgorithm(e.target.value as "schnorr" | "ecdsa")}
               style={{ marginLeft: "0.5rem" }}
             >
@@ -550,45 +552,63 @@ function App() {
         <div style={{ marginBottom: "1rem" }}>
           <details style={{ marginBottom: "0.5rem" }}>
             <summary>About derivation paths</summary>
-            <p><small>
-              The derivation path determines which private key is used for signing.
-              Different paths generate different key pairs from the same master key,
-              useful for separating keys by purpose or application.
-            </small></p>
-            <p><small>Common paths and their uses:</small></p>
+            <p>
+              <small>
+                The derivation path determines which private key is used for signing. Different
+                paths generate different key pairs from the same master key, useful for separating
+                keys by purpose or application.
+              </small>
+            </p>
+            <p>
+              <small>Common paths and their uses:</small>
+            </p>
             <ul>
-              <li><small>BIP44 (Legacy): m/44'/0'/0'/0/0 - For legacy Bitcoin addresses</small></li>
-              <li><small>BIP49 (SegWit): m/49'/0'/0'/0/0 - For SegWit addresses</small></li>
-              <li><small>BIP84 (Native SegWit): m/84'/0'/0'/0/0 - For Native SegWit</small></li>
-              <li><small>BIP86 (Taproot): m/86'/0'/0'/0/0 - For Taproot addresses</small></li>
+              <li>
+                <small>BIP44 (Legacy): m/44'/0'/0'/0/0 - For legacy Bitcoin addresses</small>
+              </li>
+              <li>
+                <small>BIP49 (SegWit): m/49'/0'/0'/0/0 - For SegWit addresses</small>
+              </li>
+              <li>
+                <small>BIP84 (Native SegWit): m/84'/0'/0'/0/0 - For Native SegWit</small>
+              </li>
+              <li>
+                <small>BIP86 (Taproot): m/86'/0'/0'/0/0 - For Taproot addresses</small>
+              </li>
             </ul>
-            <p><small>
-              Path format examples:
-              <ul>
-                <li>Absolute: "m/44'/0'/0'/0/0"</li>
-                <li>Relative: "0'/0'/0'/0/0"</li>
-                <li>Hardened: "44'" or "44h"</li>
-              </ul>
-              Leave empty to use the master key.
-            </small></p>
+            <p>
+              <small>
+                Path format examples:
+                <ul>
+                  <li>Absolute: "m/44'/0'/0'/0/0"</li>
+                  <li>Relative: "0'/0'/0'/0/0"</li>
+                  <li>Hardened: "44'" or "44h"</li>
+                </ul>
+                Leave empty to use the master key.
+              </small>
+            </p>
           </details>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={derivationPath}
             onChange={(e) => setDerivationPath(e.target.value)}
             placeholder="Derivation path (optional)"
             style={{ marginRight: "0.5rem", padding: "0.5rem" }}
           />
-          <button onClick={async () => {
-            try {
-              const response = await os.getPublicKey(algorithm, derivationPath || undefined);
-              setPublicKey(response.public_key);
-              setVerificationResult(null);
-            } catch (error) {
-              console.error("Failed to get public key:", error);
-              alert("Failed to get public key: " + (error as Error).message);
-            }
-          }}>Get Public Key</button>
+          <button
+            onClick={async () => {
+              try {
+                const response = await os.getPublicKey(algorithm, derivationPath || undefined);
+                setPublicKey(response.public_key);
+                setVerificationResult(null);
+              } catch (error) {
+                console.error("Failed to get public key:", error);
+                alert("Failed to get public key: " + (error as Error).message);
+              }
+            }}
+          >
+            Get Public Key
+          </button>
         </div>
 
         {publicKey && (
@@ -600,44 +620,49 @@ function App() {
         <form onSubmit={handleSignMessage} className="auth-form">
           <details style={{ marginBottom: "0.5rem" }}>
             <summary>About message signing</summary>
-            <p><small>
-              Messages are converted to bytes before signing. Examples:
-            </small></p>
+            <p>
+              <small>Messages are converted to bytes before signing. Examples:</small>
+            </p>
             <pre style={{ fontSize: "small" }}>
-{`// From string
+              {`// From string
 const messageBytes = new TextEncoder().encode("Hello, World!");
 
 // From hex
 const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));`}
             </pre>
           </details>
-          <textarea 
-            name="message" 
-            placeholder="Enter message to sign" 
-            rows={4} 
+          <textarea
+            name="message"
+            placeholder="Enter message to sign"
+            rows={4}
             className="json-input"
-            required 
+            required
           />
           <button type="submit">Sign Message</button>
         </form>
 
         {lastSignature && (
           <div className="data-display" style={{ marginTop: "1rem", wordBreak: "break-all" }}>
-            <div><strong>Message:</strong> {lastSignature.message}</div>
-            <div><strong>Message Hash:</strong> {lastSignature.messageHash}</div>
-            <div><strong>Signature:</strong> {lastSignature.signature}</div>
-            <button 
-              onClick={handleVerifySignature}
-              style={{ marginTop: "0.5rem" }}
-            >
+            <div>
+              <strong>Message:</strong> {lastSignature.message}
+            </div>
+            <div>
+              <strong>Message Hash:</strong> {lastSignature.messageHash}
+            </div>
+            <div>
+              <strong>Signature:</strong> {lastSignature.signature}
+            </div>
+            <button onClick={handleVerifySignature} style={{ marginTop: "0.5rem" }}>
               Verify Signature
             </button>
             {verificationResult !== null && (
-              <div style={{ 
-                marginTop: "0.5rem",
-                color: verificationResult ? "green" : "red",
-                fontWeight: "bold"
-              }}>
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  color: verificationResult ? "green" : "red",
+                  fontWeight: "bold"
+                }}
+              >
                 Signature is {verificationResult ? "valid" : "invalid"}!
               </div>
             )}
@@ -656,7 +681,6 @@ const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));`}
         <p>Generate JWT tokens for authorized third-party services (URL-based).</p>
         <TokenGenerator />
       </section>
-
     </main>
   );
 }

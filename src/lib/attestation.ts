@@ -239,8 +239,8 @@ export async function authenticate(
   }
 }
 
- // For localhost we get a fake document and we only need the public key
- const FakeAttestationDocumentSchema = z.object({
+// For localhost we get a fake document and we only need the public key
+const FakeAttestationDocumentSchema = z.object({
   public_key: z.nullable(z.instanceof(Uint8Array))
 });
 
@@ -265,11 +265,12 @@ export async function verifyAttestation(nonce: string): Promise<AttestationDocum
     const apiUrl = getApiUrl();
 
     // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
-    if (apiUrl && (
-      apiUrl === "http://127.0.0.1:3000" ||
-      apiUrl === "http://localhost:3000" ||
-      apiUrl === "http://0.0.0.0:3000"
-    )) {
+    if (
+      apiUrl &&
+      (apiUrl === "http://127.0.0.1:3000" ||
+        apiUrl === "http://localhost:3000" ||
+        apiUrl === "http://0.0.0.0:3000")
+    ) {
       console.log("DEV MODE: Using fake attestation document");
       const fakeDocument = await fakeAuthenticate(attestationDocumentBase64);
       return fakeDocument as AttestationDocument;

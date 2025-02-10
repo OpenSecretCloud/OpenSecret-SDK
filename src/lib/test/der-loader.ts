@@ -10,7 +10,7 @@ Bun.plugin({
     build.onLoad({ filter: /\.der$/ }, (args) => {
       console.log("Loading DER file:", args.path);
       const buffer = fs.readFileSync(args.path);
-      const uint8ArrayString = Array.from(buffer).join(',');
+      const uint8ArrayString = Array.from(buffer).join(",");
 
       return {
         loader: "js",

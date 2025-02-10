@@ -17,7 +17,7 @@ function generateNaclKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array }
   if (testNaclPublicKey && testNaclSecretKey) {
     return {
       publicKey: decode(testNaclPublicKey),
-      secretKey: decode(testNaclSecretKey),
+      secretKey: decode(testNaclSecretKey)
     };
   }
 
@@ -25,7 +25,10 @@ function generateNaclKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array }
   return nacl.box.keyPair();
 }
 
-export async function getAttestation(forceRefresh?: boolean, apiUrl?: string): Promise<Attestation> {
+export async function getAttestation(
+  forceRefresh?: boolean,
+  apiUrl?: string
+): Promise<Attestation> {
   // Check if we already have a sessionKey and sessionId in sessionstorage
   const sessionKey = sessionStorage.getItem("sessionKey");
   const sessionId = sessionStorage.getItem("sessionId");
