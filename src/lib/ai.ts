@@ -2,8 +2,7 @@ import { decryptMessage, encryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import * as api from "./api";
 
-export function createCustomFetch(
-): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
+export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
   return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       const currentAccessToken = window.localStorage.getItem("access_token");

@@ -3,7 +3,12 @@ import * as api from "./api";
 import { createCustomFetch } from "./ai";
 import { getAttestation } from "./getAttestation";
 import { authenticate } from "./attestation";
-import { parseAttestationForView, AWS_ROOT_CERT_DER, EXPECTED_ROOT_CERT_HASH, ParsedAttestationView } from "./attestationForView";
+import {
+  parseAttestationForView,
+  AWS_ROOT_CERT_DER,
+  EXPECTED_ROOT_CERT_HASH,
+  ParsedAttestationView
+} from "./attestationForView";
 import type { AttestationDocument } from "./attestation";
 import type { LoginResponse, ThirdPartyTokenResponse } from "./api";
 import { PcrConfig } from "./pcr";
@@ -17,6 +22,12 @@ export type OpenSecretContextType = {
   auth: OpenSecretAuthState;
 
   /**
+   * The client ID for this project/tenant
+   * @description A UUID that identifies which project/tenant this instance belongs to
+   */
+  clientId: string;
+
+  /**
    * Authenticates a user with email and password
    * @param email - User's email address
    * @param password - User's password
@@ -24,7 +35,7 @@ export type OpenSecretContextType = {
    * @throws {Error} If login fails
    *
    * @description
-   * - Calls the login API endpoint
+   * - Calls the login API endpoint with the configured clientId
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with user information
    * - Throws an error if authentication fails
@@ -95,7 +106,11 @@ export type OpenSecretContextType = {
    * - Updates the auth state with new user information
    * - Preserves all existing data associated with the guest account
    */
-  convertGuestToUserAccount: (email: string, password: string, name?: string) => Promise<void>;
+  convertGuestToUserAccount: (
+    email: string,
+    password: string,
+    name?: string | null
+  ) => Promise<void>;
 
   /**
    * Logs out the current user
@@ -173,8 +188,13 @@ export type OpenSecretContextType = {
   refetchUser: () => Promise<void>;
   changePassword: typeof api.changePassword;
   refreshAccessToken: typeof api.refreshToken;
-  requestPasswordReset: typeof api.requestPasswordReset;
-  confirmPasswordReset: typeof api.confirmPasswordReset;
+  requestPasswordReset: (email: string, hashedSecret: string) => Promise<void>;
+  confirmPasswordReset: (
+    email: string,
+    alphanumericCode: string,
+    plaintextSecret: string,
+    newPassword: string
+  ) => Promise<void>;
   initiateGitHubAuth: (inviteCode: string) => Promise<api.GithubAuthResponse>;
   handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
@@ -194,7 +214,7 @@ export type OpenSecretContextType = {
    * @throws {Error} If:
    * - The private key bytes cannot be retrieved
    * - The derivation path is invalid
-   * 
+   *
    * @description
    * - If no derivation path is provided, returns the master private key bytes
    * - Supports both absolute (starting with "m/") and relative paths
@@ -229,9 +249,9 @@ export type OpenSecretContextType = {
   /**
    * Custom fetch function for AI requests that handles encryption
    * and token refreshing.
-   * 
+   *
    * Meant to be used with the OpenAI JS library
-   * 
+   *
    * Example:
    * ```tsx
    * const openai = new OpenAI({
@@ -291,7 +311,7 @@ export type OpenSecretContextType = {
    * Gets and verifies an attestation document from the enclave
    * @returns A promise resolving to the parsed attestation document
    * @throws {Error} If attestation fails or is invalid
-   * 
+   *
    * @description
    * This is a convenience function that:
    * 1. Fetches the attestation document with a random nonce
@@ -308,7 +328,7 @@ export type OpenSecretContextType = {
    * - The user is not authenticated
    * - The audience URL is invalid
    * - The audience URL is not authorized
-   * 
+   *
    * @description
    * - Generates a signed JWT token for use with specific authorized third-party services
    * - The audience must be an pre-authorized URL registered by the developer (e.g. api.devservice.com)
@@ -323,17 +343,18 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
     loading: true,
     user: undefined
   },
-  signIn: async () => { },
-  signUp: async () => { },
-  signInGuest: async () => { },
+  clientId: "",
+  signIn: async () => {},
+  signUp: async () => {},
+  signInGuest: async () => {},
   signUpGuest: async (): Promise<LoginResponse> => ({
     id: "",
     email: undefined,
     access_token: "",
     refresh_token: ""
   }),
-  convertGuestToUserAccount: async () => { },
-  signOut: async () => { },
+  convertGuestToUserAccount: async () => {},
+  signOut: async () => {},
   get: api.fetchGet,
   put: api.fetchPut,
   list: api.fetchList,
@@ -341,15 +362,15 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   verifyEmail: api.verifyEmail,
   requestNewVerificationCode: api.requestNewVerificationCode,
   requestNewVerificationEmail: api.requestNewVerificationCode,
-  refetchUser: async () => { },
+  refetchUser: async () => {},
   changePassword: api.changePassword,
   refreshAccessToken: api.refreshToken,
-  requestPasswordReset: api.requestPasswordReset,
-  confirmPasswordReset: api.confirmPasswordReset,
+  requestPasswordReset: async () => {},
+  confirmPasswordReset: async () => {},
   initiateGitHubAuth: async () => ({ auth_url: "", csrf_token: "" }),
-  handleGitHubCallback: async () => { },
+  handleGitHubCallback: async () => {},
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
-  handleGoogleCallback: async () => { },
+  handleGoogleCallback: async () => {},
   getPrivateKey: api.fetchPrivateKey,
   getPrivateKeyBytes: api.fetchPrivateKeyBytes,
   getPublicKey: api.fetchPublicKey,
@@ -374,16 +395,22 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
  * @param props - Configuration properties for the OpenSecret provider
  * @param props.children - React child components to be wrapped by the provider
  * @param props.apiUrl - URL of OpenSecret enclave backend
+ * @param props.clientId - UUID identifying which project/tenant this instance belongs to
+ * @param props.pcrConfig - Optional PCR configuration for attestation validation
  *
  * @remarks
  * This provider manages:
  * - User authentication state
  * - Authentication methods (sign in, sign up, sign out)
  * - Key-value storage operations
+ * - Project/tenant identification via clientId
  *
  * @example
  * ```tsx
- * <OpenSecretProvider apiUrl='https://preview.opensecret.ai'>
+ * <OpenSecretProvider
+ *   apiUrl='https://preview.opensecret.ai'
+ *   clientId='550e8400-e29b-41d4-a716-446655440000'
+ * >
  *   <App />
  * </OpenSecretProvider>
  * ```
@@ -391,24 +418,33 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
 export function OpenSecretProvider({
   children,
   apiUrl,
+  clientId,
   pcrConfig = {}
 }: {
   children: React.ReactNode;
   apiUrl: string;
+  clientId: string;
   pcrConfig?: PcrConfig;
 }) {
   const [auth, setAuth] = useState<OpenSecretAuthState>({
     loading: true,
     user: undefined
   });
-  const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType['aiCustomFetch']>();
+  const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType["aiCustomFetch"]>();
 
   useEffect(() => {
-    if (!apiUrl || apiUrl.trim() === '') {
-      throw new Error('OpenSecretProvider requires a non-empty apiUrl. Please provide a valid API endpoint URL.');
+    if (!apiUrl || apiUrl.trim() === "") {
+      throw new Error(
+        "OpenSecretProvider requires a non-empty apiUrl. Please provide a valid API endpoint URL."
+      );
+    }
+    if (!clientId || clientId.trim() === "") {
+      throw new Error(
+        "OpenSecretProvider requires a non-empty clientId. Please provide a valid project UUID."
+      );
     }
     api.setApiUrl(apiUrl);
-  }, [apiUrl]);
+  }, [apiUrl, clientId]);
 
   // Create aiCustomFetch when user is authenticated
   useEffect(() => {
@@ -452,7 +488,7 @@ export function OpenSecretProvider({
   async function signIn(email: string, password: string) {
     console.log("Signing in");
     try {
-      const { access_token, refresh_token } = await api.fetchLogin(email, password);
+      const { access_token, refresh_token } = await api.fetchLogin(email, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
       await fetchUser();
@@ -468,7 +504,8 @@ export function OpenSecretProvider({
         email,
         password,
         inviteCode,
-        name
+        clientId,
+        name || null
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
@@ -482,7 +519,7 @@ export function OpenSecretProvider({
   async function signInGuest(id: string, password: string) {
     console.log("Signing in Guest");
     try {
-      const { access_token, refresh_token } = await api.fetchGuestLogin(id, password);
+      const { access_token, refresh_token } = await api.fetchGuestLogin(id, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
       await fetchUser();
@@ -497,6 +534,7 @@ export function OpenSecretProvider({
       const { access_token, refresh_token, id } = await api.fetchGuestSignUp(
         password,
         inviteCode,
+        clientId
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
@@ -508,13 +546,9 @@ export function OpenSecretProvider({
     }
   }
 
-  async function convertGuestToUserAccount(email: string, password: string, name?: string) {
+  async function convertGuestToUserAccount(email: string, password: string, name?: string | null) {
     try {
-      await api.convertGuestToEmailAccount(
-        email,
-        password,
-        name
-      );
+      await api.convertGuestToEmailAccount(email, password, name);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -543,7 +577,7 @@ export function OpenSecretProvider({
 
   const initiateGitHubAuth = async (inviteCode: string) => {
     try {
-      return await api.initiateGitHubAuth(inviteCode);
+      return await api.initiateGitHubAuth(clientId, inviteCode);
     } catch (error) {
       console.error("Failed to initiate GitHub auth:", error);
       throw error;
@@ -568,7 +602,7 @@ export function OpenSecretProvider({
 
   const initiateGoogleAuth = async (inviteCode: string) => {
     try {
-      return await api.initiateGoogleAuth(inviteCode);
+      return await api.initiateGoogleAuth(clientId, inviteCode);
     } catch (error) {
       console.error("Failed to initiate Google auth:", error);
       throw error;
@@ -599,12 +633,17 @@ export function OpenSecretProvider({
     }
 
     const data = await response.json();
-    const verifiedDocument = await authenticate(data.attestation_document, AWS_ROOT_CERT_DER, nonce);
+    const verifiedDocument = await authenticate(
+      data.attestation_document,
+      AWS_ROOT_CERT_DER,
+      nonce
+    );
     return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
   };
 
   const value: OpenSecretContextType = {
     auth,
+    clientId,
     signIn,
     signInGuest,
     signOut,
@@ -621,8 +660,14 @@ export function OpenSecretProvider({
     requestNewVerificationEmail: api.requestNewVerificationCode,
     changePassword: api.changePassword,
     refreshAccessToken: api.refreshToken,
-    requestPasswordReset: api.requestPasswordReset,
-    confirmPasswordReset: api.confirmPasswordReset,
+    requestPasswordReset: (email: string, hashedSecret: string) =>
+      api.requestPasswordReset(email, hashedSecret, clientId),
+    confirmPasswordReset: (
+      email: string,
+      alphanumericCode: string,
+      plaintextSecret: string,
+      newPassword: string
+    ) => api.confirmPasswordReset(email, alphanumericCode, plaintextSecret, newPassword, clientId),
     initiateGitHubAuth,
     handleGitHubCallback,
     initiateGoogleAuth,

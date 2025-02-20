@@ -20,8 +20,8 @@ export function AI() {
     setResponse("");
 
     if (!os.auth.user) {
-        alert("Please log in to use the AI chat.");
-        return;
+      alert("Please log in to use the AI chat.");
+      return;
     }
 
     const customFetch = os.aiCustomFetch;
@@ -30,16 +30,16 @@ export function AI() {
 
     try {
       console.log("Starting chat request to URL:", `${os.apiUrl}/v1/`);
-      
+
       const openai = new OpenAI({
         baseURL: `${os.apiUrl}/v1/`,
         dangerouslyAllowBrowser: true,
         apiKey: "api-key-doesnt-matter",
         defaultHeaders: {
           "Accept-Encoding": "identity",
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        fetch: customFetch,
+        fetch: customFetch
       });
 
       console.log("Created OpenAI client");
@@ -51,7 +51,7 @@ export function AI() {
       const stream = await openai.beta.chat.completions.stream({
         model,
         messages,
-        stream: true,
+        stream: true
       });
 
       console.log("Stream created successfully");
@@ -95,8 +95,8 @@ export function AI() {
           className="w-full p-2 border rounded"
           disabled={loading}
         />
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={loading}
           className="mt-2 px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
         >
@@ -105,9 +105,7 @@ export function AI() {
       </form>
 
       {response && (
-        <div className="mt-4 p-4 border rounded bg-gray-50 whitespace-pre-wrap">
-          {response}
-        </div>
+        <div className="mt-4 p-4 border rounded bg-gray-50 whitespace-pre-wrap">{response}</div>
       )}
     </div>
   );

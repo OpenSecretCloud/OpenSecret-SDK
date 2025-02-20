@@ -73,7 +73,10 @@ button {
 
 .grid-container {
   display: grid;
-  grid-template-columns: minmax(min-content, 150px) 1fr minmax(min-content, 120px) minmax(min-content, 120px);
+  grid-template-columns: minmax(min-content, 150px) 1fr minmax(min-content, 120px) minmax(
+      min-content,
+      120px
+    );
   gap: 1rem;
 }
 

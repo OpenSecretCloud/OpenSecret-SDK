@@ -28,4 +28,5 @@ jobs:
           VITE_TEST_PASSWORD: ${{ secrets.VITE_TEST_PASSWORD }}
           VITE_TEST_NAME: ${{ secrets.VITE_TEST_NAME }}
           VITE_TEST_INVITE_CODE: ${{ secrets.VITE_TEST_INVITE_CODE }}
+          VITE_TEST_CLIENT_ID: ${{ secrets.VITE_TEST_CLIENT_ID }}
         run: bun test 

@@ -19,7 +19,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && npx vite build",
-    "pack": "bun run build && bun pm pack"
+    "pack": "bun run build && bun pm pack",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""
   },
   "peerDependencies": {
     "react": "^18.3.1",
