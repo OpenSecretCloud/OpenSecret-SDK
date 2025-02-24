@@ -544,3 +544,544 @@ test("Organization deletion with random UUID", async () => {
     throw error;
   }
 });
+
+// ===== PROJECT TESTS =====
+
+test("Project CRUD operations within an organization", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create a new organization for testing projects
+    const orgName = `Test Project Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    expect(createdOrg).toBeDefined();
+    expect(createdOrg.name).toBe(orgName);
+
+    try {
+      // 1. Create a project
+      const projectName = `Test Project ${Date.now()}`;
+      const projectDescription = "A test project for automated testing";
+      const createdProject = await platformApi.createProject(
+        createdOrg.id.toString(),
+        projectName,
+        projectDescription
+      );
+      expect(createdProject).toBeDefined();
+      expect(createdProject.name).toBe(projectName);
+      expect(createdProject.description).toBe(projectDescription);
+      expect(createdProject.client_id).toBeDefined();
+
+      // 2. List projects and verify the new one is there
+      const projects = await platformApi.listProjects(createdOrg.id.toString());
+      expect(projects).toBeDefined();
+      expect(Array.isArray(projects)).toBe(true);
+
+      // Find our project in the list
+      const foundProject = projects.find((project) => project.id === createdProject.id);
+      expect(foundProject).toBeDefined();
+      expect(foundProject?.name).toBe(projectName);
+      expect(foundProject?.description).toBe(projectDescription);
+
+      // 3. Update the project
+      const updatedName = `Updated Project ${Date.now()}`;
+      const updatedDescription = "This description has been updated";
+      const updatedStatus = "inactive"; // Assuming status can be changed
+
+      const updatedProject = await platformApi.updateProject(
+        createdOrg.id.toString(),
+        createdProject.id.toString(),
+        {
+          name: updatedName,
+          description: updatedDescription,
+          status: updatedStatus
+        }
+      );
+
+      expect(updatedProject).toBeDefined();
+      expect(updatedProject.name).toBe(updatedName);
+      expect(updatedProject.description).toBe(updatedDescription);
+      expect(updatedProject.status).toBe(updatedStatus);
+
+      // 4. List projects again and verify the updates
+      const updatedProjects = await platformApi.listProjects(createdOrg.id.toString());
+      const updatedFoundProject = updatedProjects.find(
+        (project) => project.id === createdProject.id
+      );
+      expect(updatedFoundProject).toBeDefined();
+      expect(updatedFoundProject?.name).toBe(updatedName);
+      expect(updatedFoundProject?.description).toBe(updatedDescription);
+      expect(updatedFoundProject?.status).toBe(updatedStatus);
+
+      // 5. Delete the project
+      await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+
+      // 6. List projects again and verify the deleted one is gone
+      const projectsAfterDelete = await platformApi.listProjects(createdOrg.id.toString());
+      const shouldBeUndefined = projectsAfterDelete.find(
+        (project) => project.id === createdProject.id
+      );
+      expect(shouldBeUndefined).toBeUndefined();
+    } finally {
+      // Clean up by deleting the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project creation with invalid input", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Error Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Test empty name
+      try {
+        await platformApi.createProject(createdOrg.id.toString(), "");
+        throw new Error("Should not accept empty project name");
+      } catch (error: any) {
+        expect(error.message).toMatch(/Invalid|name.*required|Bad Request/i);
+      }
+
+      // Test extremely long name (if there's a limit)
+      try {
+        const veryLongName = "a".repeat(1000);
+        await platformApi.createProject(createdOrg.id.toString(), veryLongName);
+        // Note: This may or may not fail depending on API implementation
+      } catch (error: any) {
+        expect(error.message).toMatch(/Invalid|name.*too long|Bad Request/i);
+      }
+
+      // Test non-existent organization ID
+      try {
+        await platformApi.createProject("non-existent-id", "Test Project");
+        throw new Error("Should not accept non-existent organization ID");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+    } finally {
+      // Clean up
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project update with invalid input", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Update Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project first
+      const projectName = `Test Project Update ${Date.now()}`;
+      const project = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      // Test updating a non-existent project
+      try {
+        await platformApi.updateProject(createdOrg.id.toString(), "non-existent-id", {
+          name: "New Name"
+        });
+        throw new Error("Should not be able to update non-existent project");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+
+      // Test updating a project with non-existent organization
+      try {
+        await platformApi.updateProject("non-existent-id", project.id.toString(), {
+          name: "New Name"
+        });
+        throw new Error("Should not be able to update project with non-existent organization");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+
+      // Test empty update object (this may or may not be allowed)
+      try {
+        await platformApi.updateProject(createdOrg.id.toString(), project.id.toString(), {});
+        // If it succeeds, no need to do anything
+      } catch (error: any) {
+        expect(error.message).toMatch(/invalid|Bad Request/i);
+      }
+
+      // Clean up the project
+      await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project deletion edge cases", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Delete Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Test deleting a non-existent project
+      try {
+        await platformApi.deleteProject(createdOrg.id.toString(), "non-existent-id");
+        throw new Error("Should not be able to delete non-existent project");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+
+      // Test deleting a project from a non-existent organization
+      try {
+        await platformApi.deleteProject("non-existent-id", "some-project-id");
+        throw new Error("Should not be able to delete project from non-existent organization");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+
+      // Create a project and delete it
+      const projectName = `Test Project Delete ${Date.now()}`;
+      const project = await platformApi.createProject(createdOrg.id.toString(), projectName);
+      await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+
+      // Try to delete it again (should fail)
+      try {
+        await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+        throw new Error("Should not be able to delete the same project twice");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project with special characters in name", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Special Chars Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Test creating a project with special characters in name
+      const specialProjectName = `Test Project & Special #${Date.now()}`;
+
+      try {
+        const project = await platformApi.createProject(
+          createdOrg.id.toString(),
+          specialProjectName
+        );
+        expect(project).toBeDefined();
+        expect(project.name).toBe(specialProjectName);
+
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+      } catch (error: any) {
+        // If the API doesn't allow special characters, expect a proper validation error
+        expect(error.message).toMatch(/invalid|character|Bad Request/i);
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project listing with multiple projects (pagination handling)", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Pagination Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create several projects to test pagination
+      const projectIds: string[] = [];
+      const timestamp = Date.now();
+      const batchSize = 5; // Create enough to potentially trigger pagination
+
+      for (let i = 0; i < batchSize; i++) {
+        const projectName = `Test Pagination Project ${timestamp}-${i}`;
+        const project = await platformApi.createProject(
+          createdOrg.id.toString(),
+          projectName,
+          `Description for pagination project ${i}`
+        );
+        projectIds.push(project.id.toString());
+      }
+
+      // Fetch all projects - should include all created ones
+      const projects = await platformApi.listProjects(createdOrg.id.toString());
+
+      // Verify we have at least the number of projects we created
+      expect(projects.length).toBeGreaterThanOrEqual(batchSize);
+
+      // Verify all our newly created projects are in the list
+      for (const id of projectIds) {
+        const found = projects.some((project) => project.id.toString() === id);
+        expect(found).toBe(true);
+      }
+
+      // Clean up all created projects
+      for (const id of projectIds) {
+        await platformApi.deleteProject(createdOrg.id.toString(), id);
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project operations require authentication", async () => {
+  try {
+    // First create an org and project while authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    const orgName = `Test Project Auth Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    const projectName = `Test Auth Project ${Date.now()}`;
+    const project = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+    // Now clear authentication and try operations
+    window.localStorage.clear();
+
+    // Try to list projects without authentication
+    try {
+      await platformApi.listProjects(createdOrg.id.toString());
+      throw new Error("Should not be able to list projects without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to create a project without authentication
+    try {
+      await platformApi.createProject(createdOrg.id.toString(), "New Project");
+      throw new Error("Should not be able to create projects without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to update a project without authentication
+    try {
+      await platformApi.updateProject(createdOrg.id.toString(), project.id.toString(), {
+        name: "Updated Name"
+      });
+      throw new Error("Should not be able to update projects without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to delete a project without authentication
+    try {
+      await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+      throw new Error("Should not be able to delete projects without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Re-authenticate to clean up
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Clean up
+    await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+    await platformApi.deleteOrganization(createdOrg.id.toString());
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Create project with duplicate name in same organization", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Duplicate Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project with a specific name
+      const duplicateProjectName = `Test Duplicate Project ${Date.now()}`;
+      const firstProject = await platformApi.createProject(
+        createdOrg.id.toString(),
+        duplicateProjectName
+      );
+      expect(firstProject).toBeDefined();
+
+      try {
+        // Try creating a second project with the same name
+        const secondProject = await platformApi.createProject(
+          createdOrg.id.toString(),
+          duplicateProjectName
+        );
+
+        // If we reach here, it means duplicate names are allowed
+        // We should clean up both projects
+        await platformApi.deleteProject(createdOrg.id.toString(), firstProject.id.toString());
+        await platformApi.deleteProject(createdOrg.id.toString(), secondProject.id.toString());
+      } catch (error: any) {
+        // Expected error for duplicate name
+        expect(error.message).toMatch(/duplicate|already exists|Bad Request/i);
+
+        // Clean up the first project
+        await platformApi.deleteProject(createdOrg.id.toString(), firstProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project API flow with chained operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Chain Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // 1. Create a new project
+      const projectName = `Test Chain Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      // 2. Verify it appears in the list
+      let projects = await platformApi.listProjects(createdOrg.id.toString());
+      let found = projects.some(
+        (project) => project.id.toString() === createdProject.id.toString()
+      );
+      expect(found).toBe(true);
+
+      // 3. Update the project
+      const updatedName = `Updated Chain Project ${Date.now()}`;
+      const updatedProject = await platformApi.updateProject(
+        createdOrg.id.toString(),
+        createdProject.id.toString(),
+        { name: updatedName }
+      );
+      expect(updatedProject.name).toBe(updatedName);
+
+      // 4. Verify the update appears in the list
+      projects = await platformApi.listProjects(createdOrg.id.toString());
+      const updatedFound = projects.find(
+        (project) => project.id.toString() === createdProject.id.toString()
+      );
+      expect(updatedFound).toBeDefined();
+      expect(updatedFound?.name).toBe(updatedName);
+
+      // 5. Delete the project
+      await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+
+      // 6. Verify it no longer appears in the list
+      projects = await platformApi.listProjects(createdOrg.id.toString());
+      found = projects.some((project) => project.id.toString() === createdProject.id.toString());
+      expect(found).toBe(false);
+
+      // 7. Attempt to delete the same project again (should fail)
+      try {
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+        throw new Error("Should not be able to delete the same project twice");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project deletion with random UUID", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Project Random UUID Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Generate a random UUID that (almost certainly) doesn't exist
+      const randomUUID = crypto.randomUUID();
+
+      // Try to delete a project with this UUID
+      try {
+        await platformApi.deleteProject(createdOrg.id.toString(), randomUUID);
+        throw new Error("Should not be able to delete non-existent project");
+      } catch (error: any) {
+        // This should return a 404 Not Found or similar
+        expect(error.message).toMatch(/not found|not exist|HTTP error! Status: 404/i);
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
