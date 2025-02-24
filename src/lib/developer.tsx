@@ -289,8 +289,8 @@ export function OpenSecretDeveloper({
   }, [apiUrl]);
 
   async function fetchDeveloper() {
-    const access_token = window.localStorage.getItem("platform_access_token");
-    const refresh_token = window.localStorage.getItem("platform_refresh_token");
+    const access_token = window.localStorage.getItem("access_token");
+    const refresh_token = window.localStorage.getItem("refresh_token");
     if (!access_token || !refresh_token) {
       setDeveloper({
         loading: false,
