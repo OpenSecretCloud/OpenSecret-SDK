@@ -1,4 +1,5 @@
 import { encryptedApiCall, authenticatedApiCall } from "./encryptedApi";
+import { encode } from "@stablelib/base64";
 
 // Platform Auth Types
 export type PlatformLoginResponse = {
@@ -177,6 +178,7 @@ export async function createProjectSecret(
   keyName: string,
   secret: string
 ): Promise<ProjectSecret> {
+  // The secret parameter should already be base64 encoded by the caller
   return authenticatedApiCall<{ key_name: string; secret: string }, ProjectSecret>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets`,
     "POST",

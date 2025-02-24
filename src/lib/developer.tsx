@@ -91,8 +91,18 @@ export type OpenSecretDeveloperContextType = {
    * Creates a new secret for a project
    * @param orgId - Organization ID
    * @param projectId - Project ID
-   * @param keyName - Secret key name
-   * @param secret - Secret value (base64 encoded)
+   * @param keyName - Secret key name (must be alphanumeric)
+   * @param secret - Secret value (must be base64 encoded by the caller)
+   *
+   * Example:
+   * ```typescript
+   * // To encode a string secret
+   * import { encode } from "@stablelib/base64";
+   * const encodedSecret = encode(new TextEncoder().encode("my-secret-value"));
+   *
+   * // Now pass the encoded secret to the function
+   * createProjectSecret(orgId, projectId, "mySecretKey", encodedSecret);
+   * ```
    */
   createProjectSecret: (
     orgId: string,

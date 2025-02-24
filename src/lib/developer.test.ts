@@ -2,6 +2,7 @@ import { expect, test, beforeEach } from "bun:test";
 import { platformLogin, platformRegister } from "./platformApi";
 import "./test/platform-api-url-loader";
 import * as platformApi from "./platformApi";
+import { encode } from "@stablelib/base64";
 
 const TEST_DEVELOPER_EMAIL = process.env.VITE_TEST_DEVELOPER_EMAIL;
 const TEST_DEVELOPER_PASSWORD = process.env.VITE_TEST_DEVELOPER_PASSWORD;
@@ -13,6 +14,11 @@ if (!TEST_DEVELOPER_EMAIL || !TEST_DEVELOPER_PASSWORD || !TEST_DEVELOPER_NAME) {
 
 // Cache login response to avoid multiple logins
 let cachedLoginResponse: { access_token: string; refresh_token: string } | null = null;
+
+// Helper function to base64 encode strings
+const encodeSecret = (secret: string): string => {
+  return encode(new TextEncoder().encode(secret));
+};
 
 async function tryDeveloperLogin() {
   // If we have a successful login cached, reuse it
@@ -888,7 +894,7 @@ test("Project operations require authentication", async () => {
     const orgName = `Test Project Auth Org ${Date.now()}`;
     const createdOrg = await platformApi.createOrganization(orgName);
     const projectName = `Test Auth Project ${Date.now()}`;
-    const project = await platformApi.createProject(createdOrg.id.toString(), projectName);
+    const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
 
     // Now clear authentication and try operations
     window.localStorage.clear();
@@ -911,7 +917,7 @@ test("Project operations require authentication", async () => {
 
     // Try to update a project without authentication
     try {
-      await platformApi.updateProject(createdOrg.id.toString(), project.id.toString(), {
+      await platformApi.updateProject(createdOrg.id.toString(), createdProject.id.toString(), {
         name: "Updated Name"
       });
       throw new Error("Should not be able to update projects without authentication");
@@ -921,7 +927,7 @@ test("Project operations require authentication", async () => {
 
     // Try to delete a project without authentication
     try {
-      await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+      await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
       throw new Error("Should not be able to delete projects without authentication");
     } catch (error: any) {
       expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
@@ -932,7 +938,7 @@ test("Project operations require authentication", async () => {
     window.localStorage.setItem("refresh_token", refresh_token);
 
     // Clean up
-    await platformApi.deleteProject(createdOrg.id.toString(), project.id.toString());
+    await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
     await platformApi.deleteOrganization(createdOrg.id.toString());
   } catch (error: any) {
     console.error("Test failed:", error.message);
@@ -1074,7 +1080,624 @@ test("Project deletion with random UUID", async () => {
         throw new Error("Should not be able to delete non-existent project");
       } catch (error: any) {
         // This should return a 404 Not Found or similar
-        expect(error.message).toMatch(/not found|not exist|HTTP error! Status: 404/i);
+        expect(error.message).toMatch(
+          /Not Found|Organization not found|not exist|HTTP error! Status: 404/i
+        );
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+// ===== PROJECT SECRET TESTS =====
+
+test("Project secret CRUD operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create a new organization for testing
+    const orgName = `Test Secret Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    expect(createdOrg).toBeDefined();
+
+    try {
+      // Create a project for testing secrets
+      const projectName = `Test Secret Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(
+        createdOrg.id.toString(),
+        projectName,
+        "A project for testing secrets"
+      );
+      expect(createdProject).toBeDefined();
+
+      try {
+        // 1. Create a secret with alphanumeric only key name
+        const secretKeyName = `testsecret${Date.now()}`;
+        const secretValue = "supersecretvaluethatshouldbencrypted";
+        const createdSecret = await platformApi.createProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          secretKeyName,
+          encodeSecret(secretValue)
+        );
+        expect(createdSecret).toBeDefined();
+        expect(createdSecret.key_name).toBe(secretKeyName);
+        expect(createdSecret.created_at).toBeDefined();
+        expect(createdSecret.updated_at).toBeDefined();
+        // Note: The actual secret value should not be returned for security reasons
+
+        // 2. List secrets and verify the new one is there
+        const secrets = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+        expect(secrets).toBeDefined();
+        expect(Array.isArray(secrets)).toBe(true);
+
+        // Find our secret in the list
+        const foundSecret = secrets.find((secret) => secret.key_name === secretKeyName);
+        expect(foundSecret).toBeDefined();
+        expect(foundSecret?.key_name).toBe(secretKeyName);
+        // Secret value should not be included in the list
+
+        // 3. Delete the secret
+        await platformApi.deleteProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          secretKeyName
+        );
+
+        // 4. List secrets again and verify the deleted one is gone
+        const secretsAfterDelete = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+        const shouldBeUndefined = secretsAfterDelete.find(
+          (secret) => secret.key_name === secretKeyName
+        );
+        expect(shouldBeUndefined).toBeUndefined();
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret creation with invalid input", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Error Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Error Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Test empty key name
+        try {
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            "",
+            encodeSecret("some-value")
+          );
+          throw new Error("Should not accept empty secret key name");
+        } catch (error: any) {
+          expect(error.message).toMatch(/Invalid|name.*required|Bad Request/i);
+        }
+
+        // Test empty secret value
+        try {
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            "valid-key-name",
+            encodeSecret("")
+          );
+          throw new Error("Should not accept empty secret value");
+        } catch (error: any) {
+          expect(error.message).toMatch(/Invalid|value.*required|Bad Request/i);
+        }
+
+        // Test extremely long key name (if there's a limit)
+        try {
+          const veryLongName = "a".repeat(1000);
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            veryLongName,
+            encodeSecret("some-value")
+          );
+          // Note: This may or may not fail depending on API implementation
+        } catch (error: any) {
+          expect(error.message).toMatch(/Invalid|name.*too long|Bad Request/i);
+        }
+
+        // Test non-existent project ID
+        try {
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            "non-existent-id",
+            "test-key",
+            encodeSecret("test-value")
+          );
+          throw new Error("Should not accept non-existent project ID");
+        } catch (error: any) {
+          expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+        }
+
+        // Test non-existent organization ID
+        try {
+          await platformApi.createProjectSecret(
+            "non-existent-id",
+            createdProject.id.toString(),
+            "test-key",
+            encodeSecret("test-value")
+          );
+          throw new Error("Should not accept non-existent organization ID");
+        } catch (error: any) {
+          expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+        }
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret with special characters in key name", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Special Chars Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Special Chars Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // First create a valid secret to prove the API works correctly
+        const validKeyName = `testsecret${Date.now()}`;
+        const secretValue = "validalphanumericsecretvalue";
+
+        const validSecret = await platformApi.createProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          validKeyName,
+          encodeSecret(secretValue)
+        );
+
+        expect(validSecret).toBeDefined();
+        expect(validSecret.key_name).toBe(validKeyName);
+
+        // Now try with a key name containing special characters - this SHOULD fail
+        const invalidKeyName = `test@special#${Date.now()}`;
+
+        let errorThrown = false;
+        try {
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidKeyName,
+            encodeSecret(secretValue)
+          );
+        } catch (error: any) {
+          errorThrown = true;
+          // We expect an error about invalid characters or bad request
+          expect(error.message).toMatch(/invalid|character|Bad Request|HTTP error! Status: 400/i);
+        }
+
+        // Make sure the error was thrown
+        expect(errorThrown).toBe(true);
+
+        // Clean up the valid secret
+        await platformApi.deleteProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          validKeyName
+        );
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret deletion edge cases", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Delete Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Delete Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Focus on testing the core deletion functionality with better error handling
+        console.log("Creating a test secret for deletion test...");
+
+        // Create a secret that we'll delete
+        const secretKeyName = `deletetest${Date.now()}`;
+        const secretValue = "deletemevalue";
+
+        const createdSecret = await platformApi.createProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          secretKeyName,
+          encodeSecret(secretValue)
+        );
+
+        expect(createdSecret).toBeDefined();
+        console.log(`Successfully created test secret: ${secretKeyName}`);
+
+        // List secrets to verify it exists
+        const secretsBefore = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        const secretExists = secretsBefore.some((s) => s.key_name === secretKeyName);
+        expect(secretExists).toBe(true);
+        console.log("Verified secret exists in list");
+
+        // Delete the secret (should succeed)
+        await platformApi.deleteProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          secretKeyName
+        );
+        console.log("Successfully deleted the secret");
+
+        // Verify the secret was deleted
+        const secretsAfter = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        const secretStillExists = secretsAfter.some((s) => s.key_name === secretKeyName);
+        expect(secretStillExists).toBe(false);
+        console.log("Verified secret was deleted successfully");
+
+        // Now try to delete a non-existent secret - this might return either 404 or 400
+        console.log("Testing deletion of non-existent secret...");
+        try {
+          await platformApi.deleteProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            `nonexistent${Date.now()}`
+          );
+          // If it succeeds (idempotent deletion), that's acceptable too
+          console.log("Note: Deleting non-existent secret succeeded (idempotent behavior)");
+        } catch (error: any) {
+          console.log(`Got expected error for non-existent secret: ${error.message}`);
+          // Accept either "Not Found" (404) or "Bad Request" (400) as valid responses
+          // Some APIs return 400 for resource that doesn't exist rather than 404
+          expect(error.message).toMatch(
+            /not found|Resource not found|Bad Request|HTTP error! Status: 40[04]/i
+          );
+        }
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Create project secret with duplicate key name", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Duplicate Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Duplicate Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Create a secret with a specific key name (alphanumeric only)
+        const duplicateKeyName = `duplicatesecretkey${Date.now()}`;
+        const secretValue1 = "firstsecretvalue";
+        const firstSecret = await platformApi.createProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          duplicateKeyName,
+          encodeSecret(secretValue1)
+        );
+        expect(firstSecret).toBeDefined();
+
+        try {
+          // Try creating a second secret with the same key name but different value
+          const secretValue2 = "secondsecretvalue";
+          await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            duplicateKeyName,
+            encodeSecret(secretValue2)
+          );
+          throw new Error("Should not be able to create duplicate key");
+        } catch (error: any) {
+          // Expected error for duplicate key
+          expect(error.message).toMatch(/duplicate|already exists|conflict|Bad Request/i);
+        }
+
+        // Clean up the secret
+        await platformApi.deleteProjectSecret(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          duplicateKeyName
+        );
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret operations require authentication", async () => {
+  try {
+    // First create an org and project while authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    const orgName = `Test Secret Auth Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    const projectName = `Test Secret Auth Project ${Date.now()}`;
+    const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+    // Create a secret with alphanumeric name
+    const secretKeyName = `authtestsecret${Date.now()}`;
+    const secretValue = "authenticatedsecretvalue";
+    await platformApi.createProjectSecret(
+      createdOrg.id.toString(),
+      createdProject.id.toString(),
+      secretKeyName,
+      encodeSecret(secretValue)
+    );
+
+    // Now clear authentication and try operations
+    window.localStorage.clear();
+
+    // Try to list secrets without authentication
+    try {
+      await platformApi.listProjectSecrets(createdOrg.id.toString(), createdProject.id.toString());
+      throw new Error("Should not be able to list secrets without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to create a secret without authentication
+    try {
+      await platformApi.createProjectSecret(
+        createdOrg.id.toString(),
+        createdProject.id.toString(),
+        "newsecretkey",
+        encodeSecret("newsecretvalue")
+      );
+      throw new Error("Should not be able to create secrets without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to delete a secret without authentication
+    try {
+      await platformApi.deleteProjectSecret(
+        createdOrg.id.toString(),
+        createdProject.id.toString(),
+        secretKeyName
+      );
+      throw new Error("Should not be able to delete secrets without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Re-authenticate to clean up
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Clean up
+    await platformApi.deleteProjectSecret(
+      createdOrg.id.toString(),
+      createdProject.id.toString(),
+      secretKeyName
+    );
+    await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+    await platformApi.deleteOrganization(createdOrg.id.toString());
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret API flow with chained operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Chain Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Chain Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // 1. Verify no secrets exist initially
+        const initialSecrets = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+        expect(initialSecrets).toEqual([]);
+
+        // 2. Create a series of secrets (with alphanumeric key names)
+        const secrets = [];
+        for (let i = 1; i <= 3; i++) {
+          const keyName = `chainedsecret${i}${Date.now()}`;
+          const value = `secretvalue${i}`;
+
+          const secret = await platformApi.createProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            keyName,
+            encodeSecret(value)
+          );
+
+          expect(secret).toBeDefined();
+          expect(secret.key_name).toBe(keyName);
+          secrets.push(keyName);
+        }
+
+        // 3. List all secrets and verify they exist
+        const listedSecrets = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+        expect(listedSecrets.length).toBe(3);
+
+        for (const keyName of secrets) {
+          const found = listedSecrets.some((secret) => secret.key_name === keyName);
+          expect(found).toBe(true);
+        }
+
+        // 4. Delete each secret one by one and verify it's gone
+        for (const keyName of secrets) {
+          await platformApi.deleteProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            keyName
+          );
+
+          const secretsAfterDelete = await platformApi.listProjectSecrets(
+            createdOrg.id.toString(),
+            createdProject.id.toString()
+          );
+
+          const stillExists = secretsAfterDelete.some((secret) => secret.key_name === keyName);
+          expect(stillExists).toBe(false);
+        }
+
+        // 5. Verify all secrets are gone
+        const finalSecrets = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+        expect(finalSecrets).toEqual([]);
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Project secret listing with no secrets", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Secret Empty Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Secret Empty Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // List secrets for a project that has none
+        const secrets = await platformApi.listProjectSecrets(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        // Should return an empty array, not null or undefined
+        expect(Array.isArray(secrets)).toBe(true);
+        expect(secrets.length).toBe(0);
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
       }
     } finally {
       // Clean up the organization
