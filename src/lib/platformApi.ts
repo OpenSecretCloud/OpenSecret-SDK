@@ -1,5 +1,4 @@
 import { encryptedApiCall, authenticatedApiCall } from "./encryptedApi";
-import { encode } from "@stablelib/base64";
 
 // Platform Auth Types
 export type PlatformLoginResponse = {

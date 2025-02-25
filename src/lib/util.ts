@@ -1,12 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
+// Simpler implementation compatible with React 19
 export function useOnMount(callback: () => void) {
-  const hasRun = useRef(false);
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!hasRun.current) {
-      hasRun.current = true;
-      callback();
-    }
-  }, [callback]);
+    callback();
+  }, []);
 }

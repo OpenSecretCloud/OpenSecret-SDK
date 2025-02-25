@@ -3,8 +3,6 @@ import { OpenSecretContext, OpenSecretContextType } from "./main";
 
 export function useOpenSecret(): OpenSecretContextType {
   const context = useContext(OpenSecretContext);
-  if (!context) {
-    throw new Error("useOpenSecret must be used within an OpenSecretProvider");
-  }
+  // React 19 compatibility: Don't check for nullish context since the default value is provided
   return context;
 }

@@ -3,8 +3,6 @@ import { OpenSecretDeveloperContext, OpenSecretDeveloperContextType } from "./de
 
 export function useOpenSecretDeveloper(): OpenSecretDeveloperContextType {
   const context = useContext(OpenSecretDeveloperContext);
-  if (!context) {
-    throw new Error("useOpenSecretDeveloper must be used within an OpenSecretDeveloper provider");
-  }
+  // React 19 compatibility: Don't check for nullish context since the default value is provided
   return context;
 }
