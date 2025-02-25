@@ -66,7 +66,7 @@ export type OAuthSettings = {
 };
 
 export type OrganizationMember = {
-  platform_user_id: string;
+  user_id: string;
   role: string;
 };
 
@@ -265,6 +265,11 @@ export async function inviteDeveloper(
   email: string,
   role?: string
 ): Promise<{ code: string }> {
+  // Add validation for empty emails
+  if (!email || email.trim() === '') {
+    throw new Error("Email is required");
+  }
+  
   return authenticatedApiCall<{ email: string; role?: string }, { code: string }>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites`,
     "POST",

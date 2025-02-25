@@ -11,7 +11,7 @@ import type {
   OrganizationMember
 } from "./platformApi";
 
-export type DeveloperRole = "owner" | "admin" | "member";
+export type DeveloperRole = "owner" | "admin" | "developer" | "viewer";
 
 export type OrganizationDetails = Organization;
 
