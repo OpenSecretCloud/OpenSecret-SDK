@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { fetchLogin } from "./api";
-import { createCustomFetch } from "./ai";
+import { fetchLogin } from "../../api";
+import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
