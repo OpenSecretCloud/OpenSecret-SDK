@@ -8,7 +8,9 @@ import type {
   ProjectSettings,
   EmailSettings,
   OAuthSettings,
-  OrganizationMember
+  OrganizationMember,
+  PlatformOrg,
+  PlatformUser
 } from "./platformApi";
 
 export type DeveloperRole = "owner" | "admin" | "developer" | "viewer";
@@ -19,11 +21,7 @@ export type ProjectDetails = Project;
 
 export { type ProjectSettings };
 
-export type DeveloperResponse = {
-  id: string;
-  email: string;
-  name?: string;
-};
+export type DeveloperResponse = PlatformUser & { organizations: PlatformOrg[] };
 
 export type OpenSecretDeveloperState = {
   loading: boolean;
@@ -32,6 +30,32 @@ export type OpenSecretDeveloperState = {
 
 export type OpenSecretDeveloperContextType = {
   developer: OpenSecretDeveloperState;
+
+  /**
+   * Signs in a developer with email and password
+   * @param email - Developer's email address
+   * @param password - Developer's password
+   * @returns A promise that resolves to the login response with access and refresh tokens
+   */
+  signIn: (email: string, password: string) => Promise<platformApi.PlatformLoginResponse>;
+
+  /**
+   * Registers a new developer account
+   * @param email - Developer's email address
+   * @param password - Developer's password
+   * @param name - Optional developer name
+   * @returns A promise that resolves to the login response with access and refresh tokens
+   */
+  signUp: (
+    email: string,
+    password: string,
+    name?: string
+  ) => Promise<platformApi.PlatformLoginResponse>;
+
+  /**
+   * Signs out the current developer by removing authentication tokens
+   */
+  signOut: () => void;
 
   /**
    * Creates a new organization
@@ -210,6 +234,12 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
     loading: true,
     developer: undefined
   },
+  signIn: (email, password) => platformApi.platformLogin(email, password),
+  signUp: (email, password, name) => platformApi.platformRegister(email, password, name),
+  signOut: () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+  },
   createOrganization: platformApi.createOrganization,
   listOrganizations: platformApi.listOrganizations,
   deleteOrganization: platformApi.deleteOrganization,
@@ -282,10 +312,13 @@ export function OpenSecretDeveloper({
     }
 
     try {
-      // TODO: Implement platform user fetch endpoint
+      const response = await platformApi.platformMe();
       setDeveloper({
         loading: false,
-        developer: undefined
+        developer: {
+          ...response.user,
+          organizations: response.organizations
+        }
       });
     } catch (error) {
       console.error("Failed to fetch developer:", error);
@@ -302,6 +335,16 @@ export function OpenSecretDeveloper({
 
   const value: OpenSecretDeveloperContextType = {
     developer,
+    signIn: (email, password) => platformApi.platformLogin(email, password),
+    signUp: (email, password, name) => platformApi.platformRegister(email, password, name),
+    signOut: () => {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      setDeveloper({
+        loading: false,
+        developer: undefined
+      });
+    },
     createOrganization: platformApi.createOrganization,
     listOrganizations: platformApi.listOrganizations,
     deleteOrganization: platformApi.deleteOrganization,

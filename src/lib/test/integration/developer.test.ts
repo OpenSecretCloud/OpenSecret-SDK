@@ -1,5 +1,5 @@
 import { expect, test, beforeEach } from "bun:test";
-import { platformLogin, platformRegister } from "../../platformApi";
+import { platformLogin, platformRegister, platformMe } from "../../platformApi";
 import "../platform-api-url-loader";
 import * as platformApi from "../../platformApi";
 import { encode } from "@stablelib/base64";
@@ -97,6 +97,53 @@ test("Developer login and token storage", async () => {
     // Verify tokens were stored
     expect(window.localStorage.getItem("access_token")).toBe(access_token);
     expect(window.localStorage.getItem("refresh_token")).toBe(refresh_token);
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Platform Me endpoint returns user with organizations", async () => {
+  try {
+    // Clear any existing storage
+    window.localStorage.clear();
+
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+
+    // Store tokens for subsequent API calls
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    try {
+      // Call the me endpoint
+      const response = await platformMe();
+
+      // Verify the response structure
+      expect(response).toBeDefined();
+      expect(response.user).toBeDefined();
+      expect(response.user.id).toBeDefined();
+      expect(response.user.email).toBeDefined();
+      expect(typeof response.user.email_verified).toBe("boolean");
+      expect(response.organizations).toBeDefined();
+      expect(Array.isArray(response.organizations)).toBe(true);
+
+      // If the user has organizations, verify their structure
+      if (response.organizations && response.organizations.length > 0) {
+        const org = response.organizations[0];
+
+        expect(org.id).toBeDefined();
+        expect(org.name).toBeDefined();
+        // These fields may or may not be present depending on the API implementation
+        // Only check them if they exist
+        if (org.role) expect(org.role).toBeDefined();
+        if (org.created_at) expect(org.created_at).toBeDefined();
+        if (org.updated_at) expect(org.updated_at).toBeDefined();
+      }
+    } catch (meError: any) {
+      console.error("Error calling platform Me endpoint:", meError.message);
+      throw meError;
+    }
   } catch (error: any) {
     console.error("Test failed:", error.message);
     throw error;

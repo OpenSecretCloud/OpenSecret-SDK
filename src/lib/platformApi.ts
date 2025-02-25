@@ -15,10 +15,32 @@ export type PlatformRefreshResponse = {
   refresh_token: string;
 };
 
+// Platform User Types
+export type PlatformOrg = {
+  id: string;
+  name: string;
+  role?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PlatformUser = {
+  id: string;
+  email: string;
+  name?: string;
+  email_verified: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeResponse = {
+  user: PlatformUser;
+  organizations: PlatformOrg[];
+};
+
 // Organization Types
 export type Organization = {
-  id: number;
-  uuid: string;
+  id: string;
   name: string;
 };
 
@@ -266,10 +288,10 @@ export async function inviteDeveloper(
   role?: string
 ): Promise<{ code: string }> {
   // Add validation for empty emails
-  if (!email || email.trim() === '') {
+  if (!email || email.trim() === "") {
     throw new Error("Email is required");
   }
-  
+
   return authenticatedApiCall<{ email: string; role?: string }, { code: string }>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites`,
     "POST",
@@ -311,4 +333,9 @@ export async function acceptInvite(code: string): Promise<void> {
     "POST",
     undefined
   );
+}
+
+// Platform User
+export async function platformMe(): Promise<MeResponse> {
+  return authenticatedApiCall<void, MeResponse>(`${platformApiUrl}/platform/me`, "GET", undefined);
 }
