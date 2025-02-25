@@ -73,11 +73,18 @@ async function internalEncryptedApiCall<T, U>(
   accessToken?: string,
   errorMessage?: string
 ): Promise<ApiResponse<U>> {
-  let { sessionKey, sessionId } = await getAttestation();
+  // Check if we're using the platform API
+  const isPlatformApiCall = url.includes('/platform/');
+  const platformApiUrl = typeof window !== 'undefined' ? window.__PLATFORM_API_URL__ : '';
+  
+  // Use the platform API URL for attestation if this is a platform API call
+  const explicitApiUrl = isPlatformApiCall ? platformApiUrl : undefined;
+  
+  let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 
   const makeRequest = async (token: string | undefined, forceNewAttestation: boolean = false) => {
     if (forceNewAttestation || !sessionKey || !sessionId) {
-      const newAttestation = await getAttestation(true);
+      const newAttestation = await getAttestation(true, explicitApiUrl);
       sessionKey = newAttestation.sessionKey;
       sessionId = newAttestation.sessionId;
     }

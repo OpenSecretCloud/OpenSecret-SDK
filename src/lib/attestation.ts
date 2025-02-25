@@ -257,12 +257,13 @@ async function fakeAuthenticate(
   return zodParsed;
 }
 
-export async function verifyAttestation(nonce: string): Promise<AttestationDocument> {
+export async function verifyAttestation(nonce: string, explicitApiUrl?: string): Promise<AttestationDocument> {
   try {
-    const attestationDocumentBase64 = await fetchAttestationDocument(nonce);
+    const attestationDocumentBase64 = await fetchAttestationDocument(nonce, explicitApiUrl);
 
     // Get the API URL from the API layer where it's already set
-    const apiUrl = getApiUrl();
+    // First check explicit URL, then check both possible APIs
+    const apiUrl = explicitApiUrl || getApiUrl();
 
     // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
     if (

@@ -298,6 +298,11 @@ export function OpenSecretDeveloper({
       );
     }
     setPlatformApiUrl(apiUrl);
+    
+    // Store the platform API URL in window for access from other modules
+    if (typeof window !== 'undefined') {
+      window.__PLATFORM_API_URL__ = apiUrl;
+    }
   }, [apiUrl]);
 
   async function fetchDeveloper() {
