@@ -127,32 +127,6 @@ export type OpenSecretDeveloperContextType = {
   deleteProjectSecret: (orgId: string, projectId: string, keyName: string) => Promise<void>;
 
   /**
-   * Gets settings for a specific category
-   * @param orgId - Organization ID
-   * @param projectId - Project ID
-   * @param category - Settings category
-   */
-  getProjectSettings: (
-    orgId: string,
-    projectId: string,
-    category: string
-  ) => Promise<ProjectSettings>;
-
-  /**
-   * Updates settings for a specific category
-   * @param orgId - Organization ID
-   * @param projectId - Project ID
-   * @param category - Settings category
-   * @param settings - Settings object
-   */
-  updateProjectSettings: (
-    orgId: string,
-    projectId: string,
-    category: string,
-    settings: Record<string, unknown>
-  ) => Promise<ProjectSettings>;
-
-  /**
    * Gets email configuration for a project
    * @param orgId - Organization ID
    * @param projectId - Project ID
@@ -246,8 +220,6 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   createProjectSecret: platformApi.createProjectSecret,
   listProjectSecrets: platformApi.listProjectSecrets,
   deleteProjectSecret: platformApi.deleteProjectSecret,
-  getProjectSettings: platformApi.getProjectSettings,
-  updateProjectSettings: platformApi.updateProjectSettings,
   getEmailSettings: platformApi.getEmailSettings,
   updateEmailSettings: platformApi.updateEmailSettings,
   getOAuthSettings: platformApi.getOAuthSettings,
@@ -340,8 +312,6 @@ export function OpenSecretDeveloper({
     createProjectSecret: platformApi.createProjectSecret,
     listProjectSecrets: platformApi.listProjectSecrets,
     deleteProjectSecret: platformApi.deleteProjectSecret,
-    getProjectSettings: platformApi.getProjectSettings,
-    updateProjectSettings: platformApi.updateProjectSettings,
     getEmailSettings: platformApi.getEmailSettings,
     updateEmailSettings: platformApi.updateEmailSettings,
     getOAuthSettings: platformApi.getOAuthSettings,

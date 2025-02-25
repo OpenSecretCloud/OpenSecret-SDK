@@ -50,11 +50,19 @@ export type EmailSettings = {
   email_verification_url: string;
 };
 
+/**
+ * Provider-specific OAuth settings
+ */
+export type OAuthProviderSettings = {
+  client_id: string;
+  redirect_url: string;
+};
+
 export type OAuthSettings = {
   google_oauth_enabled: boolean;
   github_oauth_enabled: boolean;
-  google_oauth_settings?: Record<string, unknown>;
-  github_oauth_settings?: Record<string, unknown>;
+  google_oauth_settings?: OAuthProviderSettings;
+  github_oauth_settings?: OAuthProviderSettings;
 };
 
 export type OrganizationMember = {
@@ -206,32 +214,6 @@ export async function deleteProjectSecret(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets/${keyName}`,
     "DELETE",
     undefined
-  );
-}
-
-// Project Settings
-export async function getProjectSettings(
-  orgId: string,
-  projectId: string,
-  category: string
-): Promise<ProjectSettings> {
-  return authenticatedApiCall<void, ProjectSettings>(
-    `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/${category}`,
-    "GET",
-    undefined
-  );
-}
-
-export async function updateProjectSettings(
-  orgId: string,
-  projectId: string,
-  category: string,
-  settings: Record<string, unknown>
-): Promise<ProjectSettings> {
-  return authenticatedApiCall<{ settings: Record<string, unknown> }, ProjectSettings>(
-    `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/${category}`,
-    "PUT",
-    { settings }
   );
 }
 

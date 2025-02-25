@@ -968,15 +968,11 @@ test("Create project with duplicate name in same organization", async () => {
 
       try {
         // Try creating a second project with the same name
-        const secondProject = await platformApi.createProject(
-          createdOrg.id.toString(),
-          duplicateProjectName
-        );
+        await platformApi.createProject(createdOrg.id.toString(), duplicateProjectName);
 
         // If we reach here, it means duplicate names are allowed
         // We should clean up both projects
         await platformApi.deleteProject(createdOrg.id.toString(), firstProject.id.toString());
-        await platformApi.deleteProject(createdOrg.id.toString(), secondProject.id.toString());
       } catch (error: any) {
         // Expected error for duplicate name
         expect(error.message).toMatch(/duplicate|already exists|Bad Request/i);
@@ -1047,7 +1043,9 @@ test("Project API flow with chained operations", async () => {
         await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
         throw new Error("Should not be able to delete the same project twice");
       } catch (error: any) {
-        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+        expect(error.message).toMatch(
+          /Not Found|Organization not found|Bad Request|HTTP error! Status: 400/i
+        );
       }
     } finally {
       // Clean up the organization
@@ -1479,15 +1477,15 @@ test("Create project secret with duplicate key name", async () => {
           throw new Error("Should not be able to create duplicate key");
         } catch (error: any) {
           // Expected error for duplicate key
-          expect(error.message).toMatch(/duplicate|already exists|conflict|Bad Request/i);
-        }
+          expect(error.message).toMatch(/duplicate|already exists|Bad Request/i);
 
-        // Clean up the secret
-        await platformApi.deleteProjectSecret(
-          createdOrg.id.toString(),
-          createdProject.id.toString(),
-          duplicateKeyName
-        );
+          // Clean up the first secret
+          await platformApi.deleteProjectSecret(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            duplicateKeyName
+          );
+        }
       } finally {
         // Clean up the project
         await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
@@ -1695,6 +1693,429 @@ test("Project secret listing with no secrets", async () => {
         // Should return an empty array, not null or undefined
         expect(Array.isArray(secrets)).toBe(true);
         expect(secrets.length).toBe(0);
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+// ===== PROJECT SETTINGS TESTS =====
+
+test("Project settings operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Settings Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Settings Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Test email settings (using the specialized endpoint)
+        const emailSettings: platformApi.EmailSettings = {
+          provider: "resend", // Only "resend" provider is allowed
+          send_from: "test@example.com",
+          email_verification_url: "https://example.com/verify?code={code}"
+        };
+
+        // Update email settings
+        const updatedSettings = await platformApi.updateEmailSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          emailSettings
+        );
+
+        expect(updatedSettings).toBeDefined();
+        expect(updatedSettings.provider).toBe(emailSettings.provider);
+        expect(updatedSettings.send_from).toBe(emailSettings.send_from);
+        expect(updatedSettings.email_verification_url).toBe(emailSettings.email_verification_url);
+
+        // Get email settings and verify
+        const retrievedSettings = await platformApi.getEmailSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(retrievedSettings).toBeDefined();
+        expect(retrievedSettings.provider).toBe(emailSettings.provider);
+        expect(retrievedSettings.send_from).toBe(emailSettings.send_from);
+        expect(retrievedSettings.email_verification_url).toBe(emailSettings.email_verification_url);
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Email settings operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Email Settings Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Email Settings Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Define test email settings
+        const emailSettings: platformApi.EmailSettings = {
+          provider: "resend", // Only "resend" provider is allowed
+          send_from: "noreply@example.com",
+          email_verification_url: "https://example.com/verify?code={code}"
+        };
+
+        // Update email settings
+        const updatedSettings = await platformApi.updateEmailSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          emailSettings
+        );
+
+        expect(updatedSettings).toBeDefined();
+        expect(updatedSettings.provider).toBe(emailSettings.provider);
+        expect(updatedSettings.send_from).toBe(emailSettings.send_from);
+        expect(updatedSettings.email_verification_url).toBe(emailSettings.email_verification_url);
+
+        // Get email settings and verify
+        const retrievedSettings = await platformApi.getEmailSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(retrievedSettings).toBeDefined();
+        expect(retrievedSettings.provider).toBe(emailSettings.provider);
+        expect(retrievedSettings.send_from).toBe(emailSettings.send_from);
+        expect(retrievedSettings.email_verification_url).toBe(emailSettings.email_verification_url);
+
+        // Test with null provider (should NOT be allowed)
+        const nullProviderSettings: platformApi.EmailSettings = {
+          provider: null as unknown as string, // null provider should NOT be allowed
+          send_from: "support@example.com",
+          email_verification_url: "https://app.example.com/verify?token={code}"
+        };
+
+        let nullErrorThrown = false;
+        try {
+          await platformApi.updateEmailSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            nullProviderSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          nullErrorThrown = true;
+          expect(error.message).toMatch(/invalid provider|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(nullErrorThrown).toBe(true);
+
+        // Test with disallowed provider
+        const invalidProviderSettings: platformApi.EmailSettings = {
+          provider: "sendgrid", // Not allowed
+          send_from: "support@example.com",
+          email_verification_url: "https://app.example.com/verify?token={code}"
+        };
+
+        let errorThrown = false;
+        try {
+          await platformApi.updateEmailSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidProviderSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          errorThrown = true;
+          expect(error.message).toMatch(/invalid provider|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(errorThrown).toBe(true);
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("OAuth settings operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test OAuth Settings Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test OAuth Settings Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Get default OAuth settings (should be disabled by default)
+        const defaultSettings = await platformApi.getOAuthSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(defaultSettings).toBeDefined();
+        expect(defaultSettings.google_oauth_enabled).toBe(false);
+        expect(defaultSettings.github_oauth_enabled).toBe(false);
+        expect(defaultSettings.google_oauth_settings).toBeNull();
+        expect(defaultSettings.github_oauth_settings).toBeNull();
+
+        // Define test OAuth settings with Google enabled
+        const googleOAuthSettings: platformApi.OAuthSettings = {
+          google_oauth_enabled: true,
+          github_oauth_enabled: false,
+          google_oauth_settings: {
+            client_id: "google-client-id-12345",
+            redirect_url: "https://example.com/auth/google/callback"
+          }
+        };
+
+        // Update OAuth settings
+        const googleUpdated = await platformApi.updateOAuthSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          googleOAuthSettings
+        );
+
+        expect(googleUpdated).toBeDefined();
+        expect(googleUpdated.google_oauth_enabled).toBe(true);
+        expect(googleUpdated.github_oauth_enabled).toBe(false);
+        expect(googleUpdated.google_oauth_settings).toBeDefined();
+        expect(googleUpdated.google_oauth_settings!.client_id).toBe(
+          googleOAuthSettings.google_oauth_settings!.client_id
+        );
+        expect(googleUpdated.google_oauth_settings!.redirect_url).toBe(
+          googleOAuthSettings.google_oauth_settings!.redirect_url
+        );
+
+        // Now update to enable GitHub OAuth
+        const bothOAuthSettings: platformApi.OAuthSettings = {
+          google_oauth_enabled: true,
+          github_oauth_enabled: true,
+          google_oauth_settings: {
+            client_id: "google-client-id-12345",
+            redirect_url: "https://example.com/auth/google/callback"
+          },
+          github_oauth_settings: {
+            client_id: "github-client-id-67890",
+            redirect_url: "https://example.com/auth/github/callback"
+          }
+        };
+
+        const bothUpdated = await platformApi.updateOAuthSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          bothOAuthSettings
+        );
+
+        expect(bothUpdated).toBeDefined();
+        expect(bothUpdated.google_oauth_enabled).toBe(true);
+        expect(bothUpdated.github_oauth_enabled).toBe(true);
+
+        expect(bothUpdated.google_oauth_settings).toBeDefined();
+        expect(bothUpdated.google_oauth_settings!.client_id).toBe(
+          bothOAuthSettings.google_oauth_settings!.client_id
+        );
+        expect(bothUpdated.google_oauth_settings!.redirect_url).toBe(
+          bothOAuthSettings.google_oauth_settings!.redirect_url
+        );
+
+        expect(bothUpdated.github_oauth_settings).toBeDefined();
+        expect(bothUpdated.github_oauth_settings!.client_id).toBe(
+          bothOAuthSettings.github_oauth_settings!.client_id
+        );
+        expect(bothUpdated.github_oauth_settings!.redirect_url).toBe(
+          bothOAuthSettings.github_oauth_settings!.redirect_url
+        );
+
+        // Get OAuth settings and verify
+        const retrievedSettings = await platformApi.getOAuthSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(retrievedSettings).toBeDefined();
+        expect(retrievedSettings.google_oauth_enabled).toBe(true);
+        expect(retrievedSettings.github_oauth_enabled).toBe(true);
+        expect(retrievedSettings.google_oauth_settings).toBeDefined();
+        expect(retrievedSettings.github_oauth_settings).toBeDefined();
+      } finally {
+        // Clean up the project
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Invalid project settings operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Invalid Settings Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Create a project for testing
+      const projectName = `Test Invalid Settings Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(createdOrg.id.toString(), projectName);
+
+      try {
+        // Test invalid email settings (invalid email)
+        const invalidEmailSettings: platformApi.EmailSettings = {
+          provider: "resend", // Use valid provider but invalid email
+          send_from: "not-an-email", // Invalid email format
+          email_verification_url: "https://example.com/verify?code={code}"
+        };
+
+        let errorThrown = false;
+        try {
+          await platformApi.updateEmailSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidEmailSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          errorThrown = true;
+          expect(error.message).toMatch(/invalid|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(errorThrown).toBe(true);
+
+        // Test invalid provider
+        const invalidProviderSettings: platformApi.EmailSettings = {
+          provider: "smtp", // Not allowed - only "resend" is allowed as provider
+          send_from: "valid@example.com",
+          email_verification_url: "https://example.com/verify?code={code}"
+        };
+
+        errorThrown = false;
+        try {
+          await platformApi.updateEmailSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidProviderSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          errorThrown = true;
+          expect(error.message).toMatch(/invalid provider|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(errorThrown).toBe(true);
+
+        // Test invalid OAuth settings (missing required fields when enabled)
+        const invalidOAuthSettings: platformApi.OAuthSettings = {
+          google_oauth_enabled: true, // Enabled but missing settings
+          github_oauth_enabled: false,
+          google_oauth_settings: undefined, // Must be provided when google_oauth_enabled is true
+          github_oauth_settings: undefined
+        };
+
+        errorThrown = false;
+        try {
+          await platformApi.updateOAuthSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidOAuthSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          errorThrown = true;
+          expect(error.message).toMatch(/invalid|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(errorThrown).toBe(true);
+
+        // Test invalid OAuth provider settings
+        const invalidOAuthProviderSettings: platformApi.OAuthSettings = {
+          google_oauth_enabled: true,
+          github_oauth_enabled: false,
+          google_oauth_settings: {
+            client_id: "valid-id",
+            redirect_url: "not-a-valid-url" // Invalid URL format
+          },
+          github_oauth_settings: undefined
+        };
+
+        errorThrown = false;
+        try {
+          await platformApi.updateOAuthSettings(
+            createdOrg.id.toString(),
+            createdProject.id.toString(),
+            invalidOAuthProviderSettings
+          );
+          // If we reach here, the API call succeeded when it should have failed
+        } catch (error: any) {
+          // Expected error for validation failure
+          errorThrown = true;
+          expect(error.message).toMatch(/invalid|bad request|validation/i);
+        }
+
+        // Make sure we received an error
+        expect(errorThrown).toBe(true);
       } finally {
         // Clean up the project
         await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
