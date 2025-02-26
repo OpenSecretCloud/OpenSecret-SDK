@@ -181,6 +181,7 @@ function App() {
   return (
     <OpenSecretDeveloper 
       apiUrl="https://developer.opensecret.cloud"
+      pcrConfig={{}} // Optional PCR configuration for attestation validation
     >
       <YourApp />
     </OpenSecretDeveloper>
@@ -204,6 +205,7 @@ function DeveloperLogin() {
       const response = await dev.signIn("developer@example.com", "yourpassword");
       console.log("Login successful", response);
       // Now you can use the developer context APIs
+      // Authentication state is automatically updated
     } catch (error) {
       console.error("Login failed:", error);
     }
@@ -219,15 +221,20 @@ function DeveloperLogin() {
       );
       console.log("Registration successful", response);
       // Now you can use the developer context APIs
+      // Authentication state is automatically updated
     } catch (error) {
       console.error("Registration failed:", error);
     }
   }
 
   // Sign out
-  function handleLogout() {
-    dev.signOut();
-    // The developer context will update automatically
+  async function handleLogout() {
+    try {
+      await dev.signOut();
+      // The developer context will update automatically
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   }
 
   return (
@@ -278,6 +285,27 @@ function PlatformManagement() {
     - `email`: Developer's email address
     - `name`: Developer's name (optional)
     - `organizations`: Array of organizations the developer belongs to
+- `apiUrl`: The current OpenSecret developer API URL being used
+
+#### Developer Authentication
+
+- `signIn(email: string, password: string): Promise<PlatformLoginResponse>`: Signs in a developer with the provided email and password. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
+- `signUp(email: string, password: string, name?: string): Promise<PlatformLoginResponse>`: Registers a new developer account with the provided email, password, and optional name. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
+- `signOut(): Promise<void>`: Signs out the current developer by removing authentication tokens and making a server logout call.
+- `refetchDeveloper(): Promise<void>`: Refreshes the developer's authentication state. Useful after making changes that affect developer profile or organization membership.
+
+#### Attestation Verification
+
+- `pcrConfig`: An object containing additional PCR0 hashes to validate against.
+- `getAttestation`: Gets attestation from the enclave.
+- `authenticate`: Authenticates an attestation document.
+- `parseAttestationForView`: Parses an attestation document for viewing.
+- `awsRootCertDer`: AWS root certificate in DER format.
+- `expectedRootCertHash`: Expected hash of the AWS root certificate.
+- `getAttestationDocument()`: Gets and verifies an attestation document from the enclave. This is a convenience function that:
+  1. Fetches the attestation document with a random nonce
+  2. Authenticates the document
+  3. Parses it for viewing
 
 #### Organization Management
 

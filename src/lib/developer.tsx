@@ -1,6 +1,16 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as platformApi from "./platformApi";
 import { setPlatformApiUrl } from "./platformApi";
+import { getAttestation } from "./getAttestation";
+import { authenticate } from "./attestation";
+import {
+  parseAttestationForView,
+  AWS_ROOT_CERT_DER,
+  EXPECTED_ROOT_CERT_HASH,
+  ParsedAttestationView
+} from "./attestationForView";
+import type { AttestationDocument } from "./attestation";
+import { PcrConfig } from "./pcr";
 import type {
   Organization,
   Project,
@@ -36,6 +46,12 @@ export type OpenSecretDeveloperContextType = {
    * @param email - Developer's email address
    * @param password - Developer's password
    * @returns A promise that resolves to the login response with access and refresh tokens
+   * 
+   * @description
+   * - Calls the login API endpoint
+   * - Stores access_token and refresh_token in localStorage
+   * - Updates the developer state with user information
+   * - Throws an error if authentication fails
    */
   signIn: (email: string, password: string) => Promise<platformApi.PlatformLoginResponse>;
 
@@ -45,6 +61,12 @@ export type OpenSecretDeveloperContextType = {
    * @param password - Developer's password
    * @param name - Optional developer name
    * @returns A promise that resolves to the login response with access and refresh tokens
+   * 
+   * @description
+   * - Calls the registration API endpoint
+   * - Stores access_token and refresh_token in localStorage
+   * - Updates the developer state with new user information
+   * - Throws an error if account creation fails
    */
   signUp: (
     email: string,
@@ -54,8 +76,72 @@ export type OpenSecretDeveloperContextType = {
 
   /**
    * Signs out the current developer by removing authentication tokens
+   * 
+   * @description
+   * - Calls the logout API endpoint with the current refresh_token
+   * - Removes access_token, refresh_token from localStorage
+   * - Resets the developer state to show no user is authenticated
    */
-  signOut: () => void;
+  signOut: () => Promise<void>;
+  
+  /**
+   * Refreshes the developer's authentication state
+   * @returns A promise that resolves when the refresh is complete
+   * @throws {Error} If the refresh fails
+   *
+   * @description
+   * - Retrieves the latest developer information from the server
+   * - Updates the developer state with fresh data
+   * - Useful after making changes that affect developer profile or organization membership
+   */
+  refetchDeveloper: () => Promise<void>;
+  
+  /**
+   * Additional PCR0 hashes to validate against
+   */
+  pcrConfig: PcrConfig;
+
+  /**
+   * Gets attestation from the enclave
+   */
+  getAttestation: typeof getAttestation;
+
+  /**
+   * Authenticates an attestation document
+   */
+  authenticate: typeof authenticate;
+
+  /**
+   * Parses an attestation document for viewing
+   */
+  parseAttestationForView: (
+    document: AttestationDocument,
+    cabundle: Uint8Array[],
+    pcrConfig?: PcrConfig
+  ) => Promise<ParsedAttestationView>;
+
+  /**
+   * AWS root certificate in DER format
+   */
+  awsRootCertDer: typeof AWS_ROOT_CERT_DER;
+
+  /**
+   * Expected hash of the AWS root certificate
+   */
+  expectedRootCertHash: typeof EXPECTED_ROOT_CERT_HASH;
+
+  /**
+   * Gets and verifies an attestation document from the enclave
+   * @returns A promise resolving to the parsed attestation document
+   * @throws {Error} If attestation fails or is invalid
+   *
+   * @description
+   * This is a convenience function that:
+   * 1. Fetches the attestation document with a random nonce
+   * 2. Authenticates the document
+   * 3. Parses it for viewing
+   */
+  getAttestationDocument: () => Promise<ParsedAttestationView>;
 
   /**
    * Creates a new organization
@@ -234,11 +320,26 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
     loading: true,
     developer: undefined
   },
-  signIn: (email, password) => platformApi.platformLogin(email, password),
-  signUp: (email, password, name) => platformApi.platformRegister(email, password, name),
-  signOut: () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
+  signIn: async () => { 
+    throw new Error("signIn called outside of OpenSecretDeveloper provider"); 
+  },
+  signUp: async () => { 
+    throw new Error("signUp called outside of OpenSecretDeveloper provider"); 
+  },
+  signOut: async () => {
+    throw new Error("signOut called outside of OpenSecretDeveloper provider");
+  },
+  refetchDeveloper: async () => {
+    throw new Error("refetchDeveloper called outside of OpenSecretDeveloper provider");
+  },
+  pcrConfig: {},
+  getAttestation,
+  authenticate,
+  parseAttestationForView,
+  awsRootCertDer: AWS_ROOT_CERT_DER,
+  expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
+  getAttestationDocument: async () => {
+    throw new Error("getAttestationDocument called outside of OpenSecretDeveloper provider");
   },
   createOrganization: platformApi.createOrganization,
   listOrganizations: platformApi.listOrganizations,
@@ -281,10 +382,12 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
  */
 export function OpenSecretDeveloper({
   children,
-  apiUrl
+  apiUrl,
+  pcrConfig = {}
 }: {
   children: React.ReactNode;
   apiUrl: string;
+  pcrConfig?: PcrConfig;
 }) {
   const [developer, setDeveloper] = useState<OpenSecretDeveloperState>({
     loading: true,
@@ -333,16 +436,67 @@ export function OpenSecretDeveloper({
       });
     }
   }
+  
+  const getAttestationDocument = async () => {
+    const nonce = window.crypto.randomUUID();
+    const response = await fetch(`${apiUrl}/attestation/${nonce}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch attestation document");
+    }
+
+    const data = await response.json();
+    const verifiedDocument = await authenticate(
+      data.attestation_document,
+      AWS_ROOT_CERT_DER,
+      nonce
+    );
+    return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
+  };
 
   useEffect(() => {
     fetchDeveloper();
   }, []);
 
+  async function signIn(email: string, password: string) {
+    try {
+      const { access_token, refresh_token } = await platformApi.platformLogin(email, password);
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchDeveloper();
+      return { access_token, refresh_token, id: '', email };
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
+  }
+
+  async function signUp(email: string, password: string, name?: string) {
+    try {
+      const { access_token, refresh_token } = await platformApi.platformRegister(email, password, name);
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchDeveloper();
+      return { access_token, refresh_token, id: '', email, name };
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
+    }
+  }
+
   const value: OpenSecretDeveloperContextType = {
     developer,
-    signIn: (email, password) => platformApi.platformLogin(email, password),
-    signUp: (email, password, name) => platformApi.platformRegister(email, password, name),
-    signOut: () => {
+    signIn,
+    signUp,
+    refetchDeveloper: fetchDeveloper,
+    signOut: async () => {
+      const refresh_token = window.localStorage.getItem("refresh_token");
+      if (refresh_token) {
+        try {
+          await platformApi.platformLogout(refresh_token);
+        } catch (error) {
+          console.error("Error during logout:", error);
+        }
+      }
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       setDeveloper({
@@ -350,6 +504,13 @@ export function OpenSecretDeveloper({
         developer: undefined
       });
     },
+    pcrConfig,
+    getAttestation,
+    authenticate,
+    parseAttestationForView,
+    awsRootCertDer: AWS_ROOT_CERT_DER,
+    expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
+    getAttestationDocument,
     createOrganization: platformApi.createOrganization,
     listOrganizations: platformApi.listOrganizations,
     deleteOrganization: platformApi.deleteOrganization,

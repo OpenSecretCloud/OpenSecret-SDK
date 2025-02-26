@@ -44,8 +44,7 @@ export type Organization = {
 };
 
 export type Project = {
-  id: number;
-  uuid: string;
+  id: string;
   client_id: string;
   name: string;
   description?: string;
@@ -109,7 +108,9 @@ export async function platformLogin(
   return encryptedApiCall<{ email: string; password: string }, PlatformLoginResponse>(
     `${platformApiUrl}/platform/login`,
     "POST",
-    { email, password }
+    { email, password },
+    undefined,
+    "Failed to login"
   );
 }
 
@@ -121,17 +122,47 @@ export async function platformRegister(
   return encryptedApiCall<
     { email: string; password: string; name?: string },
     PlatformLoginResponse
-  >(`${platformApiUrl}/platform/register`, "POST", { email, password, name });
+  >(
+    `${platformApiUrl}/platform/register`,
+    "POST", 
+    { email, password, name },
+    undefined,
+    "Failed to register"
+  );
 }
 
-export async function platformRefreshToken(
-  refresh_token: string
-): Promise<PlatformRefreshResponse> {
-  return encryptedApiCall<{ refresh_token: string }, PlatformRefreshResponse>(
-    `${platformApiUrl}/platform/refresh`,
+export async function platformLogout(refresh_token: string): Promise<void> {
+  return encryptedApiCall<{ refresh_token: string }, void>(
+    `${platformApiUrl}/platform/logout`,
     "POST",
-    { refresh_token }
+    { refresh_token },
+    undefined,
+    "Failed to logout"
   );
+}
+
+export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
+  const refresh_token = window.localStorage.getItem("refresh_token");
+  if (!refresh_token) throw new Error("No refresh token available");
+
+  const refreshData = { refresh_token };
+
+  try {
+    const response = await encryptedApiCall<typeof refreshData, PlatformRefreshResponse>(
+      `${platformApiUrl}/platform/refresh`,
+      "POST",
+      refreshData,
+      undefined,
+      "Failed to refresh token"
+    );
+
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    return response;
+  } catch (error) {
+    console.error("Error refreshing token:", error);
+    throw error;
+  }
 }
 
 // Organization Management
