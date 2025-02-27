@@ -49,6 +49,7 @@ export type Project = {
   name: string;
   description?: string;
   status: string;
+  created_at: string;
 };
 
 export type ProjectSecret = {
