@@ -33,13 +33,13 @@ export { type ProjectSettings };
 
 export type DeveloperResponse = PlatformUser & { organizations: PlatformOrg[] };
 
-export type OpenSecretDeveloperState = {
+export type OpenSecretDeveloperAuthState = {
   loading: boolean;
   developer?: DeveloperResponse;
 };
 
 export type OpenSecretDeveloperContextType = {
-  developer: OpenSecretDeveloperState;
+  auth: OpenSecretDeveloperAuthState;
 
   /**
    * Signs in a developer with email and password
@@ -316,7 +316,7 @@ export type OpenSecretDeveloperContextType = {
 };
 
 export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperContextType>({
-  developer: {
+  auth: {
     loading: true,
     developer: undefined
   },
@@ -389,7 +389,7 @@ export function OpenSecretDeveloper({
   apiUrl: string;
   pcrConfig?: PcrConfig;
 }) {
-  const [developer, setDeveloper] = useState<OpenSecretDeveloperState>({
+  const [auth, setAuth] = useState<OpenSecretDeveloperAuthState>({
     loading: true,
     developer: undefined
   });
@@ -412,7 +412,7 @@ export function OpenSecretDeveloper({
     const access_token = window.localStorage.getItem("access_token");
     const refresh_token = window.localStorage.getItem("refresh_token");
     if (!access_token || !refresh_token) {
-      setDeveloper({
+      setAuth({
         loading: false,
         developer: undefined
       });
@@ -421,7 +421,7 @@ export function OpenSecretDeveloper({
 
     try {
       const response = await platformApi.platformMe();
-      setDeveloper({
+      setAuth({
         loading: false,
         developer: {
           ...response.user,
@@ -430,7 +430,7 @@ export function OpenSecretDeveloper({
       });
     } catch (error) {
       console.error("Failed to fetch developer:", error);
-      setDeveloper({
+      setAuth({
         loading: false,
         developer: undefined
       });
@@ -484,7 +484,7 @@ export function OpenSecretDeveloper({
   }
 
   const value: OpenSecretDeveloperContextType = {
-    developer,
+    auth,
     signIn,
     signUp,
     refetchDeveloper: fetchDeveloper,
@@ -499,7 +499,7 @@ export function OpenSecretDeveloper({
       }
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
-      setDeveloper({
+      setAuth({
         loading: false,
         developer: undefined
       });

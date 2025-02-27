@@ -77,15 +77,15 @@ function DeveloperLogin() {
 }
 ```
 
-When a developer successfully logs in or registers, the authentication tokens are stored in localStorage and managed by the SDK. The `OpenSecretDeveloper` provider automatically detects these tokens and loads the developer profile. You can check the authentication state using the `developer` property:
+When a developer successfully logs in or registers, the authentication tokens are stored in localStorage and managed by the SDK. The `OpenSecretDeveloper` provider automatically detects these tokens and loads the developer profile. You can check the authentication state using the `auth` property:
 
 ```tsx
 const dev = useOpenSecretDeveloper();
 
 // Check if developer is loaded and authenticated
-if (!dev.developer.loading && dev.developer.developer) {
-  console.log("Developer is authenticated:", dev.developer.developer.email);
-} else if (!dev.developer.loading) {
+if (!dev.auth.loading && dev.auth.developer) {
+  console.log("Developer is authenticated:", dev.auth.developer.email);
+} else if (!dev.auth.loading) {
   console.log("Developer is not authenticated");
 }
 ```
@@ -101,7 +101,7 @@ function PlatformManagement() {
   const dev = useOpenSecretDeveloper();
   
   // Access developer information
-  const { loading, developer } = dev.developer;
+  const { loading, developer } = dev.auth;
   
   // Now you can use any of the platform management methods
   // ...
@@ -110,7 +110,7 @@ function PlatformManagement() {
 
 #### Developer State
 
-- `developer`: An object containing the current developer's information
+- `auth`: An object containing the current developer's information
   - `loading`: Boolean indicating whether developer information is being loaded
   - `developer`: Developer data (undefined if not logged in) including:
     - `id`: Developer's unique ID
@@ -295,10 +295,10 @@ function DeveloperPortal() {
   
   useEffect(() => {
     // Load organizations when developer is available
-    if (!dev.developer.loading && dev.developer.developer) {
+    if (!dev.auth.loading && dev.auth.developer) {
       loadOrganizations();
     }
-  }, [dev.developer.loading, dev.developer.developer]);
+  }, [dev.auth.loading, dev.auth.developer]);
   
   async function loadOrganizations() {
     try {
@@ -337,11 +337,11 @@ function DeveloperPortal() {
   return (
     <div>
       <h1>Developer Portal</h1>
-      {dev.developer.loading ? (
+      {dev.auth.loading ? (
         <p>Loading...</p>
-      ) : dev.developer.developer ? (
+      ) : dev.auth.developer ? (
         <div>
-          <p>Welcome, {dev.developer.developer.name || dev.developer.developer.email}</p>
+          <p>Welcome, {dev.auth.developer.name || dev.auth.developer.email}</p>
           
           <h2>Your Organizations</h2>
           <ul>

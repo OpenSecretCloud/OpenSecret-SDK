@@ -18,7 +18,7 @@ export { useOpenSecretDeveloper } from "./developerContext";
 // Export types needed by consumers
 export type { OpenSecretAuthState, OpenSecretContextType } from "./main";
 export type {
-  OpenSecretDeveloperState,
+  OpenSecretDeveloperAuthState,
   OpenSecretDeveloperContextType,
   DeveloperRole,
   OrganizationDetails,
