@@ -142,6 +142,20 @@ export async function platformLogout(refresh_token: string): Promise<void> {
   );
 }
 
+/**
+ * Refreshes platform access and refresh tokens
+ * 
+ * This function:
+ * 1. Gets the refresh token from localStorage
+ * 2. Calls the platform-specific refresh endpoint (/platform/refresh)
+ * 3. Updates localStorage with the new tokens
+ * 
+ * The platform refresh endpoint expects:
+ * - A refresh token with audience "platform_refresh" in the request body
+ * - The request to be encrypted according to the platform's encryption scheme
+ * 
+ * It returns new access and refresh tokens if validation succeeds.
+ */
 export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
   const refresh_token = window.localStorage.getItem("refresh_token");
   if (!refresh_token) throw new Error("No refresh token available");
@@ -154,14 +168,14 @@ export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
       "POST",
       refreshData,
       undefined,
-      "Failed to refresh token"
+      "Failed to refresh platform token"
     );
 
     window.localStorage.setItem("access_token", response.access_token);
     window.localStorage.setItem("refresh_token", response.refresh_token);
     return response;
   } catch (error) {
-    console.error("Error refreshing token:", error);
+    console.error("Error refreshing platform token:", error);
     throw error;
   }
 }

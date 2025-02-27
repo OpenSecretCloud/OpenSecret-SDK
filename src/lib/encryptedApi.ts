@@ -1,6 +1,7 @@
 import { encryptMessage, decryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import { refreshToken } from "./api";
+import { platformRefreshToken } from "./platformApi";
 
 interface EncryptedResponse {
   encrypted: string;
@@ -22,7 +23,15 @@ export async function authenticatedApiCall<T, U>(
     try {
       if (forceRefresh) {
         console.log("Refreshing access token");
-        await refreshToken();
+        // Determine which refresh function to use based on the URL
+        // If it's a platform API call, use platformRefreshToken, otherwise use regular refreshToken
+        if (url.includes('/platform/')) {
+          console.log("Using platform refresh token");
+          await platformRefreshToken();
+        } else {
+          console.log("Using regular refresh token");
+          await refreshToken();
+        }
       }
 
       // Always get the latest token from localStorage
@@ -41,7 +50,7 @@ export async function authenticatedApiCall<T, U>(
 
       // Attempt to refresh token once if we get a 401
       if (response.status === 401 && !forceRefresh) {
-        console.log("Received 401, attempting to refresh token");
+        console.log(`Received 401 for URL ${url}, attempting to refresh token`);
         return tryAuthenticatedRequest(true);
       }
 
