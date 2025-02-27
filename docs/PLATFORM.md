@@ -161,6 +161,7 @@ const handleCreateOrg = async () => {
 
 - `createProject(orgId: string, name: string, description?: string): Promise<Project>`: Creates a new project within an organization.
 - `listProjects(orgId: string): Promise<Project[]>`: Lists all projects within an organization.
+- `getProject(orgId: string, projectId: string): Promise<Project>`: Gets a single project by ID.
 - `updateProject(orgId: string, projectId: string, updates: { name?: string; description?: string; status?: string }): Promise<Project>`: Updates project details.
 - `deleteProject(orgId: string, projectId: string): Promise<void>`: Deletes a project.
 
@@ -177,6 +178,15 @@ const handleCreateProject = async (orgId) => {
     // project.client_id can be used as the clientId for OpenSecretProvider
   } catch (error) {
     console.error("Failed to create project:", error);
+  }
+};
+
+const handleGetProject = async (orgId, projectId) => {
+  try {
+    const project = await dev.getProject(orgId, projectId);
+    console.log("Retrieved project details:", project);
+  } catch (error) {
+    console.error("Failed to get project:", error);
   }
 };
 ```
@@ -371,6 +381,16 @@ function DeveloperPortal() {
                 {projects.map(project => (
                   <li key={project.id}>
                     {project.name} - Client ID: {project.client_id}
+                    <button onClick={async () => {
+                      try {
+                        const projectDetails = await dev.getProject(selectedOrg.id, project.id);
+                        alert(`Project details: ${JSON.stringify(projectDetails, null, 2)}`);
+                      } catch (error) {
+                        console.error("Failed to get project details:", error);
+                      }
+                    }}>
+                      View Details
+                    </button>
                   </li>
                 ))}
               </ul>

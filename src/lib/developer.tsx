@@ -179,6 +179,14 @@ export type OpenSecretDeveloperContextType = {
   listProjects: (orgId: string) => Promise<Project[]>;
 
   /**
+   * Gets a single project by ID
+   * @param orgId - Organization ID
+   * @param projectId - Project ID
+   * @returns A promise resolving to the project details
+   */
+  getProject: (orgId: string, projectId: string) => Promise<Project>;
+
+  /**
    * Updates project details
    * @param orgId - Organization ID
    * @param projectId - Project ID
@@ -346,6 +354,7 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   deleteOrganization: platformApi.deleteOrganization,
   createProject: platformApi.createProject,
   listProjects: platformApi.listProjects,
+  getProject: platformApi.getProject,
   updateProject: platformApi.updateProject,
   deleteProject: platformApi.deleteProject,
   createProjectSecret: platformApi.createProjectSecret,
@@ -516,6 +525,7 @@ export function OpenSecretDeveloper({
     deleteOrganization: platformApi.deleteOrganization,
     createProject: platformApi.createProject,
     listProjects: platformApi.listProjects,
+    getProject: platformApi.getProject,
     updateProject: platformApi.updateProject,
     deleteProject: platformApi.deleteProject,
     createProjectSecret: platformApi.createProjectSecret,

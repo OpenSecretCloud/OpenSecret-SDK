@@ -600,6 +600,70 @@ test("Organization deletion with random UUID", async () => {
 
 // ===== PROJECT TESTS =====
 
+test("Get project by ID", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create a new organization for testing
+    const orgName = `Test Get Project Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    expect(createdOrg).toBeDefined();
+    expect(createdOrg.name).toBe(orgName);
+
+    try {
+      // Create a project first
+      const projectName = `Test Get Project ${Date.now()}`;
+      const projectDescription = "A project to test getProject functionality";
+      const createdProject = await platformApi.createProject(
+        createdOrg.id.toString(),
+        projectName,
+        projectDescription
+      );
+      expect(createdProject).toBeDefined();
+
+      // Get the project by ID
+      const retrievedProject = await platformApi.getProject(
+        createdOrg.id.toString(),
+        createdProject.id.toString()
+      );
+      
+      // Verify the project details
+      expect(retrievedProject).toBeDefined();
+      expect(retrievedProject.id).toBe(createdProject.id);
+      expect(retrievedProject.name).toBe(projectName);
+      expect(retrievedProject.description).toBe(projectDescription);
+      expect(retrievedProject.client_id).toBeDefined();
+      expect(retrievedProject.status).toBeDefined();
+      expect(retrievedProject.created_at).toBeDefined();
+
+      // Test getting a non-existent project
+      try {
+        await platformApi.getProject(createdOrg.id.toString(), "non-existent-id");
+        throw new Error("Should not be able to get non-existent project");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+
+      // Test getting a project with non-existent organization
+      try {
+        await platformApi.getProject("non-existent-id", createdProject.id.toString());
+        throw new Error("Should not be able to get project with non-existent organization");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40/i);
+      }
+    } finally {
+      // Clean up by deleting the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
 test("Project CRUD operations within an organization", async () => {
   try {
     // Login first to get authenticated

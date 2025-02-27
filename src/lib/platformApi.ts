@@ -212,6 +212,14 @@ export async function listProjects(orgId: string): Promise<Project[]> {
   );
 }
 
+export async function getProject(orgId: string, projectId: string): Promise<Project> {
+  return authenticatedApiCall<void, Project>(
+    `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}`,
+    "GET",
+    undefined
+  );
+}
+
 export async function updateProject(
   orgId: string,
   projectId: string,
