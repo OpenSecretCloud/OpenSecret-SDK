@@ -1,6 +1,6 @@
 import { expect, test, beforeEach } from "bun:test";
-import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from "./api";
-import { bytesToHex } from "./test/utils";
+import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from "../../api";
+import { bytesToHex } from "../utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 

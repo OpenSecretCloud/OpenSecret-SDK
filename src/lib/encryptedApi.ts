@@ -1,6 +1,7 @@
 import { encryptMessage, decryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import { refreshToken } from "./api";
+import { platformRefreshToken } from "./platformApi";
 
 interface EncryptedResponse {
   encrypted: string;
@@ -22,7 +23,15 @@ export async function authenticatedApiCall<T, U>(
     try {
       if (forceRefresh) {
         console.log("Refreshing access token");
-        await refreshToken();
+        // Determine which refresh function to use based on the URL
+        // If it's a platform API call, use platformRefreshToken, otherwise use regular refreshToken
+        if (url.includes('/platform/')) {
+          console.log("Using platform refresh token");
+          await platformRefreshToken();
+        } else {
+          console.log("Using regular refresh token");
+          await refreshToken();
+        }
       }
 
       // Always get the latest token from localStorage
@@ -41,7 +50,7 @@ export async function authenticatedApiCall<T, U>(
 
       // Attempt to refresh token once if we get a 401
       if (response.status === 401 && !forceRefresh) {
-        console.log("Received 401, attempting to refresh token");
+        console.log(`Received 401 for URL ${url}, attempting to refresh token`);
         return tryAuthenticatedRequest(true);
       }
 
@@ -73,11 +82,18 @@ async function internalEncryptedApiCall<T, U>(
   accessToken?: string,
   errorMessage?: string
 ): Promise<ApiResponse<U>> {
-  let { sessionKey, sessionId } = await getAttestation();
+  // Check if we're using the platform API
+  const isPlatformApiCall = url.includes('/platform/');
+  const platformApiUrl = typeof window !== 'undefined' ? window.__PLATFORM_API_URL__ : '';
+  
+  // Use the platform API URL for attestation if this is a platform API call
+  const explicitApiUrl = isPlatformApiCall ? platformApiUrl : undefined;
+  
+  let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 
   const makeRequest = async (token: string | undefined, forceNewAttestation: boolean = false) => {
     if (forceNewAttestation || !sessionKey || !sessionId) {
-      const newAttestation = await getAttestation(true);
+      const newAttestation = await getAttestation(true, explicitApiUrl);
       sessionKey = newAttestation.sessionKey;
       sessionId = newAttestation.sessionId;
     }

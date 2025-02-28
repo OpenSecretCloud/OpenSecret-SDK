@@ -27,7 +27,7 @@ function generateNaclKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array }
 
 export async function getAttestation(
   forceRefresh?: boolean,
-  apiUrl?: string
+  explicitApiUrl?: string
 ): Promise<Attestation> {
   // Check if we already have a sessionKey and sessionId in sessionstorage
   const sessionKey = sessionStorage.getItem("sessionKey");
@@ -48,7 +48,7 @@ export async function getAttestation(
     const attestationNonce = window.crypto.randomUUID();
 
     console.log("Generated attestation nonce:", attestationNonce);
-    const document = await verifyAttestation(attestationNonce);
+    const document = await verifyAttestation(attestationNonce, explicitApiUrl);
 
     if (document && document.public_key) {
       console.log("Attestation document verification succeeded");
@@ -58,7 +58,8 @@ export async function getAttestation(
 
       const { encrypted_session_key, session_id } = await keyExchange(
         encode(clientKeyPair.publicKey),
-        attestationNonce
+        attestationNonce,
+        explicitApiUrl
       );
       console.log("Key exchange completed.");
 

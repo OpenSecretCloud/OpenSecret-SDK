@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createSigStructure, parseDocumentData, parseDocumentPayload } from "./attestation";
+import { createSigStructure, parseDocumentData, parseDocumentPayload } from "../../attestation";
 import { encode } from "@stablelib/base64";
 
 const HARDCODED_TEST_ATTESTATION_DOCUMENT =

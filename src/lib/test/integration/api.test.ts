@@ -9,7 +9,7 @@ import {
   fetchUser,
   // convertGuestToEmailAccount,
   generateThirdPartyToken
-} from "./api";
+} from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
