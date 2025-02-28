@@ -25,7 +25,7 @@ export async function authenticatedApiCall<T, U>(
         console.log("Refreshing access token");
         // Determine which refresh function to use based on the URL
         // If it's a platform API call, use platformRefreshToken, otherwise use regular refreshToken
-        if (url.includes('/platform/')) {
+        if (url.includes("/platform/")) {
           console.log("Using platform refresh token");
           await platformRefreshToken();
         } else {
@@ -83,12 +83,12 @@ async function internalEncryptedApiCall<T, U>(
   errorMessage?: string
 ): Promise<ApiResponse<U>> {
   // Check if we're using the platform API
-  const isPlatformApiCall = url.includes('/platform/');
-  const platformApiUrl = typeof window !== 'undefined' ? window.__PLATFORM_API_URL__ : '';
-  
+  const isPlatformApiCall = url.includes("/platform/");
+  const platformApiUrl = typeof window !== "undefined" ? window.__PLATFORM_API_URL__ : "";
+
   // Use the platform API URL for attestation if this is a platform API call
   const explicitApiUrl = isPlatformApiCall ? platformApiUrl : undefined;
-  
+
   let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 
   const makeRequest = async (token: string | undefined, forceNewAttestation: boolean = false) => {

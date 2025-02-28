@@ -43,6 +43,17 @@ export type Organization = {
   name: string;
 };
 
+export type OrganizationInvite = {
+  code: string; // UUID of the invite
+  email: string;
+  role: string;
+  used: boolean;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  organization_name?: string;
+};
+
 export type Project = {
   id: string;
   client_id: string;
@@ -126,7 +137,7 @@ export async function platformRegister(
     PlatformLoginResponse
   >(
     `${platformApiUrl}/platform/register`,
-    "POST", 
+    "POST",
     { email, password, name },
     undefined,
     "Failed to register"
@@ -145,16 +156,16 @@ export async function platformLogout(refresh_token: string): Promise<void> {
 
 /**
  * Refreshes platform access and refresh tokens
- * 
+ *
  * This function:
  * 1. Gets the refresh token from localStorage
  * 2. Calls the platform-specific refresh endpoint (/platform/refresh)
  * 3. Updates localStorage with the new tokens
- * 
+ *
  * The platform refresh endpoint expects:
  * - A refresh token with audience "platform_refresh" in the request body
  * - The request to be encrypted according to the platform's encryption scheme
- * 
+ *
  * It returns new access and refresh tokens if validation succeeds.
  */
 export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
@@ -260,13 +271,13 @@ function isValidBase64(str: string): boolean {
   // Base64 should have a length that is a multiple of 4
   // It should only contain characters A-Z, a-z, 0-9, +, /, and end with '=' or '=='
   const base64Regex = /^[A-Za-z0-9+/]*[=]{0,2}$/;
-  
+
   // Check if the string length is a multiple of 4
   const validLength = str.length % 4 === 0;
-  
+
   // Check if the string only contains valid base64 characters
   const validChars = base64Regex.test(str);
-  
+
   return validLength && validChars;
 }
 
@@ -279,9 +290,11 @@ export async function createProjectSecret(
 ): Promise<ProjectSecret> {
   // Validate that the secret is base64 encoded
   if (!isValidBase64(secret)) {
-    throw new Error("Secret must be base64 encoded. Use @stablelib/base64's encode function to encode your data.");
+    throw new Error(
+      "Secret must be base64 encoded. Use @stablelib/base64's encode function to encode your data."
+    );
   }
-  
+
   return authenticatedApiCall<{ key_name: string; secret: string }, ProjectSecret>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets`,
     "POST",
@@ -359,16 +372,46 @@ export async function inviteDeveloper(
   orgId: string,
   email: string,
   role?: string
-): Promise<{ code: string }> {
+): Promise<OrganizationInvite> {
   // Add validation for empty emails
   if (!email || email.trim() === "") {
     throw new Error("Email is required");
   }
 
-  return authenticatedApiCall<{ email: string; role?: string }, { code: string }>(
+  return authenticatedApiCall<{ email: string; role?: string }, OrganizationInvite>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites`,
     "POST",
     { email, role }
+  );
+}
+
+export async function listOrganizationInvites(orgId: string): Promise<OrganizationInvite[]> {
+  return authenticatedApiCall<void, OrganizationInvite[]>(
+    `${platformApiUrl}/platform/orgs/${orgId}/invites`,
+    "GET",
+    undefined
+  );
+}
+
+export async function getOrganizationInvite(
+  orgId: string,
+  inviteCode: string
+): Promise<OrganizationInvite> {
+  return authenticatedApiCall<void, OrganizationInvite>(
+    `${platformApiUrl}/platform/orgs/${orgId}/invites/${inviteCode}`,
+    "GET",
+    undefined
+  );
+}
+
+export async function deleteOrganizationInvite(
+  orgId: string,
+  inviteCode: string
+): Promise<{ message: string }> {
+  return authenticatedApiCall<void, { message: string }>(
+    `${platformApiUrl}/platform/orgs/${orgId}/invites/${inviteCode}`,
+    "DELETE",
+    undefined
   );
 }
 
@@ -400,8 +443,8 @@ export async function removeMember(orgId: string, userId: string): Promise<void>
   );
 }
 
-export async function acceptInvite(code: string): Promise<void> {
-  return authenticatedApiCall<void, void>(
+export async function acceptInvite(code: string): Promise<{ message: string }> {
+  return authenticatedApiCall<void, { message: string }>(
     `${platformApiUrl}/platform/accept_invite/${code}`,
     "POST",
     undefined

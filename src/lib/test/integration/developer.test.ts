@@ -629,7 +629,7 @@ test("Get project by ID", async () => {
         createdOrg.id.toString(),
         createdProject.id.toString()
       );
-      
+
       // Verify the project details
       expect(retrievedProject).toBeDefined();
       expect(retrievedProject.id).toBe(createdProject.id);
@@ -1812,6 +1812,203 @@ test("Project secret listing with no secrets", async () => {
       // Clean up the organization
       await platformApi.deleteOrganization(createdOrg.id.toString());
     }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+// ===== ORGANIZATION INVITES TESTS =====
+
+test("Organization invite CRUD operations", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create a new organization for testing
+    const orgName = `Test Invite Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    expect(createdOrg).toBeDefined();
+
+    try {
+      // 1. Create an invite
+      const testEmail = `test-invite-${Date.now()}@example.com`;
+      const createdInvite = await platformApi.inviteDeveloper(
+        createdOrg.id.toString(),
+        testEmail,
+        "admin"
+      );
+      expect(createdInvite).toBeDefined();
+      expect(createdInvite.email).toBe(testEmail);
+      expect(createdInvite.role).toBe("admin");
+      expect(createdInvite.code).toBeDefined();
+      expect(createdInvite.used).toBe(false);
+
+      // 2. List invites and verify the new one is there
+      const invites = await platformApi.listOrganizationInvites(createdOrg.id.toString());
+      expect(invites).toBeDefined();
+      expect(Array.isArray(invites)).toBe(true);
+
+      // Find our invite in the list
+      const foundInvite = invites.find((invite) => invite.code === createdInvite.code);
+      expect(foundInvite).toBeDefined();
+      expect(foundInvite?.email).toBe(testEmail);
+      expect(foundInvite?.role).toBe("admin");
+
+      // 3. Get a specific invite
+      const retrievedInvite = await platformApi.getOrganizationInvite(
+        createdOrg.id.toString(),
+        createdInvite.code
+      );
+      expect(retrievedInvite).toBeDefined();
+      expect(retrievedInvite.code).toBe(createdInvite.code);
+      expect(retrievedInvite.email).toBe(testEmail);
+      expect(retrievedInvite.role).toBe("admin");
+      // Organization name should be present in the specific invite response
+      expect(retrievedInvite.organization_name).toBeDefined();
+      expect(retrievedInvite.organization_name).toBe(orgName);
+
+      // 4. Delete the invite
+      const deleteResult = await platformApi.deleteOrganizationInvite(
+        createdOrg.id.toString(),
+        createdInvite.code
+      );
+      expect(deleteResult).toBeDefined();
+      expect(deleteResult.message).toMatch(/deleted|removed|success/i);
+
+      // 5. List invites again and verify the deleted one is gone
+      const invitesAfterDelete = await platformApi.listOrganizationInvites(
+        createdOrg.id.toString()
+      );
+      const shouldBeUndefined = invitesAfterDelete.find(
+        (invite) => invite.code === createdInvite.code
+      );
+      expect(shouldBeUndefined).toBeUndefined();
+    } finally {
+      // Clean up the organization
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Organization invite with invalid input", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Create an organization for testing
+    const orgName = `Test Invite Error Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    try {
+      // Test empty email
+      try {
+        await platformApi.inviteDeveloper(createdOrg.id.toString(), "");
+        throw new Error("Should not accept empty email");
+      } catch (error: any) {
+        expect(error.message).toMatch(/email.*required|Invalid|Bad Request/i);
+      }
+
+      // Test invalid email format
+      try {
+        await platformApi.inviteDeveloper(createdOrg.id.toString(), "notanemail");
+        throw new Error("Should not accept invalid email format");
+      } catch (error: any) {
+        expect(error.message).toMatch(/Invalid email|Email.*invalid|Bad Request/i);
+      }
+
+      // Test invalid role
+      try {
+        await platformApi.inviteDeveloper(
+          createdOrg.id.toString(),
+          "valid@example.com",
+          "invalid-role"
+        );
+        // This may or may not fail depending on API implementation
+      } catch (error: any) {
+        expect(error.message).toMatch(/Invalid role|Role.*invalid|Bad Request/i);
+      }
+
+      // Test non-existent organization ID
+      try {
+        await platformApi.inviteDeveloper("non-existent-id", "valid@example.com");
+        throw new Error("Should not accept non-existent organization ID");
+      } catch (error: any) {
+        expect(error.message).toMatch(/not found|invalid|Bad Request|HTTP error! Status: 40[0-9]/i);
+      }
+    } finally {
+      // Clean up
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Organization invite operations require authentication", async () => {
+  try {
+    // First create an org and invite while authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    const orgName = `Test Invite Auth Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+
+    // Create a test invite
+    const testEmail = `test-invite-auth-${Date.now()}@example.com`;
+    const createdInvite = await platformApi.inviteDeveloper(
+      createdOrg.id.toString(),
+      testEmail,
+      "admin"
+    );
+
+    // Now clear authentication and try operations
+    window.localStorage.clear();
+
+    // Try to list invites without authentication
+    try {
+      await platformApi.listOrganizationInvites(createdOrg.id.toString());
+      throw new Error("Should not be able to list invites without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to get an invite without authentication
+    try {
+      await platformApi.getOrganizationInvite(createdOrg.id.toString(), createdInvite.code);
+      throw new Error("Should not be able to get invites without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Try to delete an invite without authentication
+    try {
+      await platformApi.deleteOrganizationInvite(createdOrg.id.toString(), createdInvite.code);
+      throw new Error("Should not be able to delete invites without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Re-authenticate to clean up
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Clean up
+    try {
+      await platformApi.deleteOrganizationInvite(createdOrg.id.toString(), createdInvite.code);
+    } catch (error) {
+      // Ignore if already deleted
+    }
+    await platformApi.deleteOrganization(createdOrg.id.toString());
   } catch (error: any) {
     console.error("Test failed:", error.message);
     throw error;

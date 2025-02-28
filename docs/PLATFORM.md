@@ -457,28 +457,84 @@ export type OrganizationMember = {
   role: string;
   name?: string;
 };
+
+export type OrganizationInvite = {
+  code: string;  // UUID of the invite
+  email: string;
+  role: string;
+  used: boolean;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  organization_name?: string;  // Name of the organization (included in getOrganizationInvite response)
+};
 ```
 
 ### Membership API Methods
 
-- `inviteDeveloper(orgId: string, email: string, role?: string): Promise<{ code: string }>`: Creates an invitation to join an organization.
+- `inviteDeveloper(orgId: string, email: string, role?: string): Promise<OrganizationInvite>`: Creates an invitation to join an organization.
 - `listOrganizationMembers(orgId: string): Promise<OrganizationMember[]>`: Lists all members of an organization.
+- `listOrganizationInvites(orgId: string): Promise<OrganizationInvite[]>`: Lists all pending invitations for an organization.
+- `getOrganizationInvite(orgId: string, inviteCode: string): Promise<OrganizationInvite>`: Gets a specific invitation by UUID code.
+- `deleteOrganizationInvite(orgId: string, inviteCode: string): Promise<{ message: string }>`: Deletes an invitation.
 - `updateMemberRole(orgId: string, userId: string, role: string): Promise<OrganizationMember>`: Updates a member's role.
 - `removeMember(orgId: string, userId: string): Promise<void>`: Removes a member from the organization.
-- `acceptInvite(code: string): Promise<void>`: Accepts an organization invitation.
+- `acceptInvite(code: string): Promise<{ message: string }>`: Accepts an organization invitation.
 
 Example:
 ```tsx
+// Create an invitation
 const handleInviteDeveloper = async (orgId) => {
   try {
-    const result = await dev.inviteDeveloper(
+    const invite = await dev.inviteDeveloper(
       orgId,
       "developer@example.com",
       "admin" // Possible roles: "owner", "admin", "developer", "viewer"
     );
-    console.log("Invitation sent with code:", result.code);
+    console.log("Invitation sent:", invite);
   } catch (error) {
     console.error("Failed to invite developer:", error);
+  }
+};
+
+// List all invitations
+const handleListInvites = async (orgId) => {
+  try {
+    const invites = await dev.listOrganizationInvites(orgId);
+    console.log("Pending invitations:", invites);
+  } catch (error) {
+    console.error("Failed to list invitations:", error);
+  }
+};
+
+// Get a specific invitation
+const handleGetInvite = async (orgId, inviteCode) => {
+  try {
+    const invite = await dev.getOrganizationInvite(orgId, inviteCode);
+    console.log("Invitation details:", invite);
+    console.log(`This invitation is for organization: ${invite.organization_name}`);
+  } catch (error) {
+    console.error("Failed to get invitation:", error);
+  }
+};
+
+// Delete an invitation
+const handleDeleteInvite = async (orgId, inviteCode) => {
+  try {
+    const result = await dev.deleteOrganizationInvite(orgId, inviteCode);
+    console.log(result.message);
+  } catch (error) {
+    console.error("Failed to delete invitation:", error);
+  }
+};
+
+// Accept an invitation
+const handleAcceptInvite = async (inviteCode) => {
+  try {
+    const result = await dev.acceptInvite(inviteCode);
+    console.log(result.message);  // "Invite accepted successfully"
+  } catch (error) {
+    console.error("Failed to accept invitation:", error);
   }
 };
 ```

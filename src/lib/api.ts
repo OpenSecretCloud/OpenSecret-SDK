@@ -205,7 +205,10 @@ export async function requestNewVerificationCode(): Promise<void> {
   );
 }
 
-export async function fetchAttestationDocument(nonce: string, explicitApiUrl?: string): Promise<string> {
+export async function fetchAttestationDocument(
+  nonce: string,
+  explicitApiUrl?: string
+): Promise<string> {
   const url = explicitApiUrl || apiUrl;
   const response = await fetch(`${url}/attestation/${nonce}`);
   if (!response.ok) {

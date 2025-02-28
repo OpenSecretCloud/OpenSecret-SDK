@@ -10,7 +10,7 @@ export function useOnMount(callback: () => void) {
 
 // Helper function to sleep for a specified duration
 export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Extend the Window interface to include our custom property

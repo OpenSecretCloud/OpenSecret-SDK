@@ -257,7 +257,10 @@ async function fakeAuthenticate(
   return zodParsed;
 }
 
-export async function verifyAttestation(nonce: string, explicitApiUrl?: string): Promise<AttestationDocument> {
+export async function verifyAttestation(
+  nonce: string,
+  explicitApiUrl?: string
+): Promise<AttestationDocument> {
   try {
     const attestationDocumentBase64 = await fetchAttestationDocument(nonce, explicitApiUrl);
 

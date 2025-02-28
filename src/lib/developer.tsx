@@ -20,7 +20,8 @@ import type {
   OAuthSettings,
   OrganizationMember,
   PlatformOrg,
-  PlatformUser
+  PlatformUser,
+  OrganizationInvite
 } from "./platformApi";
 
 export type DeveloperRole = "owner" | "admin" | "developer" | "viewer";
@@ -46,7 +47,7 @@ export type OpenSecretDeveloperContextType = {
    * @param email - Developer's email address
    * @param password - Developer's password
    * @returns A promise that resolves to the login response with access and refresh tokens
-   * 
+   *
    * @description
    * - Calls the login API endpoint
    * - Stores access_token and refresh_token in localStorage
@@ -61,7 +62,7 @@ export type OpenSecretDeveloperContextType = {
    * @param password - Developer's password
    * @param name - Optional developer name
    * @returns A promise that resolves to the login response with access and refresh tokens
-   * 
+   *
    * @description
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
@@ -76,14 +77,14 @@ export type OpenSecretDeveloperContextType = {
 
   /**
    * Signs out the current developer by removing authentication tokens
-   * 
+   *
    * @description
    * - Calls the logout API endpoint with the current refresh_token
    * - Removes access_token, refresh_token from localStorage
    * - Resets the developer state to show no user is authenticated
    */
   signOut: () => Promise<void>;
-  
+
   /**
    * Refreshes the developer's authentication state
    * @returns A promise that resolves when the refresh is complete
@@ -95,7 +96,7 @@ export type OpenSecretDeveloperContextType = {
    * - Useful after making changes that affect developer profile or organization membership
    */
   refetchDeveloper: () => Promise<void>;
-  
+
   /**
    * Additional PCR0 hashes to validate against
    */
@@ -288,13 +289,33 @@ export type OpenSecretDeveloperContextType = {
    * @param email - Developer's email address
    * @param role - Role to assign (defaults to "admin")
    */
-  inviteDeveloper: (orgId: string, email: string, role?: string) => Promise<{ code: string }>;
+  inviteDeveloper: (orgId: string, email: string, role?: string) => Promise<OrganizationInvite>;
 
   /**
    * Lists all members of an organization
    * @param orgId - Organization ID
    */
   listOrganizationMembers: (orgId: string) => Promise<OrganizationMember[]>;
+
+  /**
+   * Lists all pending invitations for an organization
+   * @param orgId - Organization ID
+   */
+  listOrganizationInvites: (orgId: string) => Promise<OrganizationInvite[]>;
+
+  /**
+   * Gets a specific invitation by code
+   * @param orgId - Organization ID
+   * @param inviteCode - Invitation UUID code
+   */
+  getOrganizationInvite: (orgId: string, inviteCode: string) => Promise<OrganizationInvite>;
+
+  /**
+   * Deletes an invitation
+   * @param orgId - Organization ID
+   * @param inviteCode - Invitation UUID code
+   */
+  deleteOrganizationInvite: (orgId: string, inviteCode: string) => Promise<{ message: string }>;
 
   /**
    * Updates a member's role
@@ -313,9 +334,9 @@ export type OpenSecretDeveloperContextType = {
 
   /**
    * Accepts an organization invitation
-   * @param code - Invitation code
+   * @param code - Invitation UUID code
    */
-  acceptInvite: (code: string) => Promise<void>;
+  acceptInvite: (code: string) => Promise<{ message: string }>;
 
   /**
    * Returns the current OpenSecret developer API URL being used
@@ -328,11 +349,11 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
     loading: true,
     developer: undefined
   },
-  signIn: async () => { 
-    throw new Error("signIn called outside of OpenSecretDeveloper provider"); 
+  signIn: async () => {
+    throw new Error("signIn called outside of OpenSecretDeveloper provider");
   },
-  signUp: async () => { 
-    throw new Error("signUp called outside of OpenSecretDeveloper provider"); 
+  signUp: async () => {
+    throw new Error("signUp called outside of OpenSecretDeveloper provider");
   },
   signOut: async () => {
     throw new Error("signOut called outside of OpenSecretDeveloper provider");
@@ -366,6 +387,9 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   updateOAuthSettings: platformApi.updateOAuthSettings,
   inviteDeveloper: platformApi.inviteDeveloper,
   listOrganizationMembers: platformApi.listOrganizationMembers,
+  listOrganizationInvites: platformApi.listOrganizationInvites,
+  getOrganizationInvite: platformApi.getOrganizationInvite,
+  deleteOrganizationInvite: platformApi.deleteOrganizationInvite,
   updateMemberRole: platformApi.updateMemberRole,
   removeMember: platformApi.removeMember,
   acceptInvite: platformApi.acceptInvite,
@@ -410,9 +434,9 @@ export function OpenSecretDeveloper({
       );
     }
     setPlatformApiUrl(apiUrl);
-    
+
     // Store the platform API URL in window for access from other modules
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       window.__PLATFORM_API_URL__ = apiUrl;
     }
   }, [apiUrl]);
@@ -445,7 +469,7 @@ export function OpenSecretDeveloper({
       });
     }
   }
-  
+
   const getAttestationDocument = async () => {
     const nonce = window.crypto.randomUUID();
     const response = await fetch(`${apiUrl}/attestation/${nonce}`);
@@ -472,7 +496,7 @@ export function OpenSecretDeveloper({
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
       await fetchDeveloper();
-      return { access_token, refresh_token, id: '', email };
+      return { access_token, refresh_token, id: "", email };
     } catch (error) {
       console.error("Login error:", error);
       throw error;
@@ -481,11 +505,15 @@ export function OpenSecretDeveloper({
 
   async function signUp(email: string, password: string, name?: string) {
     try {
-      const { access_token, refresh_token } = await platformApi.platformRegister(email, password, name);
+      const { access_token, refresh_token } = await platformApi.platformRegister(
+        email,
+        password,
+        name
+      );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
       await fetchDeveloper();
-      return { access_token, refresh_token, id: '', email, name };
+      return { access_token, refresh_token, id: "", email, name };
     } catch (error) {
       console.error("Registration error:", error);
       throw error;
@@ -537,6 +565,9 @@ export function OpenSecretDeveloper({
     updateOAuthSettings: platformApi.updateOAuthSettings,
     inviteDeveloper: platformApi.inviteDeveloper,
     listOrganizationMembers: platformApi.listOrganizationMembers,
+    listOrganizationInvites: platformApi.listOrganizationInvites,
+    getOrganizationInvite: platformApi.getOrganizationInvite,
+    deleteOrganizationInvite: platformApi.deleteOrganizationInvite,
     updateMemberRole: platformApi.updateMemberRole,
     removeMember: platformApi.removeMember,
     acceptInvite: platformApi.acceptInvite,
