@@ -89,6 +89,7 @@ export type OAuthSettings = {
 export type OrganizationMember = {
   user_id: string;
   role: string;
+  name?: string;
 };
 
 let platformApiUrl = "";

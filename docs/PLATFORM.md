@@ -2,7 +2,7 @@
 
 The Developer Platform API allows developers to manage organizations, projects, secrets, and user access within the OpenSecret platform. This API is specifically designed for developers integrating OpenSecret into their applications and platforms.
 
-### `OpenSecretDeveloper`
+## `OpenSecretDeveloper`
 
 The `OpenSecretDeveloper` component is the provider for developer-specific platform operations. It requires the URL of the OpenSecret developer API.
 
@@ -21,7 +21,104 @@ function App() {
 }
 ```
 
-### Developer Authentication
+## Types Reference
+
+Here are the main types used throughout the Platform API:
+
+```typescript
+// Authentication Types
+export type PlatformLoginResponse = {
+  id: string;
+  email: string;
+  name?: string;
+  access_token: string;
+  refresh_token: string;
+};
+
+export type PlatformRefreshResponse = {
+  access_token: string;
+  refresh_token: string;
+};
+
+// User Types
+export type PlatformUser = {
+  id: string;
+  email: string;
+  name?: string;
+  email_verified: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlatformOrg = {
+  id: string;
+  name: string;
+  role?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type MeResponse = {
+  user: PlatformUser;
+  organizations: PlatformOrg[];
+};
+
+// Organization Types
+export type Organization = {
+  id: string;
+  name: string;
+};
+
+export type OrganizationMember = {
+  user_id: string;
+  role: string;
+  name?: string;
+};
+
+// Project Types
+export type Project = {
+  id: string;
+  client_id: string;
+  name: string;
+  description?: string;
+  status: string;
+  created_at: string;
+};
+
+// Project Settings Types
+export type ProjectSecret = {
+  key_name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectSettings = {
+  category: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailSettings = {
+  provider: string;
+  send_from: string;
+  email_verification_url: string;
+};
+
+export type OAuthProviderSettings = {
+  client_id: string;
+  redirect_url: string;
+};
+
+export type OAuthSettings = {
+  google_oauth_enabled: boolean;
+  github_oauth_enabled: boolean;
+  google_oauth_settings?: OAuthProviderSettings;
+  github_oauth_settings?: OAuthProviderSettings;
+};
+```
+
+## Developer Authentication
 
 Before using the developer platform APIs, you need to authenticate. The SDK provides authentication methods through the `useOpenSecretDeveloper` hook:
 
@@ -77,6 +174,17 @@ function DeveloperLogin() {
 }
 ```
 
+### Authentication API Types and Methods
+
+```typescript
+// Authentication Methods
+platformLogin(email: string, password: string): Promise<PlatformLoginResponse>
+platformRegister(email: string, password: string, name?: string): Promise<PlatformLoginResponse>
+platformLogout(refresh_token: string): Promise<void>
+platformRefreshToken(): Promise<PlatformRefreshResponse>
+platformMe(): Promise<MeResponse>
+```
+
 When a developer successfully logs in or registers, the authentication tokens are stored in localStorage and managed by the SDK. The `OpenSecretDeveloper` provider automatically detects these tokens and loads the developer profile. You can check the authentication state using the `auth` property:
 
 ```tsx
@@ -90,7 +198,7 @@ if (!dev.auth.loading && dev.auth.developer) {
 }
 ```
 
-### `useOpenSecretDeveloper`
+## `useOpenSecretDeveloper`
 
 The `useOpenSecretDeveloper` hook provides access to all developer platform management APIs. It returns an object with the following properties and methods:
 
@@ -108,7 +216,7 @@ function PlatformManagement() {
 }
 ```
 
-#### Developer State
+### Developer State
 
 - `auth`: An object containing the current developer's information
   - `loading`: Boolean indicating whether developer information is being loaded
@@ -119,14 +227,14 @@ function PlatformManagement() {
     - `organizations`: Array of organizations the developer belongs to
 - `apiUrl`: The current OpenSecret developer API URL being used
 
-#### Developer Authentication
+### Developer Authentication
 
 - `signIn(email: string, password: string): Promise<PlatformLoginResponse>`: Signs in a developer with the provided email and password. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
 - `signUp(email: string, password: string, name?: string): Promise<PlatformLoginResponse>`: Registers a new developer account with the provided email, password, and optional name. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
 - `signOut(): Promise<void>`: Signs out the current developer by removing authentication tokens and making a server logout call.
 - `refetchDeveloper(): Promise<void>`: Refreshes the developer's authentication state. Useful after making changes that affect developer profile or organization membership.
 
-#### Attestation Verification
+### Attestation Verification
 
 - `pcrConfig`: An object containing additional PCR0 hashes to validate against.
 - `getAttestation`: Gets attestation from the enclave.
@@ -139,7 +247,24 @@ function PlatformManagement() {
   2. Authenticates the document
   3. Parses it for viewing
 
-#### Organization Management
+## Organization Management
+
+### Organization API Types
+
+```typescript
+export type Organization = {
+  id: string;
+  name: string;
+};
+
+export type OrganizationMember = {
+  user_id: string;
+  role: string;
+  name?: string;
+};
+```
+
+### Organization API Methods
 
 - `createOrganization(name: string): Promise<Organization>`: Creates a new organization with the given name.
 - `listOrganizations(): Promise<Organization[]>`: Lists all organizations the developer has access to.
@@ -157,7 +282,22 @@ const handleCreateOrg = async () => {
 };
 ```
 
-#### Project Management
+## Project Management
+
+### Project API Types
+
+```typescript
+export type Project = {
+  id: string;
+  client_id: string;
+  name: string;
+  description?: string;
+  status: string;
+  created_at: string;
+};
+```
+
+### Project API Methods
 
 - `createProject(orgId: string, name: string, description?: string): Promise<Project>`: Creates a new project within an organization.
 - `listProjects(orgId: string): Promise<Project[]>`: Lists all projects within an organization.
@@ -191,7 +331,19 @@ const handleGetProject = async (orgId, projectId) => {
 };
 ```
 
-#### Project Secrets Management
+## Project Secrets Management
+
+### Project Secrets API Types
+
+```typescript
+export type ProjectSecret = {
+  key_name: string;
+  created_at: string;
+  updated_at: string;
+};
+```
+
+### Project Secrets API Methods
 
 - `createProjectSecret(orgId: string, projectId: string, keyName: string, secret: string): Promise<ProjectSecret>`: Creates a new secret for a project. The secret must be base64 encoded.
 - `listProjectSecrets(orgId: string, projectId: string): Promise<ProjectSecret[]>`: Lists all secrets for a project.
@@ -220,7 +372,19 @@ const handleCreateSecret = async (orgId, projectId) => {
 };
 ```
 
-#### Email Configuration
+## Email Configuration
+
+### Email Settings API Types
+
+```typescript
+export type EmailSettings = {
+  provider: string;
+  send_from: string;
+  email_verification_url: string;
+};
+```
+
+### Email Settings API Methods
 
 - `getEmailSettings(orgId: string, projectId: string): Promise<EmailSettings>`: Gets email configuration for a project.
 - `updateEmailSettings(orgId: string, projectId: string, settings: EmailSettings): Promise<EmailSettings>`: Updates email configuration.
@@ -241,7 +405,25 @@ const handleUpdateEmailSettings = async (orgId, projectId) => {
 };
 ```
 
-#### OAuth Configuration
+## OAuth Configuration
+
+### OAuth Settings API Types
+
+```typescript
+export type OAuthProviderSettings = {
+  client_id: string;
+  redirect_url: string;
+};
+
+export type OAuthSettings = {
+  google_oauth_enabled: boolean;
+  github_oauth_enabled: boolean;
+  google_oauth_settings?: OAuthProviderSettings;
+  github_oauth_settings?: OAuthProviderSettings;
+};
+```
+
+### OAuth Settings API Methods
 
 - `getOAuthSettings(orgId: string, projectId: string): Promise<OAuthSettings>`: Gets OAuth settings for a project.
 - `updateOAuthSettings(orgId: string, projectId: string, settings: OAuthSettings): Promise<OAuthSettings>`: Updates OAuth configuration.
@@ -265,7 +447,19 @@ const handleUpdateOAuthSettings = async (orgId, projectId) => {
 };
 ```
 
-#### Developer Membership Management
+## Developer Membership Management
+
+### Membership API Types
+
+```typescript
+export type OrganizationMember = {
+  user_id: string;
+  role: string;
+  name?: string;
+};
+```
+
+### Membership API Methods
 
 - `inviteDeveloper(orgId: string, email: string, role?: string): Promise<{ code: string }>`: Creates an invitation to join an organization.
 - `listOrganizationMembers(orgId: string): Promise<OrganizationMember[]>`: Lists all members of an organization.
@@ -289,7 +483,7 @@ const handleInviteDeveloper = async (orgId) => {
 };
 ```
 
-### Complete Example
+## Complete Example
 
 Here's a complete example of how to use the developer platform API:
 
