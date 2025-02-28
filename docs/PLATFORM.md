@@ -230,7 +230,7 @@ Example:
 const handleUpdateEmailSettings = async (orgId, projectId) => {
   try {
     await dev.updateEmailSettings(orgId, projectId, {
-      provider: "smtp",
+      provider: "resend",
       send_from: "noreply@yourdomain.com",
       email_verification_url: "https://yourdomain.com/verify-email"
     });

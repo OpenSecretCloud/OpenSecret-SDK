@@ -254,6 +254,21 @@ export async function deleteProject(orgId: string, projectId: string): Promise<v
   );
 }
 
+// Helper function to check if a string is valid base64
+function isValidBase64(str: string): boolean {
+  // Base64 should have a length that is a multiple of 4
+  // It should only contain characters A-Z, a-z, 0-9, +, /, and end with '=' or '=='
+  const base64Regex = /^[A-Za-z0-9+/]*[=]{0,2}$/;
+  
+  // Check if the string length is a multiple of 4
+  const validLength = str.length % 4 === 0;
+  
+  // Check if the string only contains valid base64 characters
+  const validChars = base64Regex.test(str);
+  
+  return validLength && validChars;
+}
+
 // Project Secrets
 export async function createProjectSecret(
   orgId: string,
@@ -261,7 +276,11 @@ export async function createProjectSecret(
   keyName: string,
   secret: string
 ): Promise<ProjectSecret> {
-  // The secret parameter should already be base64 encoded by the caller
+  // Validate that the secret is base64 encoded
+  if (!isValidBase64(secret)) {
+    throw new Error("Secret must be base64 encoded. Use @stablelib/base64's encode function to encode your data.");
+  }
+  
   return authenticatedApiCall<{ key_name: string; secret: string }, ProjectSecret>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets`,
     "POST",
