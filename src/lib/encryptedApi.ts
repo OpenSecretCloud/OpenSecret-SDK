@@ -2,6 +2,7 @@ import { encryptMessage, decryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import { refreshToken } from "./api";
 import { platformRefreshToken } from "./platformApi";
+import { apiConfig } from "./apiConfig";
 
 interface EncryptedResponse {
   encrypted: string;
@@ -23,13 +24,14 @@ export async function authenticatedApiCall<T, U>(
     try {
       if (forceRefresh) {
         console.log("Refreshing access token");
-        // Determine which refresh function to use based on the URL
-        // If it's a platform API call, use platformRefreshToken, otherwise use regular refreshToken
-        if (url.includes("/platform/")) {
-          console.log("Using platform refresh token");
+
+        // Use the apiConfig to determine which refresh function to use
+        const refreshFn = apiConfig.getRefreshFunction(url);
+        console.log(`Using ${refreshFn}`);
+
+        if (refreshFn === "platformRefreshToken") {
           await platformRefreshToken();
         } else {
-          console.log("Using regular refresh token");
           await refreshToken();
         }
       }
@@ -82,12 +84,9 @@ async function internalEncryptedApiCall<T, U>(
   accessToken?: string,
   errorMessage?: string
 ): Promise<ApiResponse<U>> {
-  // Check if we're using the platform API
-  const isPlatformApiCall = url.includes("/platform/");
-  const platformApiUrl = typeof window !== "undefined" ? window.__PLATFORM_API_URL__ : "";
-
-  // Use the platform API URL for attestation if this is a platform API call
-  const explicitApiUrl = isPlatformApiCall ? platformApiUrl : undefined;
+  // Use apiConfig to determine the context and get the appropriate API URL
+  const endpoint = apiConfig.resolveEndpoint(url);
+  const explicitApiUrl = endpoint.context === "platform" ? apiConfig.platformApiUrl : undefined;
 
   let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 

@@ -7,6 +7,9 @@ export type {
   GoogleAuthResponse
 } from "./api";
 
+// Export API configuration
+export { apiConfig, type ApiContext, type ApiEndpoint } from "./apiConfig";
+
 // Export the provider and context
 export { OpenSecretProvider, OpenSecretContext } from "./main";
 export { OpenSecretDeveloper, OpenSecretDeveloperContext } from "./developer";

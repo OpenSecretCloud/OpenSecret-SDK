@@ -444,6 +444,13 @@ export function OpenSecretProvider({
       );
     }
     api.setApiUrl(apiUrl);
+
+    // Configure the apiConfig service with the app URL
+    // Using dynamic import to avoid circular dependencies
+    import("./apiConfig").then(({ apiConfig }) => {
+      const platformUrl = apiConfig.platformApiUrl || '';
+      apiConfig.configure(apiUrl, platformUrl);
+    });
   }, [apiUrl, clientId]);
 
   // Create aiCustomFetch when user is authenticated

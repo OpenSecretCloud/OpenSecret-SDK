@@ -12,10 +12,3 @@ export function useOnMount(callback: () => void) {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-// Extend the Window interface to include our custom property
-declare global {
-  interface Window {
-    __PLATFORM_API_URL__?: string;
-  }
-}

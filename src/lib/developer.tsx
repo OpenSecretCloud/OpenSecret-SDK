@@ -435,10 +435,12 @@ export function OpenSecretDeveloper({
     }
     setPlatformApiUrl(apiUrl);
 
-    // Store the platform API URL in window for access from other modules
-    if (typeof window !== "undefined") {
-      window.__PLATFORM_API_URL__ = apiUrl;
-    }
+    // Configure the apiConfig service with the platform URL
+    // Using dynamic import to avoid circular dependencies
+    import("./apiConfig").then(({ apiConfig }) => {
+      const appUrl = apiConfig.appApiUrl || '';
+      apiConfig.configure(appUrl, apiUrl);
+    });
   }, [apiUrl]);
 
   async function fetchDeveloper() {
