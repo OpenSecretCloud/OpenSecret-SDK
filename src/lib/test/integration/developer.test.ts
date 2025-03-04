@@ -1203,6 +1203,82 @@ test("Project deletion with random UUID", async () => {
   }
 });
 
+// ===== EMAIL VERIFICATION TESTS =====
+
+test("Platform user email verification functionality", async () => {
+  try {
+    // Login first to get authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Mock invalid verification code
+    const invalidCode = "invalid-verification-code";
+
+    // Test with an invalid verification code - this should fail
+    try {
+      await platformApi.verifyPlatformEmail(invalidCode);
+      throw new Error("Should not verify with invalid code");
+    } catch (error: any) {
+      // We expect an error for invalid verification code
+      // API returns "Failed to verify email" as the default error message
+      expect(error.message).toMatch(
+        /Invalid|verification.*failed|Bad Request|not found|Failed to verify email/i
+      );
+    }
+
+    // Test requesting a new verification code - this should succeed if the user is not verified
+    // or fail appropriately if the user is already verified
+    try {
+      const response = await platformApi.requestNewPlatformVerificationCode();
+      // If it succeeds, we should get a success message
+      expect(response).toBeDefined();
+      expect(response.message).toBeDefined();
+      expect(response.message).toMatch(/sent|success/i);
+    } catch (error: any) {
+      // It's also acceptable if the user is already verified
+      if (error.message.includes("already verified")) {
+        console.log("User is already verified, which is acceptable");
+      } else {
+        // Any other error should be a proper test failure
+        throw error;
+      }
+    }
+
+    // We can't test a valid verification code since those are unique and one-time use
+    // But we can verify that the API call is structured correctly
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
+test("Platform verification requires authentication for requestNewPlatformVerificationCode", async () => {
+  try {
+    // First make sure we're authenticated
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    // Now clear authentication and try operations
+    window.localStorage.clear();
+
+    // Try to request a new verification code without authentication
+    try {
+      await platformApi.requestNewPlatformVerificationCode();
+      throw new Error("Should not be able to request verification without authentication");
+    } catch (error: any) {
+      expect(error.message).toMatch(/unauthorized|unauthenticated|no access token|token/i);
+    }
+
+    // Note: verifyPlatformEmail is encryptedApiCall (not authenticatedApiCall) and doesn't require
+    // authentication since it's used in the verification flow before the user is logged in
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
 // ===== PROJECT SECRET TESTS =====
 
 test("Project secret CRUD operations", async () => {

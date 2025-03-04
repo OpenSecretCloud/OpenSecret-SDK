@@ -57,6 +57,36 @@ export type OpenSecretDeveloperContextType = {
   signIn: (email: string, password: string) => Promise<platformApi.PlatformLoginResponse>;
 
   /**
+   * Verifies a platform user's email using the verification code
+   * @param code - The verification code sent to the user's email
+   * @returns A promise that resolves when verification is complete
+   * @throws {Error} If verification fails
+   *
+   * @description
+   * - Takes the verification code from the verification email link
+   * - Calls the verification API endpoint
+   * - Updates email_verified status if successful
+   */
+  verifyEmail: typeof platformApi.verifyPlatformEmail;
+
+  /**
+   * Requests a new verification email for the current user
+   * @returns A promise that resolves to a success message
+   * @throws {Error} If the user is already verified or request fails
+   *
+   * @description
+   * - Used when the user needs a new verification email
+   * - Requires the user to be authenticated
+   * - Sends a new verification email to the user's registered email address
+   */
+  requestNewVerificationCode: typeof platformApi.requestNewPlatformVerificationCode;
+
+  /**
+   * Alias for requestNewVerificationCode - for consistency with OpenSecretContext
+   */
+  requestNewVerificationEmail: typeof platformApi.requestNewPlatformVerificationCode;
+
+  /**
    * Registers a new developer account
    * @param email - Developer's email address
    * @param password - Developer's password
@@ -361,6 +391,9 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   refetchDeveloper: async () => {
     throw new Error("refetchDeveloper called outside of OpenSecretDeveloper provider");
   },
+  verifyEmail: platformApi.verifyPlatformEmail,
+  requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
+  requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
   pcrConfig: {},
   getAttestation,
   authenticate,
@@ -438,7 +471,7 @@ export function OpenSecretDeveloper({
     // Configure the apiConfig service with the platform URL
     // Using dynamic import to avoid circular dependencies
     import("./apiConfig").then(({ apiConfig }) => {
-      const appUrl = apiConfig.appApiUrl || '';
+      const appUrl = apiConfig.appApiUrl || "";
       apiConfig.configure(appUrl, apiUrl);
     });
   }, [apiUrl]);
@@ -543,6 +576,9 @@ export function OpenSecretDeveloper({
         developer: undefined
       });
     },
+    verifyEmail: platformApi.verifyPlatformEmail,
+    requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
+    requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
     pcrConfig,
     getAttestation,
     authenticate,

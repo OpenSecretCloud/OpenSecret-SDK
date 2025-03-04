@@ -448,7 +448,7 @@ export function OpenSecretProvider({
     // Configure the apiConfig service with the app URL
     // Using dynamic import to avoid circular dependencies
     import("./apiConfig").then(({ apiConfig }) => {
-      const platformUrl = apiConfig.platformApiUrl || '';
+      const platformUrl = apiConfig.platformApiUrl || "";
       apiConfig.configure(apiUrl, platformUrl);
     });
   }, [apiUrl, clientId]);

@@ -166,6 +166,28 @@ function DeveloperLogin() {
     }
   }
 
+  // Email verification
+  async function handleVerifyEmail(code: string) {
+    try {
+      await dev.verifyEmail(code);
+      console.log("Email verified successfully");
+      // Reload developer info to update email_verified status
+      await dev.refetchDeveloper();
+    } catch (error) {
+      console.error("Email verification failed:", error);
+    }
+  }
+
+  // Request new verification email
+  async function handleRequestNewVerificationEmail() {
+    try {
+      const response = await dev.requestNewVerificationEmail();
+      console.log(response.message);
+    } catch (error) {
+      console.error("Failed to request new verification email:", error);
+    }
+  }
+
   return (
     <div>
       {/* Login/Register UI */}
@@ -183,6 +205,10 @@ platformRegister(email: string, password: string, name?: string): Promise<Platfo
 platformLogout(refresh_token: string): Promise<void>
 platformRefreshToken(): Promise<PlatformRefreshResponse>
 platformMe(): Promise<MeResponse>
+
+// Email Verification Methods
+verifyPlatformEmail(code: string): Promise<void>
+requestNewPlatformVerificationCode(): Promise<{ message: string }>
 ```
 
 When a developer successfully logs in or registers, the authentication tokens are stored in localStorage and managed by the SDK. The `OpenSecretDeveloper` provider automatically detects these tokens and loads the developer profile. You can check the authentication state using the `auth` property:
@@ -233,6 +259,9 @@ function PlatformManagement() {
 - `signUp(email: string, password: string, name?: string): Promise<PlatformLoginResponse>`: Registers a new developer account with the provided email, password, and optional name. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
 - `signOut(): Promise<void>`: Signs out the current developer by removing authentication tokens and making a server logout call.
 - `refetchDeveloper(): Promise<void>`: Refreshes the developer's authentication state. Useful after making changes that affect developer profile or organization membership.
+- `verifyEmail(code: string): Promise<void>`: Verifies a developer's email address using the verification code sent to their email. This method is used to complete the email verification process.
+- `requestNewVerificationCode(): Promise<{ message: string }>`: Requests a new verification email to be sent to the developer's email address. Used when the original verification email was not received or expired.
+- `requestNewVerificationEmail(): Promise<{ message: string }>`: Alias for `requestNewVerificationCode()` for consistency with the OpenSecretContext API.
 
 ### Attestation Verification
 

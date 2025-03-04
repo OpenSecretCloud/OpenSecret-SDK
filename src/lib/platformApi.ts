@@ -455,3 +455,33 @@ export async function acceptInvite(code: string): Promise<{ message: string }> {
 export async function platformMe(): Promise<MeResponse> {
   return authenticatedApiCall<void, MeResponse>(`${platformApiUrl}/platform/me`, "GET", undefined);
 }
+
+/**
+ * Verifies a platform user's email using the verification code
+ * @param code - The verification code sent to the user's email
+ * @returns A promise that resolves when verification is complete
+ * @throws {Error} If verification fails
+ */
+export async function verifyPlatformEmail(code: string): Promise<void> {
+  return encryptedApiCall<void, void>(
+    `${platformApiUrl}/platform/verify-email/${code}`,
+    "GET",
+    undefined,
+    undefined,
+    "Failed to verify email"
+  );
+}
+
+/**
+ * Requests a new verification email for a platform user
+ * @returns A promise that resolves to a success message
+ * @throws {Error} If the user is already verified or request fails
+ */
+export async function requestNewPlatformVerificationCode(): Promise<{ message: string }> {
+  return authenticatedApiCall<void, { message: string }>(
+    `${platformApiUrl}/platform/request_verification`,
+    "POST",
+    undefined,
+    "Failed to request new verification code"
+  );
+}
