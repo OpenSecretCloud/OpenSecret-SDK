@@ -209,6 +209,86 @@ platformMe(): Promise<MeResponse>
 // Email Verification Methods
 verifyPlatformEmail(code: string): Promise<void>
 requestNewPlatformVerificationCode(): Promise<{ message: string }>
+
+// Password Management Methods
+requestPlatformPasswordReset(email: string, hashedSecret: string): Promise<void>
+confirmPlatformPasswordReset(
+  email: string, 
+  alphanumericCode: string, 
+  plaintextSecret: string, 
+  newPassword: string
+): Promise<{ message: string }>
+changePlatformPassword(currentPassword: string, newPassword: string): Promise<{ message: string }>
+```
+
+### Password Management
+
+The SDK provides methods for managing platform developer passwords, including password reset and password change functionality:
+
+```tsx
+import { useOpenSecretDeveloper } from "@opensecret/react";
+import { generateSecureSecret, hashSecret } from "@opensecret/react";
+
+function DeveloperPasswordManagement() {
+  const dev = useOpenSecretDeveloper();
+
+  // Request password reset
+  async function handleRequestPasswordReset(email: string) {
+    try {
+      // Generate a secure random secret and its hash for verification
+      const plaintextSecret = generateSecureSecret();
+      const hashedSecret = hashSecret(plaintextSecret);
+      
+      // Store the plaintext secret securely (e.g., in component state)
+      // to be used in the confirmation step
+      setStoredSecret(plaintextSecret);
+      
+      // Request the password reset
+      await dev.requestPasswordReset(email, hashedSecret);
+      console.log("Password reset email sent. Check your inbox for the code.");
+    } catch (error) {
+      console.error("Failed to request password reset:", error);
+    }
+  }
+
+  // Confirm password reset with code from email
+  async function handleConfirmPasswordReset(
+    email: string,
+    code: string,
+    plaintextSecret: string,
+    newPassword: string
+  ) {
+    try {
+      const response = await dev.confirmPasswordReset(
+        email,
+        code,
+        plaintextSecret,
+        newPassword
+      );
+      console.log(response.message);
+      // User can now log in with the new password
+    } catch (error) {
+      console.error("Failed to confirm password reset:", error);
+    }
+  }
+  
+  // Change password when already logged in
+  async function handleChangePassword(currentPassword: string, newPassword: string) {
+    try {
+      const response = await dev.changePassword(currentPassword, newPassword);
+      console.log(response.message);
+      // Password has been updated
+    } catch (error) {
+      console.error("Failed to change password:", error);
+    }
+  }
+
+  return (
+    <div>
+      {/* Password Management UI */}
+    </div>
+  );
+}
 ```
 
 When a developer successfully logs in or registers, the authentication tokens are stored in localStorage and managed by the SDK. The `OpenSecretDeveloper` provider automatically detects these tokens and loads the developer profile. You can check the authentication state using the `auth` property:
@@ -262,6 +342,9 @@ function PlatformManagement() {
 - `verifyEmail(code: string): Promise<void>`: Verifies a developer's email address using the verification code sent to their email. This method is used to complete the email verification process.
 - `requestNewVerificationCode(): Promise<{ message: string }>`: Requests a new verification email to be sent to the developer's email address. Used when the original verification email was not received or expired.
 - `requestNewVerificationEmail(): Promise<{ message: string }>`: Alias for `requestNewVerificationCode()` for consistency with the OpenSecretContext API.
+- `requestPasswordReset(email: string, hashedSecret: string): Promise<void>`: Initiates the password reset process for a platform developer account. The hashedSecret is used for additional security verification and should be created using the `hashSecret` function.
+- `confirmPasswordReset(email: string, alphanumericCode: string, plaintextSecret: string, newPassword: string): Promise<{ message: string }>`: Completes the password reset process for a platform developer account using the code received via email and the plaintext secret that corresponds to the hashed secret sent in the initial request.
+- `changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }>`: Changes the password for an authenticated platform developer account. Requires the user to be logged in and to provide their current password for verification.
 
 ### Attestation Verification
 

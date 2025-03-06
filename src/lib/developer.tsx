@@ -87,6 +87,52 @@ export type OpenSecretDeveloperContextType = {
   requestNewVerificationEmail: typeof platformApi.requestNewPlatformVerificationCode;
 
   /**
+   * Initiates the password reset process for a platform developer account
+   * @param email - Developer's email address
+   * @param hashedSecret - Hashed secret used for additional security verification
+   * @returns A promise that resolves when the reset request is successfully processed
+   * @throws {Error} If the request fails or the email doesn't exist
+   *
+   * @description
+   * - Sends a password reset request for a platform developer
+   * - The server will send an email with an alphanumeric code
+   * - The email and hashed_secret are paired for the reset process
+   * - Use confirmPasswordReset to complete the process
+   */
+  requestPasswordReset: typeof platformApi.requestPlatformPasswordReset;
+
+  /**
+   * Completes the password reset process for a platform developer account
+   * @param email - Developer's email address
+   * @param alphanumericCode - Code received via email
+   * @param plaintextSecret - The plaintext secret that corresponds to the hashed_secret sent in the request
+   * @param newPassword - New password to set
+   * @returns A promise that resolves when the password is successfully reset
+   * @throws {Error} If the verification fails or the request is invalid
+   *
+   * @description
+   * - Completes the password reset process using the code from the email
+   * - Requires the plaintext_secret that matches the previously sent hashed_secret
+   * - Sets the new password if all verification succeeds
+   * - The user can then log in with the new password
+   */
+  confirmPasswordReset: typeof platformApi.confirmPlatformPasswordReset;
+
+  /**
+   * Changes password for a platform developer account
+   * @param currentPassword - Current password for verification
+   * @param newPassword - New password to set
+   * @returns A promise that resolves when the password is successfully changed
+   * @throws {Error} If current password is incorrect or the request fails
+   *
+   * @description
+   * - Requires the user to be authenticated
+   * - Verifies the current password before allowing the change
+   * - Updates to the new password if verification succeeds
+   */
+  changePassword: typeof platformApi.changePlatformPassword;
+
+  /**
    * Registers a new developer account
    * @param email - Developer's email address
    * @param password - Developer's password
@@ -394,6 +440,9 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   verifyEmail: platformApi.verifyPlatformEmail,
   requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
   requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
+  requestPasswordReset: platformApi.requestPlatformPasswordReset,
+  confirmPasswordReset: platformApi.confirmPlatformPasswordReset,
+  changePassword: platformApi.changePlatformPassword,
   pcrConfig: {},
   getAttestation,
   authenticate,
@@ -579,6 +628,9 @@ export function OpenSecretDeveloper({
     verifyEmail: platformApi.verifyPlatformEmail,
     requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
     requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
+    requestPasswordReset: platformApi.requestPlatformPasswordReset,
+    confirmPasswordReset: platformApi.confirmPlatformPasswordReset,
+    changePassword: platformApi.changePlatformPassword,
     pcrConfig,
     getAttestation,
     authenticate,

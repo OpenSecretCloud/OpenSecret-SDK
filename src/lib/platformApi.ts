@@ -485,3 +485,100 @@ export async function requestNewPlatformVerificationCode(): Promise<{ message: s
     "Failed to request new verification code"
   );
 }
+
+/**
+ * Initiates the password reset process for a platform developer account
+ * @param email - Developer's email address
+ * @param hashedSecret - Hashed secret used for additional security verification
+ * @returns A promise that resolves when the reset request is successfully processed
+ * @throws {Error} If the request fails or the email doesn't exist
+ *
+ * @description
+ * This function:
+ * 1. Sends a password reset request for a platform developer
+ * 2. The server will send an email with an alphanumeric code
+ * 3. The email and hashed_secret are paired for the reset process
+ * 4. Use confirmPlatformPasswordReset to complete the process
+ */
+export async function requestPlatformPasswordReset(
+  email: string,
+  hashedSecret: string
+): Promise<void> {
+  const resetData = {
+    email,
+    hashed_secret: hashedSecret
+  };
+  return encryptedApiCall<typeof resetData, void>(
+    `${platformApiUrl}/platform/password-reset/request`,
+    "POST",
+    resetData,
+    undefined,
+    "Failed to request platform password reset"
+  );
+}
+
+/**
+ * Completes the password reset process for a platform developer account
+ * @param email - Developer's email address
+ * @param alphanumericCode - Code received via email
+ * @param plaintextSecret - The plaintext secret that corresponds to the hashed_secret sent in the request
+ * @param newPassword - New password to set
+ * @returns A promise that resolves when the password is successfully reset
+ * @throws {Error} If the verification fails or the request is invalid
+ *
+ * @description
+ * This function:
+ * 1. Completes the password reset process using the code from the email
+ * 2. Requires the plaintext_secret that matches the previously sent hashed_secret
+ * 3. Sets the new password if all verification succeeds
+ * 4. The user can then log in with the new password
+ */
+export async function confirmPlatformPasswordReset(
+  email: string,
+  alphanumericCode: string,
+  plaintextSecret: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  const confirmData = {
+    email,
+    alphanumeric_code: alphanumericCode,
+    plaintext_secret: plaintextSecret,
+    new_password: newPassword
+  };
+  return encryptedApiCall<typeof confirmData, { message: string }>(
+    `${platformApiUrl}/platform/password-reset/confirm`,
+    "POST",
+    confirmData,
+    undefined,
+    "Failed to confirm platform password reset"
+  );
+}
+
+/**
+ * Changes password for a platform developer account
+ * @param currentPassword - Current password for verification
+ * @param newPassword - New password to set
+ * @returns A promise that resolves when the password is successfully changed
+ * @throws {Error} If current password is incorrect or the request fails
+ *
+ * @description
+ * This function:
+ * 1. Requires the user to be authenticated
+ * 2. Verifies the current password before allowing the change
+ * 3. Updates to the new password if verification succeeds
+ */
+export async function changePlatformPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  const changePasswordData = {
+    current_password: currentPassword,
+    new_password: newPassword
+  };
+  return authenticatedApiCall<typeof changePasswordData, { message: string }>(
+    `${platformApiUrl}/platform/change-password`,
+    "POST",
+    changePasswordData,
+    "Failed to change platform password"
+  );
+}
