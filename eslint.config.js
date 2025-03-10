@@ -25,4 +25,12 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Special rules for test files
+    files: ['**/*.test.{ts,tsx}', '**/test/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }]
+    }
+  }
 )

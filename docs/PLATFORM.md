@@ -146,6 +146,7 @@ function DeveloperLogin() {
       const response = await dev.signUp(
         "developer@example.com", 
         "yourpassword", 
+        "01234567-89ab-cdef-0123-456789abcdef", // Required invite code in UUID format
         "Developer Name" // Optional
       );
       console.log("Registration successful", response);
@@ -201,7 +202,7 @@ function DeveloperLogin() {
 ```typescript
 // Authentication Methods
 platformLogin(email: string, password: string): Promise<PlatformLoginResponse>
-platformRegister(email: string, password: string, name?: string): Promise<PlatformLoginResponse>
+platformRegister(email: string, password: string, invite_code: string, name?: string): Promise<PlatformLoginResponse>
 platformLogout(refresh_token: string): Promise<void>
 platformRefreshToken(): Promise<PlatformRefreshResponse>
 platformMe(): Promise<MeResponse>
@@ -336,7 +337,7 @@ function PlatformManagement() {
 ### Developer Authentication
 
 - `signIn(email: string, password: string): Promise<PlatformLoginResponse>`: Signs in a developer with the provided email and password. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
-- `signUp(email: string, password: string, name?: string): Promise<PlatformLoginResponse>`: Registers a new developer account with the provided email, password, and optional name. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
+- `signUp(email: string, password: string, invite_code: string, name?: string): Promise<PlatformLoginResponse>`: Registers a new developer account with the provided email, password, invite code (in UUID format), and optional name. Returns a response containing access and refresh tokens. The authentication state is automatically updated.
 - `signOut(): Promise<void>`: Signs out the current developer by removing authentication tokens and making a server logout call.
 - `refetchDeveloper(): Promise<void>`: Refreshes the developer's authentication state. Useful after making changes that affect developer profile or organization membership.
 - `verifyEmail(code: string): Promise<void>`: Verifies a developer's email address using the verification code sent to their email. This method is used to complete the email verification process.

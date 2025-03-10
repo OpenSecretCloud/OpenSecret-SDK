@@ -136,6 +136,7 @@ export type OpenSecretDeveloperContextType = {
    * Registers a new developer account
    * @param email - Developer's email address
    * @param password - Developer's password
+   * @param invite_code - Required invitation code in UUID format
    * @param name - Optional developer name
    * @returns A promise that resolves to the login response with access and refresh tokens
    *
@@ -148,6 +149,7 @@ export type OpenSecretDeveloperContextType = {
   signUp: (
     email: string,
     password: string,
+    invite_code: string,
     name?: string
   ) => Promise<platformApi.PlatformLoginResponse>;
 
@@ -587,11 +589,12 @@ export function OpenSecretDeveloper({
     }
   }
 
-  async function signUp(email: string, password: string, name?: string) {
+  async function signUp(email: string, password: string, invite_code: string, name?: string) {
     try {
       const { access_token, refresh_token } = await platformApi.platformRegister(
         email,
         password,
+        invite_code,
         name
       );
       window.localStorage.setItem("access_token", access_token);

@@ -127,18 +127,27 @@ export async function platformLogin(
   );
 }
 
+/**
+ * Registers a new platform developer account
+ * @param email Developer's email address
+ * @param password Developer's password
+ * @param invite_code Required invitation code in UUID format
+ * @param name Optional developer name
+ * @returns A promise that resolves to the login response with access and refresh tokens
+ */
 export async function platformRegister(
   email: string,
   password: string,
+  invite_code: string,
   name?: string
 ): Promise<PlatformLoginResponse> {
   return encryptedApiCall<
-    { email: string; password: string; name?: string },
+    { email: string; password: string; invite_code: string; name?: string },
     PlatformLoginResponse
   >(
     `${platformApiUrl}/platform/register`,
     "POST",
-    { email, password, name },
+    { email, password, invite_code, name },
     undefined,
     "Failed to register"
   );
