@@ -67,7 +67,11 @@ class ApiConfigService {
     }
 
     const endpoint = this.resolveEndpoint(path);
-    return `${endpoint.baseUrl}${path}`;
+    const baseUrl = endpoint.baseUrl.endsWith("/")
+      ? endpoint.baseUrl.slice(0, -1)
+      : endpoint.baseUrl;
+    const pathWithSlash = path.startsWith("/") ? path : `/${path}`;
+    return `${baseUrl}${pathWithSlash}`;
   }
 
   /**

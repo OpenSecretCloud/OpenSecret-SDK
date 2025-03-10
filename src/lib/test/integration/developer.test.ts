@@ -9,7 +9,12 @@ const TEST_DEVELOPER_PASSWORD = process.env.VITE_TEST_DEVELOPER_PASSWORD;
 const TEST_DEVELOPER_NAME = process.env.VITE_TEST_DEVELOPER_NAME;
 const TEST_DEVELOPER_INVITE_CODE = process.env.VITE_TEST_DEVELOPER_INVITE_CODE;
 
-if (!TEST_DEVELOPER_EMAIL || !TEST_DEVELOPER_PASSWORD || !TEST_DEVELOPER_NAME || !TEST_DEVELOPER_INVITE_CODE) {
+if (
+  !TEST_DEVELOPER_EMAIL ||
+  !TEST_DEVELOPER_PASSWORD ||
+  !TEST_DEVELOPER_NAME ||
+  !TEST_DEVELOPER_INVITE_CODE
+) {
   throw new Error("Test developer credentials and invite code must be set in .env.local");
 }
 
@@ -163,20 +168,15 @@ test("Developer login fails with invalid credentials", async () => {
 });
 
 test("Developer registration fails with existing email", async () => {
-  try {
-    // This should fail since we've already registered this email in tryDeveloperLogin
-    await platformRegister(
+  // This should fail since we've already registered this email in tryDeveloperLogin
+  await expect(
+    platformRegister(
       TEST_DEVELOPER_EMAIL!,
       TEST_DEVELOPER_PASSWORD!,
       TEST_DEVELOPER_INVITE_CODE!, // Use the actual invite code from env
       TEST_DEVELOPER_NAME!
-    );
-    // If we reach here without an error being thrown, the test should fail
-    expect(true).toBe(false); // This line should never be reached
-  } catch (error: any) {
-    // We expect an "Email already registered" error
-    expect(error.message).toMatch(/Email already registered|User already exists/);
-  }
+    )
+  ).rejects.toThrow(/Email already registered|User already exists/);
 });
 
 test("Developer login persists tokens correctly", async () => {
@@ -208,8 +208,8 @@ test("Developer registration validates input", async () => {
   try {
     await platformRegister(
       "test@example.com", // Use a dummy email that won't actually register
-      "password123",      // Use a dummy password
-      "",                 // Empty invite code - should fail validation
+      "password123", // Use a dummy password
+      "", // Empty invite code - should fail validation
       "Test User"
     );
     throw new Error("Should not accept empty invite code");
@@ -222,8 +222,8 @@ test("Developer registration validates input", async () => {
   try {
     await platformRegister(
       "test@example.com", // Use a dummy email that won't actually register
-      "password123",      // Use a dummy password
-      "not-a-uuid",       // Invalid UUID format - should fail validation
+      "password123", // Use a dummy password
+      "not-a-uuid", // Invalid UUID format - should fail validation
       "Test User"
     );
     throw new Error("Should not accept invalid invite code format");
@@ -2207,8 +2207,8 @@ test("Organization invite operations require authentication", async () => {
     // Clean up
     try {
       await platformApi.deleteOrganizationInvite(createdOrg.id.toString(), createdInvite.code);
-    } catch {
-      // Ignore if already deleted
+    } catch (error) {
+      console.warn("Failed to delete invite during cleanup:", error);
     }
     await platformApi.deleteOrganization(createdOrg.id.toString());
   } catch (error: any) {

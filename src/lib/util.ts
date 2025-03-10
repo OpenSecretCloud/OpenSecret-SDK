@@ -1,10 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-// Simpler implementation compatible with React 19
+// Implementation that ensures callback only runs once, even in React strict mode
 export function useOnMount(callback: () => void) {
+  const hasRun = useRef(false);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    callback();
+    if (!hasRun.current) {
+      hasRun.current = true;
+      callback();
+    }
   }, []);
 }
 

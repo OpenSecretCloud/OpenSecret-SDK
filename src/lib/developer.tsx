@@ -521,10 +521,17 @@ export function OpenSecretDeveloper({
 
     // Configure the apiConfig service with the platform URL
     // Using dynamic import to avoid circular dependencies
-    import("./apiConfig").then(({ apiConfig }) => {
-      const appUrl = apiConfig.appApiUrl || "";
-      apiConfig.configure(appUrl, apiUrl);
-    });
+    import("./apiConfig")
+      .then(({ apiConfig }) => {
+        const appUrl = apiConfig.appApiUrl || "";
+        apiConfig.configure(appUrl, apiUrl);
+      })
+      .catch((error) => {
+        console.error("Failed to load apiConfig:", error);
+        throw new Error(
+          "Failed to initialize OpenSecretDeveloper - could not load required dependencies"
+        );
+      });
   }, [apiUrl]);
 
   async function fetchDeveloper() {
