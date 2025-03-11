@@ -1,6 +1,8 @@
 import { encryptMessage, decryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import { refreshToken } from "./api";
+import { platformRefreshToken } from "./platformApi";
+import { apiConfig } from "./apiConfig";
 
 interface EncryptedResponse {
   encrypted: string;
@@ -22,7 +24,16 @@ export async function authenticatedApiCall<T, U>(
     try {
       if (forceRefresh) {
         console.log("Refreshing access token");
-        await refreshToken();
+
+        // Use the apiConfig to determine which refresh function to use
+        const refreshFn = apiConfig.getRefreshFunction(url);
+        console.log(`Using ${refreshFn}`);
+
+        if (refreshFn === "platformRefreshToken") {
+          await platformRefreshToken();
+        } else {
+          await refreshToken();
+        }
       }
 
       // Always get the latest token from localStorage
@@ -41,7 +52,7 @@ export async function authenticatedApiCall<T, U>(
 
       // Attempt to refresh token once if we get a 401
       if (response.status === 401 && !forceRefresh) {
-        console.log("Received 401, attempting to refresh token");
+        console.log(`Received 401 for URL ${url}, attempting to refresh token`);
         return tryAuthenticatedRequest(true);
       }
 
@@ -73,11 +84,15 @@ async function internalEncryptedApiCall<T, U>(
   accessToken?: string,
   errorMessage?: string
 ): Promise<ApiResponse<U>> {
-  let { sessionKey, sessionId } = await getAttestation();
+  // Use apiConfig to determine the context and get the appropriate API URL
+  const endpoint = apiConfig.resolveEndpoint(url);
+  const explicitApiUrl = endpoint.context === "platform" ? apiConfig.platformApiUrl : undefined;
+
+  let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 
   const makeRequest = async (token: string | undefined, forceNewAttestation: boolean = false) => {
     if (forceNewAttestation || !sessionKey || !sessionId) {
-      const newAttestation = await getAttestation(true);
+      const newAttestation = await getAttestation(true, explicitApiUrl);
       sessionKey = newAttestation.sessionKey;
       sessionId = newAttestation.sessionId;
     }

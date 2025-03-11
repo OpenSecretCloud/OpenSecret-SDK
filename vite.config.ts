@@ -51,16 +51,20 @@ export default defineConfig({
       fileName: (format) => `opensecret-react.${format}.js`
     },
     rollupOptions: {
-      // Only externalize React and React DOM
+      // Externalize React and React DOM along with their internals
       external: [
         "react", 
-        "react-dom"
+        "react-dom",
+        "react/jsx-runtime",
+        /^react\/.*/,
+        /^react-dom\/.*/
       ],
       output: {
         // Provide global variables to use in the UMD build
         globals: {
           react: "React",
-          "react-dom": "ReactDOM"
+          "react-dom": "ReactDOM",
+          "react/jsx-runtime": "React"
         }
       }
     }

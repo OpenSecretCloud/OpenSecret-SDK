@@ -205,8 +205,12 @@ export async function requestNewVerificationCode(): Promise<void> {
   );
 }
 
-export async function fetchAttestationDocument(nonce: string): Promise<string> {
-  const response = await fetch(`${apiUrl}/attestation/${nonce}`);
+export async function fetchAttestationDocument(
+  nonce: string,
+  explicitApiUrl?: string
+): Promise<string> {
+  const url = explicitApiUrl || apiUrl;
+  const response = await fetch(`${url}/attestation/${nonce}`);
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
@@ -216,9 +220,11 @@ export async function fetchAttestationDocument(nonce: string): Promise<string> {
 
 export async function keyExchange(
   clientPublicKey: string,
-  nonce: string
+  nonce: string,
+  explicitApiUrl?: string
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
-  const response = await fetch(`${apiUrl}/key_exchange`, {
+  const url = explicitApiUrl || apiUrl;
+  const response = await fetch(`${url}/key_exchange`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
