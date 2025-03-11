@@ -8,7 +8,9 @@ import {
   refreshToken,
   fetchUser,
   // convertGuestToEmailAccount,
-  generateThirdPartyToken
+  generateThirdPartyToken,
+  encryptData,
+  decryptData
 } from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -178,6 +180,62 @@ test("Third party token generation", async () => {
   try {
     await generateThirdPartyToken("https://google.com");
     throw new Error("Should not accept any random URL");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+});
+
+test("Encrypt and decrypt data", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Test data to encrypt
+  const testData = "Hello, World!";
+
+  // Encrypt the data
+  const encryptResponse = await encryptData(testData);
+  expect(encryptResponse.encrypted_data).toBeDefined();
+  expect(typeof encryptResponse.encrypted_data).toBe("string");
+  expect(encryptResponse.encrypted_data.length).toBeGreaterThan(0);
+
+  // Decrypt the data
+  const decryptedData = await decryptData(encryptResponse.encrypted_data);
+  expect(decryptedData).toBe(testData);
+
+  // Try with a derivation path
+  const derivationPath = "m/44'/0'/0'/0/0";
+  const encryptWithPathResponse = await encryptData(testData, derivationPath);
+  expect(encryptWithPathResponse.encrypted_data).toBeDefined();
+
+  // Decrypt with the same derivation path
+  const decryptedWithPathData = await decryptData(
+    encryptWithPathResponse.encrypted_data,
+    derivationPath
+  );
+  expect(decryptedWithPathData).toBe(testData);
+
+  // Try decrypting with a different derivation path (should fail)
+  try {
+    await decryptData(encryptWithPathResponse.encrypted_data, "m/44'/0'/0'/0/1");
+    throw new Error("Should not decrypt with wrong derivation path");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+
+  // Try decrypting with no derivation path when it was encrypted with one (should fail)
+  try {
+    await decryptData(encryptWithPathResponse.encrypted_data);
+    throw new Error("Should not decrypt with missing derivation path");
+  } catch (error: any) {
+    expect(error.message).toBe("Bad Request");
+  }
+
+  // Try with invalid encrypted data
+  try {
+    await decryptData("invalid-data");
+    throw new Error("Should not decrypt invalid data");
   } catch (error: any) {
     expect(error.message).toBe("Bad Request");
   }

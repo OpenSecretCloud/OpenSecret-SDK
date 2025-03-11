@@ -129,6 +129,36 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
   const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
   ```
 
+- `encryptData(data: string, derivationPath?: string): Promise<{ encrypted_data: string }>`: Encrypts arbitrary string data using the user's private key.
+  - Uses AES-256-GCM encryption with a random nonce for each operation
+  - If derivation_path is provided, encryption uses the derived key at that path
+  - If derivation_path is omitted, encryption uses the master key
+  - Returns base64-encoded encrypted data containing the nonce, ciphertext, and authentication tag
+  
+  Example:
+  ```typescript
+  // Encrypt with master key
+  const { encrypted_data } = await os.encryptData("Secret message");
+  
+  // Encrypt with derived key
+  const { encrypted_data } = await os.encryptData("Secret message", "m/44'/0'/0'/0/0");
+  ```
+
+- `decryptData(encryptedData: string, derivationPath?: string): Promise<string>`: Decrypts data that was previously encrypted with the user's key.
+  - Uses AES-256-GCM decryption with authentication tag verification
+  - If derivation_path is provided, decryption uses the derived key at that path
+  - If derivation_path is omitted, decryption uses the master key
+  - The encrypted_data must be in the exact format returned by the encrypt endpoint
+  
+  Example:
+  ```typescript
+  // Decrypt with master key
+  const decrypted = await os.decryptData(encrypted_data);
+  
+  // Decrypt with derived key (must use same path as encryption)
+  const decrypted = await os.decryptData(encrypted_data, "m/44'/0'/0'/0/0");
+  ```
+
 ### AI Integration
 
 To get encrypted-to-the-gpu AI chat we provide a special version of `fetch` (`os.aiCustomFetch`) that handles all the encryption. Because we require the user to be logged in, and do the encryption client-side, this is safe to call from the client.

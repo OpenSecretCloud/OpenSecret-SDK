@@ -594,3 +594,82 @@ export async function generateThirdPartyToken(audience: string): Promise<ThirdPa
     "Failed to generate third party token"
   );
 }
+
+export type EncryptDataRequest = {
+  data: string;
+  derivation_path?: string;
+};
+
+export type EncryptDataResponse = {
+  encrypted_data: string;
+};
+
+/**
+ * Encrypts arbitrary string data using the user's private key
+ * @param data - String content to be encrypted
+ * @param derivationPath - Optional BIP32 derivation path
+ * @returns A promise resolving to the encrypted data response
+ * @throws {Error} If:
+ * - The derivation path is invalid
+ * - Authentication fails
+ * - Server-side encryption error occurs
+ *
+ * @description
+ * - Encrypts data with AES-256-GCM
+ * - A random nonce is generated for each encryption operation (included in the result)
+ * - If derivation_path is provided, encryption uses the derived key at that path
+ * - If derivation_path is omitted, encryption uses the master key
+ * - The encrypted_data format:
+ *   - First 12 bytes: Nonce used for encryption (prepended to ciphertext)
+ *   - Remaining bytes: AES-256-GCM encrypted ciphertext + authentication tag
+ *   - The entire payload is base64-encoded for safe transport
+ */
+export async function encryptData(
+  data: string,
+  derivationPath?: string
+): Promise<EncryptDataResponse> {
+  return authenticatedApiCall<EncryptDataRequest, EncryptDataResponse>(
+    `${apiUrl}/protected/encrypt`,
+    "POST",
+    {
+      data,
+      derivation_path: derivationPath
+    },
+    "Failed to encrypt data"
+  );
+}
+
+export type DecryptDataRequest = {
+  encrypted_data: string;
+  derivation_path?: string;
+};
+
+/**
+ * Decrypts data that was previously encrypted with the user's key
+ * @param encryptedData - Base64-encoded encrypted data string
+ * @param derivationPath - Optional BIP32 derivation path
+ * @returns A promise resolving to the decrypted string
+ * @throws {Error} If:
+ * - The encrypted data is malformed
+ * - The derivation path is invalid
+ * - Authentication fails
+ * - Server-side decryption error occurs
+ *
+ * @description
+ * - Uses AES-256-GCM decryption with authentication tag verification
+ * - Extracts the nonce from the first 12 bytes of the encrypted data
+ * - If derivation_path is provided, decryption uses the derived key at that path
+ * - If derivation_path is omitted, decryption uses the master key
+ * - The encrypted_data must be in the exact format returned by the encrypt endpoint
+ */
+export async function decryptData(encryptedData: string, derivationPath?: string): Promise<string> {
+  return authenticatedApiCall<DecryptDataRequest, string>(
+    `${apiUrl}/protected/decrypt`,
+    "POST",
+    {
+      encrypted_data: encryptedData,
+      derivation_path: derivationPath
+    },
+    "Failed to decrypt data"
+  );
+}
