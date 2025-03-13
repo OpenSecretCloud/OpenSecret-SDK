@@ -579,18 +579,27 @@ export async function convertGuestToEmailAccount(
 }
 
 export type ThirdPartyTokenRequest = {
-  audience: string;
+  audience?: string;
 };
 
 export type ThirdPartyTokenResponse = {
   token: string;
 };
 
-export async function generateThirdPartyToken(audience: string): Promise<ThirdPartyTokenResponse> {
+/**
+ * Generates a JWT token for use with third-party services
+ * @param audience - Optional URL of the service
+ * @returns A promise resolving to the token response containing the JWT
+ *
+ * @description
+ * - If audience is provided, it can be any valid URL
+ * - If audience is omitted, a token with no audience restriction will be generated
+ */
+export async function generateThirdPartyToken(audience?: string): Promise<ThirdPartyTokenResponse> {
   return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
     `${apiUrl}/protected/third_party_token`,
     "POST",
-    { audience },
+    audience ? { audience } : {},
     "Failed to generate third party token"
   );
 }

@@ -321,21 +321,21 @@ export type OpenSecretContextType = {
   getAttestationDocument: () => Promise<ParsedAttestationView>;
 
   /**
-   * Generates a JWT token for use with authorized third-party services
-   * @param audience - The URL of the authorized service (e.g. "https://billing.opensecret.cloud")
+   * Generates a JWT token for use with third-party services
+   * @param audience - Optional URL of the service (e.g. "https://billing.opensecret.cloud")
    * @returns A promise resolving to the token response
    * @throws {Error} If:
    * - The user is not authenticated
-   * - The audience URL is invalid
-   * - The audience URL is not authorized
+   * - The audience URL is invalid (if provided)
    *
    * @description
-   * - Generates a signed JWT token for use with specific authorized third-party services
-   * - The audience must be an pre-authorized URL registered by the developer (e.g. api.devservice.com)
+   * - Generates a signed JWT token for use with third-party services
+   * - If audience is provided, it can be any valid URL
+   * - If audience is omitted, a token with no audience restriction will be generated
    * - Requires an active authentication session
    * - Token can be used to authenticate with the specified service
    */
-  generateThirdPartyToken: (audience: string) => Promise<ThirdPartyTokenResponse>;
+  generateThirdPartyToken: (audience?: string) => Promise<ThirdPartyTokenResponse>;
 
   /**
    * Encrypts arbitrary string data using the user's private key

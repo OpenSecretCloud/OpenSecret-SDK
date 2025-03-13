@@ -168,18 +168,23 @@ test("Third party token generation", async () => {
   expect(typeof opensSecretResponse.token).toBe("string");
   expect(opensSecretResponse.token.length).toBeGreaterThan(0);
 
-  // Test invalid audience URL
+  // Test with any valid URL (now allowed)
+  const anyValidUrl = "https://google.com";
+  const googleResponse = await generateThirdPartyToken(anyValidUrl);
+  expect(googleResponse.token).toBeDefined();
+  expect(typeof googleResponse.token).toBe("string");
+  expect(googleResponse.token.length).toBeGreaterThan(0);
+
+  // Test with no audience (should work)
+  const noAudienceResponse = await generateThirdPartyToken();
+  expect(noAudienceResponse.token).toBeDefined();
+  expect(typeof noAudienceResponse.token).toBe("string");
+  expect(noAudienceResponse.token.length).toBeGreaterThan(0);
+
+  // Test invalid audience URL (this should still fail)
   try {
     await generateThirdPartyToken("not-a-url");
     throw new Error("Should not accept invalid URL");
-  } catch (error: any) {
-    expect(error.message).toBe("Bad Request");
-  }
-
-  // Test not authorized URL
-  try {
-    await generateThirdPartyToken("https://google.com");
-    throw new Error("Should not accept any random URL");
   } catch (error: any) {
     expect(error.message).toBe("Bad Request");
   }

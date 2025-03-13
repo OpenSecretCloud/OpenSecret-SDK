@@ -91,7 +91,7 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 #### Account Management Methods
 - `refetchUser(): Promise<void>`: Refreshes the user's authentication state.
 - `changePassword(currentPassword: string, newPassword: string): Promise<void>`: Changes the user's password.
-- `generateThirdPartyToken(audience: string): Promise<{ token: string }>`: Generates a JWT token for use with pre-authorized third-party services (e.g. "https://api.devservice.com"). Developers must register this URL in advance (coming soon).
+- `generateThirdPartyToken(audience?: string): Promise<{ token: string }>`: Generates a JWT token for use with third-party services. If an audience is provided, it can be any valid URL. If omitted, a token with no audience restriction will be generated.
 
 #### Cryptographic Methods
 - `getPrivateKey(): Promise<{ mnemonic: string }>`: Retrieves the user's private key mnemonic phrase. This is used for cryptographic operations and should be kept secure.
