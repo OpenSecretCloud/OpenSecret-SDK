@@ -91,7 +91,7 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 #### Account Management Methods
 - `refetchUser(): Promise<void>`: Refreshes the user's authentication state.
 - `changePassword(currentPassword: string, newPassword: string): Promise<void>`: Changes the user's password.
-- `generateThirdPartyToken(audience: string): Promise<{ token: string }>`: Generates a JWT token for use with pre-authorized third-party services (e.g. "https://api.devservice.com"). Developers must register this URL in advance (coming soon).
+- `generateThirdPartyToken(audience?: string): Promise<{ token: string }>`: Generates a JWT token for use with third-party services. If an audience is provided, it can be any valid URL. If omitted, a token with no audience restriction will be generated.
 
 #### Cryptographic Methods
 - `getPrivateKey(): Promise<{ mnemonic: string }>`: Retrieves the user's private key mnemonic phrase. This is used for cryptographic operations and should be kept secure.
@@ -127,6 +127,36 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
   
   // From hex
   const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
+  ```
+
+- `encryptData(data: string, derivationPath?: string): Promise<{ encrypted_data: string }>`: Encrypts arbitrary string data using the user's private key.
+  - Uses AES-256-GCM encryption with a random nonce for each operation
+  - If derivation_path is provided, encryption uses the derived key at that path
+  - If derivation_path is omitted, encryption uses the master key
+  - Returns base64-encoded encrypted data containing the nonce, ciphertext, and authentication tag
+  
+  Example:
+  ```typescript
+  // Encrypt with master key
+  const { encrypted_data } = await os.encryptData("Secret message");
+  
+  // Encrypt with derived key
+  const { encrypted_data } = await os.encryptData("Secret message", "m/44'/0'/0'/0/0");
+  ```
+
+- `decryptData(encryptedData: string, derivationPath?: string): Promise<string>`: Decrypts data that was previously encrypted with the user's key.
+  - Uses AES-256-GCM decryption with authentication tag verification
+  - If derivation_path is provided, decryption uses the derived key at that path
+  - If derivation_path is omitted, decryption uses the master key
+  - The encrypted_data must be in the exact format returned by the encrypt endpoint
+  
+  Example:
+  ```typescript
+  // Decrypt with master key
+  const decrypted = await os.decryptData(encrypted_data);
+  
+  // Decrypt with derived key (must use same path as encryption)
+  const decrypted = await os.decryptData(encrypted_data, "m/44'/0'/0'/0/0");
   ```
 
 ### AI Integration

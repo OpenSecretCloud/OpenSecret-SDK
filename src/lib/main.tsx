@@ -321,21 +321,63 @@ export type OpenSecretContextType = {
   getAttestationDocument: () => Promise<ParsedAttestationView>;
 
   /**
-   * Generates a JWT token for use with authorized third-party services
-   * @param audience - The URL of the authorized service (e.g. "https://billing.opensecret.cloud")
+   * Generates a JWT token for use with third-party services
+   * @param audience - Optional URL of the service (e.g. "https://billing.opensecret.cloud")
    * @returns A promise resolving to the token response
    * @throws {Error} If:
    * - The user is not authenticated
-   * - The audience URL is invalid
-   * - The audience URL is not authorized
+   * - The audience URL is invalid (if provided)
    *
    * @description
-   * - Generates a signed JWT token for use with specific authorized third-party services
-   * - The audience must be an pre-authorized URL registered by the developer (e.g. api.devservice.com)
+   * - Generates a signed JWT token for use with third-party services
+   * - If audience is provided, it can be any valid URL
+   * - If audience is omitted, a token with no audience restriction will be generated
    * - Requires an active authentication session
    * - Token can be used to authenticate with the specified service
    */
-  generateThirdPartyToken: (audience: string) => Promise<ThirdPartyTokenResponse>;
+  generateThirdPartyToken: (audience?: string) => Promise<ThirdPartyTokenResponse>;
+
+  /**
+   * Encrypts arbitrary string data using the user's private key
+   * @param data - String content to be encrypted
+   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @returns A promise resolving to the encrypted data response
+   * @throws {Error} If:
+   * - The derivation path is invalid
+   * - Authentication fails
+   * - Server-side encryption error occurs
+   *
+   * @description
+   * - Encrypts data with AES-256-GCM
+   * - A random nonce is generated for each encryption operation (included in the result)
+   * - If derivation_path is provided, encryption uses the derived key at that path
+   * - If derivation_path is omitted, encryption uses the master key
+   * - The encrypted_data format:
+   *   - First 12 bytes: Nonce used for encryption (prepended to ciphertext)
+   *   - Remaining bytes: AES-256-GCM encrypted ciphertext + authentication tag
+   *   - The entire payload is base64-encoded for safe transport
+   */
+  encryptData: typeof api.encryptData;
+
+  /**
+   * Decrypts data that was previously encrypted with the user's key
+   * @param encryptedData - Base64-encoded encrypted data string
+   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @returns A promise resolving to the decrypted string
+   * @throws {Error} If:
+   * - The encrypted data is malformed
+   * - The derivation path is invalid
+   * - Authentication fails
+   * - Server-side decryption error occurs
+   *
+   * @description
+   * - Uses AES-256-GCM decryption with authentication tag verification
+   * - Extracts the nonce from the first 12 bytes of the encrypted data
+   * - If derivation_path is provided, decryption uses the derived key at that path
+   * - If derivation_path is omitted, decryption uses the master key
+   * - The encrypted_data must be in the exact format returned by the encrypt endpoint
+   */
+  decryptData: typeof api.decryptData;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -386,7 +428,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   getAttestationDocument: async () => {
     throw new Error("getAttestationDocument called outside of OpenSecretProvider");
   },
-  generateThirdPartyToken: async () => ({ token: "" })
+  generateThirdPartyToken: async () => ({ token: "" }),
+  encryptData: api.encryptData,
+  decryptData: api.decryptData
 });
 
 /**
@@ -692,7 +736,9 @@ export function OpenSecretProvider({
     awsRootCertDer: AWS_ROOT_CERT_DER,
     expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
     getAttestationDocument,
-    generateThirdPartyToken: api.generateThirdPartyToken
+    generateThirdPartyToken: api.generateThirdPartyToken,
+    encryptData: api.encryptData,
+    decryptData: api.decryptData
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
