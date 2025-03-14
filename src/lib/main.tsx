@@ -340,7 +340,7 @@ export type OpenSecretContextType = {
   /**
    * Encrypts arbitrary string data using the user's private key
    * @param data - String content to be encrypted
-   * @param derivationPath - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
    * @returns A promise resolving to the encrypted data response
    * @throws {Error} If:
    * - The derivation path is invalid
