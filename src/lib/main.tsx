@@ -362,7 +362,7 @@ export type OpenSecretContextType = {
   /**
    * Decrypts data that was previously encrypted with the user's key
    * @param encryptedData - Base64-encoded encrypted data string
-   * @param derivationPath - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
    * @returns A promise resolving to the decrypted string
    * @throws {Error} If:
    * - The encrypted data is malformed
