@@ -202,37 +202,82 @@ export type OpenSecretContextType = {
 
   /**
    * Retrieves the user's private key mnemonic phrase
+   * @param options - Optional key derivation options
    * @returns A promise resolving to the private key response
    * @throws {Error} If the private key cannot be retrieved
+   *
+   * @description
+   * This function supports two modes:
+   *
+   * 1. Master mnemonic (no parameters)
+   *    - Returns the user's master 12-word BIP39 mnemonic
+   *
+   * 2. BIP-85 derived mnemonic
+   *    - Derives a child mnemonic using BIP-85
+   *    - Requires seed_phrase_derivation_path in options
+   *    - Example: "m/83696968'/39'/0'/12'/0'"
    */
   getPrivateKey: typeof api.fetchPrivateKey;
 
   /**
-   * Retrieves the private key bytes for a given derivation path
-   * @param derivationPath - Optional BIP32 derivation path (e.g. "m/44'/0'/0'/0/0")
+   * Retrieves the private key bytes for the given derivation options
+   * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the private key bytes response
    * @throws {Error} If:
    * - The private key bytes cannot be retrieved
-   * - The derivation path is invalid
+   * - The derivation paths are invalid
    *
    * @description
-   * - If no derivation path is provided, returns the master private key bytes
-   * - Supports both absolute (starting with "m/") and relative paths
-   * - Supports hardened derivation using either ' or h notation
-   * - Common paths:
-   *   - BIP44 (Legacy): m/44'/0'/0'/0/0
-   *   - BIP49 (SegWit): m/49'/0'/0'/0/0
-   *   - BIP84 (Native SegWit): m/84'/0'/0'/0/0
-   *   - BIP86 (Taproot): m/86'/0'/0'/0/0
+   * This function supports multiple derivation approaches:
+   *
+   * 1. Master key only (no parameters)
+   *    - Returns the master private key bytes
+   *
+   * 2. BIP-32 derivation only
+   *    - Uses a single derivation path to derive a child key from the master seed
+   *    - Supports both absolute and relative paths with hardened derivation:
+   *      - Absolute path: "m/44'/0'/0'/0/0"
+   *      - Relative path: "0'/0'/0'/0/0"
+   *      - Hardened notation: "44'" or "44h"
+   *    - Common paths:
+   *      - BIP44 (Legacy): m/44'/0'/0'/0/0
+   *      - BIP49 (SegWit): m/49'/0'/0'/0/0
+   *      - BIP84 (Native SegWit): m/84'/0'/0'/0/0
+   *      - BIP86 (Taproot): m/86'/0'/0'/0/0
+   *
+   * 3. BIP-85 derivation only
+   *    - Derives a child mnemonic from the master seed using BIP-85
+   *    - Then returns the master private key of that derived seed
+   *    - Example path: "m/83696968'/39'/0'/12'/0'"
+   *
+   * 4. Combined BIP-85 and BIP-32 derivation
+   *    - First derives a child mnemonic via BIP-85
+   *    - Then applies BIP-32 derivation to that derived seed
    */
   getPrivateKeyBytes: typeof api.fetchPrivateKeyBytes;
 
   /**
    * Retrieves the user's public key for the specified algorithm
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
-   * @param derivationPath - Optional BIP32 derivation path
+   * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the public key response
    * @throws {Error} If the public key cannot be retrieved
+   *
+   * @description
+   * The derivation paths determine which key is used to generate the public key:
+   *
+   * 1. Master key (no derivation parameters)
+   *    - Returns the public key corresponding to the master private key
+   *
+   * 2. BIP-32 derived key
+   *    - Returns the public key for a derived child key
+   *
+   * 3. BIP-85 derived key
+   *    - Returns the public key for the master key of a BIP-85 derived seed
+   *
+   * 4. Combined BIP-85 and BIP-32 derivation
+   *    - First derives a child mnemonic via BIP-85
+   *    - Then applies BIP-32 derivation to get the corresponding public key
    */
   getPublicKey: typeof api.fetchPublicKey;
 
@@ -240,9 +285,24 @@ export type OpenSecretContextType = {
    * Signs a message using the specified algorithm
    * @param messageBytes - The message to sign as a Uint8Array
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
-   * @param derivationPath - Optional BIP32 derivation path
+   * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the signature response
    * @throws {Error} If the message signing fails
+   *
+   * @description
+   * This function supports multiple signing approaches:
+   *
+   * 1. Sign with master key (no derivation parameters)
+   *
+   * 2. Sign with BIP-32 derived key
+   *    - Derives a child key from the master seed using BIP-32
+   *
+   * 3. Sign with BIP-85 derived key
+   *    - Derives a child mnemonic using BIP-85, then uses its master key
+   *
+   * 4. Sign with combined BIP-85 and BIP-32 derivation
+   *    - First derives a child mnemonic via BIP-85
+   *    - Then applies BIP-32 derivation to derive a key from that seed
    */
   signMessage: typeof api.signMessage;
 
@@ -340,42 +400,69 @@ export type OpenSecretContextType = {
   /**
    * Encrypts arbitrary string data using the user's private key
    * @param data - String content to be encrypted
-   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the encrypted data response
    * @throws {Error} If:
-   * - The derivation path is invalid
+   * - The derivation paths are invalid
    * - Authentication fails
    * - Server-side encryption error occurs
    *
    * @description
+   * This function supports multiple encryption approaches:
+   *
+   * 1. Encrypt with master key (no derivation parameters)
+   *
+   * 2. Encrypt with BIP-32 derived key
+   *    - Derives a child key from the master seed using BIP-32
+   *    - Example: "m/44'/0'/0'/0/0"
+   *
+   * 3. Encrypt with BIP-85 derived key
+   *    - Derives a child mnemonic using BIP-85, then uses its master key
+   *    - Example: { seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'" }
+   *
+   * 4. Encrypt with combined BIP-85 and BIP-32 derivation
+   *    - First derives a child mnemonic via BIP-85
+   *    - Then applies BIP-32 derivation to derive a key from that seed
+   *    - Example: {
+   *        seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
+   *        private_key_derivation_path: "m/44'/0'/0'/0/0"
+   *      }
+   *
+   * Technical details:
    * - Encrypts data with AES-256-GCM
    * - A random nonce is generated for each encryption operation (included in the result)
-   * - If derivation_path is provided, encryption uses the derived key at that path
-   * - If derivation_path is omitted, encryption uses the master key
-   * - The encrypted_data format:
-   *   - First 12 bytes: Nonce used for encryption (prepended to ciphertext)
-   *   - Remaining bytes: AES-256-GCM encrypted ciphertext + authentication tag
-   *   - The entire payload is base64-encoded for safe transport
+   * - The encrypted_data format includes the nonce and is base64-encoded
    */
   encryptData: typeof api.encryptData;
 
   /**
    * Decrypts data that was previously encrypted with the user's key
    * @param encryptedData - Base64-encoded encrypted data string
-   * @param derivationPath? - Optional BIP32 derivation path (e.g., 'm/44'/0'/0'/0/0')
+   * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the decrypted string
    * @throws {Error} If:
    * - The encrypted data is malformed
-   * - The derivation path is invalid
+   * - The derivation paths are invalid
    * - Authentication fails
    * - Server-side decryption error occurs
    *
    * @description
-   * - Uses AES-256-GCM decryption with authentication tag verification
-   * - Extracts the nonce from the first 12 bytes of the encrypted data
-   * - If derivation_path is provided, decryption uses the derived key at that path
-   * - If derivation_path is omitted, decryption uses the master key
-   * - The encrypted_data must be in the exact format returned by the encrypt endpoint
+   * This function supports multiple decryption approaches:
+   *
+   * 1. Decrypt with master key (no derivation parameters)
+   *
+   * 2. Decrypt with BIP-32 derived key
+   *    - Derives a child key from the master seed using BIP-32
+   *
+   * 3. Decrypt with BIP-85 derived key
+   *    - Derives a child mnemonic using BIP-85, then uses its master key
+   *
+   * 4. Decrypt with combined BIP-85 and BIP-32 derivation
+   *    - First derives a child mnemonic via BIP-85
+   *    - Then applies BIP-32 derivation to derive a key from that seed
+   *
+   * IMPORTANT: You must use the exact same derivation options for decryption
+   * that were used for encryption.
    */
   decryptData: typeof api.decryptData;
 };

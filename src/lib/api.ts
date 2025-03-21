@@ -434,9 +434,62 @@ export type PrivateKeyBytesResponse = {
   private_key: string;
 };
 
-export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
+/**
+ * Options for key derivation operations
+ */
+export type KeyOptions = {
+  /**
+   * BIP-85 derivation path to derive a child mnemonic
+   * Examples: "m/83696968'/39'/0'/12'/0'"
+   */
+  seed_phrase_derivation_path?: string;
+
+  /**
+   * BIP-32 derivation path to derive a child key from the master (or BIP-85 derived) seed
+   * Examples: "m/44'/0'/0'/0/0"
+   */
+  private_key_derivation_path?: string;
+};
+
+/**
+ * Fetches the private key as a mnemonic phrase with optional derivation paths
+ * @param key_options - Optional key derivation options (see KeyOptions type)
+ *
+ * @returns A promise resolving to the private key response containing the mnemonic
+ *
+ * @description
+ * - If seed_phrase_derivation_path is provided, a child mnemonic is derived via BIP-85
+ * - If seed_phrase_derivation_path is omitted, the master mnemonic is returned
+ * - BIP-85 allows deriving child mnemonics from a master seed in a deterministic way
+ * - Common BIP-85 path format: m/83696968'/39'/0'/[entropy in bits]'/[index]'
+ *   where entropy is typically 12' for 12-word mnemonics
+ */
+export async function fetchPrivateKey(key_options?: KeyOptions): Promise<PrivateKeyResponse> {
+  // Build URL with query parameters
+  let url = `${apiUrl}/protected/private_key`;
+  const queryParams = [];
+
+  // Add seed phrase derivation path if present
+  if (key_options?.seed_phrase_derivation_path) {
+    queryParams.push(
+      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`
+    );
+  }
+
+  // Add private key derivation path if present
+  if (key_options?.private_key_derivation_path) {
+    queryParams.push(
+      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`
+    );
+  }
+
+  // Append query parameters if any exist
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
   return authenticatedApiCall<void, PrivateKeyResponse>(
-    `${apiUrl}/protected/private_key`,
+    url,
     "GET",
     undefined,
     "Failed to fetch private key"
@@ -444,26 +497,64 @@ export async function fetchPrivateKey(): Promise<PrivateKeyResponse> {
 }
 
 /**
- * Fetches private key bytes for a given derivation path
- * @param derivationPath - Optional BIP32 derivation path
+ * Fetches private key bytes for the given derivation options
+ * @param key_options - Key derivation options (see KeyOptions type)
  *
- * Supports both absolute and relative paths with hardened derivation:
- * - Absolute path: "m/44'/0'/0'/0/0"
- * - Relative path: "0'/0'/0'/0/0"
- * - Hardened notation: "44'" or "44h"
+ * @returns A promise resolving to the private key bytes response
  *
- * Common paths:
- * - BIP44 (Legacy): m/44'/0'/0'/0/0
- * - BIP49 (SegWit): m/49'/0'/0'/0/0
- * - BIP84 (Native SegWit): m/84'/0'/0'/0/0
- * - BIP86 (Taproot): m/86'/0'/0'/0/0
+ * @description
+ * This function supports multiple derivation approaches:
+ *
+ * 1. Master key only (no parameters)
+ *    - Returns the master private key bytes
+ *
+ * 2. BIP-32 derivation only
+ *    - Uses a single derivation path to derive a child key from the master seed
+ *    - Supports both absolute and relative paths with hardened derivation:
+ *      - Absolute path: "m/44'/0'/0'/0/0"
+ *      - Relative path: "0'/0'/0'/0/0"
+ *      - Hardened notation: "44'" or "44h"
+ *    - Common paths:
+ *      - BIP44 (Legacy): m/44'/0'/0'/0/0
+ *      - BIP49 (SegWit): m/49'/0'/0'/0/0
+ *      - BIP84 (Native SegWit): m/84'/0'/0'/0/0
+ *      - BIP86 (Taproot): m/86'/0'/0'/0/0
+ *
+ * 3. BIP-85 derivation only
+ *    - Derives a child mnemonic from the master seed using BIP-85
+ *    - Then returns the master private key of that derived seed
+ *    - Example path: "m/83696968'/39'/0'/12'/0'"
+ *
+ * 4. Combined BIP-85 and BIP-32 derivation
+ *    - First derives a child mnemonic via BIP-85
+ *    - Then applies BIP-32 derivation to that derived seed
+ *    - This allows for more complex derivation schemes
  */
 export async function fetchPrivateKeyBytes(
-  derivationPath?: string
+  key_options?: KeyOptions
 ): Promise<PrivateKeyBytesResponse> {
-  const url = derivationPath
-    ? `${apiUrl}/protected/private_key_bytes?derivation_path=${encodeURIComponent(derivationPath)}`
-    : `${apiUrl}/protected/private_key_bytes`;
+  // Build URL with query parameters
+  let url = `${apiUrl}/protected/private_key_bytes`;
+  const queryParams = [];
+
+  // Add seed phrase derivation path if present
+  if (key_options?.seed_phrase_derivation_path) {
+    queryParams.push(
+      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`
+    );
+  }
+
+  // Add private key derivation path if present
+  if (key_options?.private_key_derivation_path) {
+    queryParams.push(
+      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`
+    );
+  }
+
+  // Append query parameters if any exist
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
 
   return authenticatedApiCall<void, PrivateKeyBytesResponse>(
     url,
@@ -487,15 +578,37 @@ export type SignMessageRequest = {
   message_base64: string;
   /** Signing algorithm to use (schnorr or ecdsa) */
   algorithm: SigningAlgorithm;
-  /** Optional BIP32 derivation path (e.g., "m/44'/0'/0'/0/0") */
-  derivation_path?: string;
+  /** Optional key derivation options */
+  key_options?: {
+    /** Optional BIP32 derivation path (e.g., "m/44'/0'/0'/0/0") */
+    private_key_derivation_path?: string;
+    /** Optional BIP-85 seed phrase derivation path (e.g., "m/83696968'/39'/0'/12'/0'") */
+    seed_phrase_derivation_path?: string;
+  };
 };
 
 /**
- * Signs a message using the specified algorithm and derivation path
+ * Signs a message using the specified algorithm and derivation options
  * @param message_bytes - Message to sign as Uint8Array
  * @param algorithm - Signing algorithm (schnorr or ecdsa)
- * @param derivationPath - Optional BIP32 derivation path
+ * @param key_options - Key derivation options (see KeyOptions type)
+ *
+ * @returns A promise resolving to the signature response
+ *
+ * @description
+ * This function supports multiple signing approaches:
+ *
+ * 1. Sign with master key (no derivation parameters)
+ *
+ * 2. Sign with BIP-32 derived key
+ *    - Derives a child key from the master seed using BIP-32
+ *
+ * 3. Sign with BIP-85 derived key
+ *    - Derives a child mnemonic using BIP-85, then uses its master key
+ *
+ * 4. Sign with combined BIP-85 and BIP-32 derivation
+ *    - First derives a child mnemonic via BIP-85
+ *    - Then applies BIP-32 derivation to derive a key from that seed
  *
  * Example message preparation:
  * ```typescript
@@ -509,17 +622,20 @@ export type SignMessageRequest = {
 export async function signMessage(
   message_bytes: Uint8Array,
   algorithm: SigningAlgorithm,
-  derivationPath?: string
+  key_options?: KeyOptions
 ): Promise<SignMessageResponse> {
   const message_base64 = encode(message_bytes);
-  return authenticatedApiCall<SignMessageRequest, SignMessageResponse>(
+
+  const requestData = {
+    message_base64,
+    algorithm,
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+  };
+
+  return authenticatedApiCall<typeof requestData, SignMessageResponse>(
     `${apiUrl}/protected/sign_message`,
     "POST",
-    {
-      message_base64,
-      algorithm,
-      derivation_path: derivationPath
-    },
+    requestData,
     "Failed to sign message"
   );
 }
@@ -532,24 +648,48 @@ export type PublicKeyResponse = {
 };
 
 /**
- * Retrieves the public key for a given algorithm and derivation path
+ * Retrieves the public key for a given algorithm and derivation options
  * @param algorithm - Signing algorithm (schnorr or ecdsa)
- * @param derivationPath - Optional BIP32 derivation path
+ * @param key_options - Key derivation options (see KeyOptions type)
  *
- * The derivation path determines which child key pair is used,
- * allowing different public keys to be generated from the same master key.
- * This is useful for:
- * - Separating keys by purpose (e.g., different chains or applications)
- * - Generating deterministic addresses
- * - Supporting different address formats (Legacy, SegWit, Native SegWit, Taproot)
+ * @returns A promise resolving to the public key response
+ *
+ * @description
+ * The derivation paths determine which key is used to generate the public key:
+ *
+ * 1. Master key (no derivation parameters)
+ *    - Returns the public key corresponding to the master private key
+ *
+ * 2. BIP-32 derived key
+ *    - Returns the public key for a derived child key
+ *    - Useful for:
+ *      - Separating keys by purpose (e.g., different chains or applications)
+ *      - Generating deterministic addresses
+ *      - Supporting different address formats (Legacy, SegWit, Native SegWit, Taproot)
+ *
+ * 3. BIP-85 derived key
+ *    - Returns the public key for the master key of a BIP-85 derived seed
+ *
+ * 4. Combined BIP-85 and BIP-32 derivation
+ *    - First derives a child mnemonic via BIP-85
+ *    - Then applies BIP-32 derivation to get the corresponding public key
  */
 export async function fetchPublicKey(
   algorithm: SigningAlgorithm,
-  derivationPath?: string
+  key_options?: KeyOptions
 ): Promise<PublicKeyResponse> {
-  const url = derivationPath
-    ? `${apiUrl}/protected/public_key?algorithm=${algorithm}&derivation_path=${encodeURIComponent(derivationPath)}`
-    : `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
+  // Build URL with query parameters
+  let url = `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
+
+  // Add seed phrase derivation path if present
+  if (key_options?.seed_phrase_derivation_path) {
+    url += `&seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`;
+  }
+
+  // Add private key derivation path if present
+  if (key_options?.private_key_derivation_path) {
+    url += `&private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`;
+  }
 
   return authenticatedApiCall<void, PublicKeyResponse>(
     url,
@@ -606,7 +746,10 @@ export async function generateThirdPartyToken(audience?: string): Promise<ThirdP
 
 export type EncryptDataRequest = {
   data: string;
-  derivation_path?: string;
+  key_options?: {
+    private_key_derivation_path?: string;
+    seed_phrase_derivation_path?: string;
+  };
 };
 
 export type EncryptDataResponse = {
@@ -616,18 +759,31 @@ export type EncryptDataResponse = {
 /**
  * Encrypts arbitrary string data using the user's private key
  * @param data - String content to be encrypted
- * @param derivationPath - Optional BIP32 derivation path
+ * @param key_options - Key derivation options (see KeyOptions type)
  * @returns A promise resolving to the encrypted data response
  * @throws {Error} If:
- * - The derivation path is invalid
+ * - The derivation paths are invalid
  * - Authentication fails
  * - Server-side encryption error occurs
  *
  * @description
+ * This function supports multiple encryption approaches:
+ *
+ * 1. Encrypt with master key (no derivation parameters)
+ *
+ * 2. Encrypt with BIP-32 derived key
+ *    - Derives a child key from the master seed using BIP-32
+ *
+ * 3. Encrypt with BIP-85 derived key
+ *    - Derives a child mnemonic using BIP-85, then uses its master key
+ *
+ * 4. Encrypt with combined BIP-85 and BIP-32 derivation
+ *    - First derives a child mnemonic via BIP-85
+ *    - Then applies BIP-32 derivation to derive a key from that seed
+ *
+ * Technical details:
  * - Encrypts data with AES-256-GCM
  * - A random nonce is generated for each encryption operation (included in the result)
- * - If derivation_path is provided, encryption uses the derived key at that path
- * - If derivation_path is omitted, encryption uses the master key
  * - The encrypted_data format:
  *   - First 12 bytes: Nonce used for encryption (prepended to ciphertext)
  *   - Remaining bytes: AES-256-GCM encrypted ciphertext + authentication tag
@@ -635,50 +791,76 @@ export type EncryptDataResponse = {
  */
 export async function encryptData(
   data: string,
-  derivationPath?: string
+  key_options?: KeyOptions
 ): Promise<EncryptDataResponse> {
-  return authenticatedApiCall<EncryptDataRequest, EncryptDataResponse>(
+  const requestData = {
+    data,
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+  };
+
+  return authenticatedApiCall<typeof requestData, EncryptDataResponse>(
     `${apiUrl}/protected/encrypt`,
     "POST",
-    {
-      data,
-      derivation_path: derivationPath
-    },
+    requestData,
     "Failed to encrypt data"
   );
 }
 
 export type DecryptDataRequest = {
   encrypted_data: string;
-  derivation_path?: string;
+  key_options?: {
+    private_key_derivation_path?: string;
+    seed_phrase_derivation_path?: string;
+  };
 };
 
 /**
  * Decrypts data that was previously encrypted with the user's key
  * @param encryptedData - Base64-encoded encrypted data string
- * @param derivationPath - Optional BIP32 derivation path
+ * @param key_options - Key derivation options (see KeyOptions type)
  * @returns A promise resolving to the decrypted string
  * @throws {Error} If:
  * - The encrypted data is malformed
- * - The derivation path is invalid
+ * - The derivation paths are invalid
  * - Authentication fails
  * - Server-side decryption error occurs
  *
  * @description
+ * This function supports multiple decryption approaches:
+ *
+ * 1. Decrypt with master key (no derivation parameters)
+ *
+ * 2. Decrypt with BIP-32 derived key
+ *    - Derives a child key from the master seed using BIP-32
+ *
+ * 3. Decrypt with BIP-85 derived key
+ *    - Derives a child mnemonic using BIP-85, then uses its master key
+ *
+ * 4. Decrypt with combined BIP-85 and BIP-32 derivation
+ *    - First derives a child mnemonic via BIP-85
+ *    - Then applies BIP-32 derivation to derive a key from that seed
+ *
+ * IMPORTANT: You must use the exact same derivation paths for decryption
+ * that were used for encryption.
+ *
+ * Technical details:
  * - Uses AES-256-GCM decryption with authentication tag verification
  * - Extracts the nonce from the first 12 bytes of the encrypted data
- * - If derivation_path is provided, decryption uses the derived key at that path
- * - If derivation_path is omitted, decryption uses the master key
  * - The encrypted_data must be in the exact format returned by the encrypt endpoint
  */
-export async function decryptData(encryptedData: string, derivationPath?: string): Promise<string> {
-  return authenticatedApiCall<DecryptDataRequest, string>(
+export async function decryptData(
+  encryptedData: string,
+  key_options?: KeyOptions
+): Promise<string> {
+  const requestData = {
+    encrypted_data: encryptedData,
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+  };
+
+  return authenticatedApiCall<typeof requestData, string>(
     `${apiUrl}/protected/decrypt`,
     "POST",
-    {
-      encrypted_data: encryptedData,
-      derivation_path: derivationPath
-    },
+    requestData,
     "Failed to decrypt data"
   );
 }
