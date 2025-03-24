@@ -197,7 +197,7 @@ test("Encrypt and decrypt data", async () => {
   window.localStorage.setItem("refresh_token", refresh_token);
 
   // Test data to encrypt
-  const testData = "Hello, World!";
+  const testData = "[]";
 
   // Encrypt the data
   const encryptResponse = await encryptData(testData);
@@ -208,6 +208,23 @@ test("Encrypt and decrypt data", async () => {
   // Decrypt the data
   const decryptedData = await decryptData(encryptResponse.encrypted_data);
   expect(decryptedData).toBe(testData);
+
+  // Test data to encrypt again
+  const testData2 = "[]";
+
+  // Encrypt the data
+  const encryptResponse2 = await encryptData(testData2);
+  expect(encryptResponse2.encrypted_data).toBeDefined();
+  expect(typeof encryptResponse2.encrypted_data).toBe("string");
+  expect(encryptResponse2.encrypted_data.length).toBeGreaterThan(0);
+
+  // Decrypt the data again
+  const decryptedData2 = await decryptData(encryptResponse2.encrypted_data);
+  expect(decryptedData2).toBe(testData2);
+
+  // Decrypt the original data
+  const decryptedDataOriginal = await decryptData(encryptResponse.encrypted_data);
+  expect(decryptedDataOriginal).toBe(testData);
 
   // Try with a derivation path
   const derivationPath = "m/44'/0'/0'/0/0";
