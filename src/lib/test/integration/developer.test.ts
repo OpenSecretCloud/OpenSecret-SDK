@@ -3,6 +3,8 @@ import { platformLogin, platformRegister, platformMe } from "../../platformApi";
 import "../platform-api-url-loader";
 import * as platformApi from "../../platformApi";
 import { encode } from "@stablelib/base64";
+import { clearPcrHistoryCache } from "../../pcrHistory";
+import { resetTestState } from "../preload";
 
 const TEST_DEVELOPER_EMAIL = process.env.VITE_TEST_DEVELOPER_EMAIL;
 const TEST_DEVELOPER_PASSWORD = process.env.VITE_TEST_DEVELOPER_PASSWORD;
@@ -88,7 +90,14 @@ async function tryDeveloperLogin() {
 
 // Clean up before each test
 beforeEach(async () => {
-  window.localStorage.clear();
+  // Reset all test state
+  resetTestState();
+
+  // Reset the cached login response to ensure a fresh state for each test
+  cachedLoginResponse = null;
+
+  // Clear the PCR history cache to avoid state between tests
+  clearPcrHistoryCache();
 });
 
 test("Developer login and token storage", async () => {
