@@ -211,19 +211,22 @@ test("Encrypt and decrypt data", async () => {
 
   // Try with a derivation path
   const derivationPath = "m/44'/0'/0'/0/0";
-  const encryptWithPathResponse = await encryptData(testData, derivationPath);
+  const encryptWithPathResponse = await encryptData(testData, {
+    private_key_derivation_path: derivationPath
+  });
   expect(encryptWithPathResponse.encrypted_data).toBeDefined();
 
   // Decrypt with the same derivation path
-  const decryptedWithPathData = await decryptData(
-    encryptWithPathResponse.encrypted_data,
-    derivationPath
-  );
+  const decryptedWithPathData = await decryptData(encryptWithPathResponse.encrypted_data, {
+    private_key_derivation_path: derivationPath
+  });
   expect(decryptedWithPathData).toBe(testData);
 
   // Try decrypting with a different derivation path (should fail)
   try {
-    await decryptData(encryptWithPathResponse.encrypted_data, "m/44'/0'/0'/0/1");
+    await decryptData(encryptWithPathResponse.encrypted_data, {
+      private_key_derivation_path: "m/44'/0'/0'/0/1"
+    });
     throw new Error("Should not decrypt with wrong derivation path");
   } catch (error: any) {
     expect(error.message).toBe("Bad Request");

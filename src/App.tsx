@@ -251,7 +251,10 @@ function App() {
 
     try {
       const messageBytes = new TextEncoder().encode(message);
-      const response = await os.signMessage(messageBytes, algorithm, derivationPath || undefined);
+      const keyOptions = derivationPath
+        ? { private_key_derivation_path: derivationPath }
+        : undefined;
+      const response = await os.signMessage(messageBytes, algorithm, keyOptions);
 
       setLastSignature({
         signature: response.signature,
@@ -512,7 +515,10 @@ function App() {
               const derivationPath = formData.get("derivationPath") as string;
 
               try {
-                const response = await os.getPrivateKeyBytes(derivationPath || undefined);
+                const keyOptions = derivationPath
+                  ? { private_key_derivation_path: derivationPath }
+                  : undefined;
+                const response = await os.getPrivateKeyBytes(keyOptions);
                 alert(`Private key bytes (hex):\n\n${response.private_key}`);
               } catch (error) {
                 console.error("Failed to get private key bytes:", error);
@@ -598,7 +604,10 @@ function App() {
           <button
             onClick={async () => {
               try {
-                const response = await os.getPublicKey(algorithm, derivationPath || undefined);
+                const keyOptions = derivationPath
+                  ? { private_key_derivation_path: derivationPath }
+                  : undefined;
+                const response = await os.getPublicKey(algorithm, keyOptions);
                 setPublicKey(response.public_key);
                 setVerificationResult(null);
               } catch (error) {

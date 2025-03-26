@@ -94,31 +94,79 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 - `generateThirdPartyToken(audience?: string): Promise<{ token: string }>`: Generates a JWT token for use with third-party services. If an audience is provided, it can be any valid URL. If omitted, a token with no audience restriction will be generated.
 
 #### Cryptographic Methods
-- `getPrivateKey(): Promise<{ mnemonic: string }>`: Retrieves the user's private key mnemonic phrase. This is used for cryptographic operations and should be kept secure.
 
-- `getPrivateKeyBytes(derivationPath?: string): Promise<{ private_key: string }>`: Retrieves the private key bytes for a given BIP32 derivation path. If no path is provided, returns the master private key bytes.
-  - Supports both absolute (starting with "m/") and relative paths
-  - Supports hardened derivation using either ' or h notation
-    Examples:
-    - Absolute path: "m/44'/0'/0'/0/0"
-    - Relative path: "0'/0'/0'/0/0"
-    - Hardened notation: "44'" or "44h"
-  - Common paths:
-    - BIP44 (Legacy): `m/44'/0'/0'/0/0`
-    - BIP49 (SegWit): `m/49'/0'/0'/0/0`
-    - BIP84 (Native SegWit): `m/84'/0'/0'/0/0`
-    - BIP86 (Taproot): `m/86'/0'/0'/0/0`
+##### Key Derivation Options
 
-- `getPublicKey(algorithm: 'schnorr' | 'ecdsa', derivationPath?: string): Promise<PublicKeyResponse>`: Retrieves the user's public key for the specified signing algorithm and optional derivation path. The derivation path determines which child key pair is used, allowing different public keys to be generated from the same master key. This is useful for:
-  - Separating keys by purpose (e.g., different chains or applications)
-  - Generating deterministic addresses
-  - Supporting different address formats (Legacy, SegWit, Native SegWit, Taproot)
+For cryptographic operations, the SDK supports a `KeyOptions` object with the following structure:
+
+```typescript
+type KeyOptions = {
+  /** 
+   * BIP-85 derivation path to derive a child mnemonic
+   * Example: "m/83696968'/39'/0'/12'/0'"
+   */
+  seed_phrase_derivation_path?: string;
+  
+  /**
+   * BIP-32 derivation path to derive a child key from the master (or BIP-85 derived) seed
+   * Example: "m/44'/0'/0'/0/0"
+   */
+  private_key_derivation_path?: string;
+};
+```
+
+All cryptographic methods accept this `KeyOptions` object as a parameter to specify derivation options.
+
+##### Methods
+
+- `getPrivateKey(key_options?: KeyOptions): Promise<{ mnemonic: string }>`: Retrieves the user's private key mnemonic phrase.
+  - If no key_options are provided, returns the master mnemonic
+  - If `seed_phrase_derivation_path` is provided, returns a BIP-85 derived child mnemonic
+  - For BIP-85, the path format is typically `m/83696968'/39'/0'/12'/0'` where:
+    - `83696968'` is the hardened BIP-85 application number (ASCII for "BIPS")
+    - `39'` is the hardened BIP-39 application (for mnemonic derivation)
+    - `0'` is the hardened coin type (0' for Bitcoin)
+    - `12'` is the hardened entropy in words (12-word mnemonic)
+    - `0'` is the hardened index (can be incremented to generate different phrases)
+
+- `getPrivateKeyBytes(key_options?: KeyOptions): Promise<{ private_key: string }>`: Retrieves the private key bytes with flexible derivation options.
+  - Supports multiple derivation approaches:
+  
+  1. Master key only (no parameters)
+     - Returns the master private key bytes
+  
+  2. BIP-32 derivation only
+     - Uses path format like `m/44'/0'/0'/0/0`
+     - Supports both absolute (starting with "m/") and relative paths
+     - Supports hardened derivation using either ' or h notation
+  
+  3. BIP-85 derivation only
+     - Derives a child mnemonic from the master seed using BIP-85
+     - Then returns the master private key of that derived seed
+  
+  4. Combined BIP-85 and BIP-32 derivation
+     - First derives a child mnemonic via BIP-85
+     - Then applies BIP-32 derivation to that derived seed
+
+  Common BIP-32 paths:
+  - BIP44 (Legacy): `m/44'/0'/0'/0/0`
+  - BIP49 (SegWit): `m/49'/0'/0'/0/0`
+  - BIP84 (Native SegWit): `m/84'/0'/0'/0/0`
+  - BIP86 (Taproot): `m/86'/0'/0'/0/0`
+
+- `getPublicKey(algorithm: 'schnorr' | 'ecdsa', key_options?: KeyOptions): Promise<PublicKeyResponse>`: Retrieves the user's public key for the specified signing algorithm and derivation options.
+  
+  The derivation paths determine which key is used to generate the public key:
+  - Master key (no parameters)
+  - BIP-32 derived key
+  - BIP-85 derived key
+  - Combined BIP-85 + BIP-32 derived key
   
   Supports two algorithms:
   - `'schnorr'`: For Schnorr signatures
   - `'ecdsa'`: For ECDSA signatures
 
-- `signMessage(messageBytes: Uint8Array, algorithm: 'schnorr' | 'ecdsa', derivationPath?: string): Promise<SignatureResponse>`: Signs a message using the specified algorithm and optional derivation path. The message must be provided as a Uint8Array of bytes. Returns a signature that can be verified using the corresponding public key.
+- `signMessage(messageBytes: Uint8Array, algorithm: 'schnorr' | 'ecdsa', key_options?: KeyOptions): Promise<SignatureResponse>`: Signs a message using the specified algorithm and derivation options.
   
   Example message preparation:
   ```typescript
@@ -129,35 +177,128 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
   const messageBytes = new Uint8Array(Buffer.from("deadbeef", "hex"));
   ```
 
-- `encryptData(data: string, derivationPath?: string): Promise<{ encrypted_data: string }>`: Encrypts arbitrary string data using the user's private key.
-  - Uses AES-256-GCM encryption with a random nonce for each operation
-  - If derivation_path is provided, encryption uses the derived key at that path
-  - If derivation_path is omitted, encryption uses the master key
-  - Returns base64-encoded encrypted data containing the nonce, ciphertext, and authentication tag
+- `encryptData(data: string, key_options?: KeyOptions): Promise<{ encrypted_data: string }>`: Encrypts arbitrary string data using the user's private key with flexible derivation options.
   
-  Example:
+  Examples:
   ```typescript
   // Encrypt with master key
   const { encrypted_data } = await os.encryptData("Secret message");
   
-  // Encrypt with derived key
-  const { encrypted_data } = await os.encryptData("Secret message", "m/44'/0'/0'/0/0");
+  // Encrypt with BIP-32 derived key
+  const { encrypted_data } = await os.encryptData("Secret message", {
+    private_key_derivation_path: "m/44'/0'/0'/0/0"
+  });
+  
+  // Encrypt with BIP-85 derived key
+  const { encrypted_data } = await os.encryptData("Secret message", {
+    seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+  });
+  
+  // Encrypt with combined BIP-85 and BIP-32 derivation
+  const { encrypted_data } = await os.encryptData("Secret message", {
+    seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
+    private_key_derivation_path: "m/44'/0'/0'/0/0"
+  });
   ```
 
-- `decryptData(encryptedData: string, derivationPath?: string): Promise<string>`: Decrypts data that was previously encrypted with the user's key.
-  - Uses AES-256-GCM decryption with authentication tag verification
-  - If derivation_path is provided, decryption uses the derived key at that path
-  - If derivation_path is omitted, decryption uses the master key
-  - The encrypted_data must be in the exact format returned by the encrypt endpoint
+- `decryptData(encryptedData: string, key_options?: KeyOptions): Promise<string>`: Decrypts data that was previously encrypted with the user's key.
   
-  Example:
+  IMPORTANT: You must use the exact same derivation options for decryption that were used for encryption.
+  
+  Examples:
   ```typescript
   // Decrypt with master key
   const decrypted = await os.decryptData(encrypted_data);
   
-  // Decrypt with derived key (must use same path as encryption)
-  const decrypted = await os.decryptData(encrypted_data, "m/44'/0'/0'/0/0");
+  // Decrypt with BIP-32 derived key
+  const decrypted = await os.decryptData(encrypted_data, {
+    private_key_derivation_path: "m/44'/0'/0'/0/0"
+  });
+  
+  // Decrypt with BIP-85 derived key
+  const decrypted = await os.decryptData(encrypted_data, {
+    seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+  });
+  
+  // Decrypt with combined BIP-85 and BIP-32 derivation
+  const decrypted = await os.decryptData(encrypted_data, {
+    seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
+    private_key_derivation_path: "m/44'/0'/0'/0/0"
+  });
   ```
+
+##### Implementation Examples
+
+1. Basic Usage with Default Master Key
+
+```typescript
+// Get the master mnemonic
+const { mnemonic } = await os.getPrivateKey();
+
+// Get the master private key bytes
+const { private_key } = await os.getPrivateKeyBytes();
+
+// Sign with the master key
+const signature = await os.signMessage(messageBytes, 'ecdsa');
+```
+
+2. Using BIP-32 Derivation Only
+
+```typescript
+// Get private key bytes using BIP-32 derivation
+const { private_key } = await os.getPrivateKeyBytes({
+  private_key_derivation_path: "m/44'/0'/0'/0/0"
+});
+
+// Sign with a derived key
+const signature = await os.signMessage(messageBytes, 'ecdsa', {
+  private_key_derivation_path: "m/44'/0'/0'/0/0"
+});
+```
+
+3. Using BIP-85 Derivation Only
+
+```typescript
+// Get a child mnemonic phrase derived via BIP-85
+const { mnemonic } = await os.getPrivateKey({
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+});
+
+// Get master private key of a BIP-85 derived seed
+const { private_key } = await os.getPrivateKeyBytes({
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+});
+```
+
+4. Using Both BIP-85 and BIP-32 Derivation
+
+```typescript
+// Get private key bytes derived through BIP-85 and then BIP-32
+const { private_key } = await os.getPrivateKeyBytes({
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
+  private_key_derivation_path: "m/44'/0'/0'/0/0"
+});
+
+// Sign a message with a key derived through both methods
+const signature = await os.signMessage(messageBytes, 'schnorr', {
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
+  private_key_derivation_path: "m/44'/0'/0'/0/0"
+});
+```
+
+5. Encryption/Decryption with Derived Keys
+
+```typescript
+// Encrypt with a BIP-85 derived key
+const { encrypted_data } = await os.encryptData("Secret message", {
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+});
+
+// Decrypt using the same derivation path
+const decrypted = await os.decryptData(encrypted_data, {
+  seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'"
+});
+```
 
 ### AI Integration
 
