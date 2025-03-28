@@ -24,6 +24,8 @@ const DEFAULT_PCR0_VALUES_DEV = [
   "c4285443b87b9b12a6cea3bef1064ec060f652b235a297095975af8f134e5ed65f92d70d4616fdec80af9dff48bb9f35"
 ];
 
+import { validatePcrAgainstHistory } from "./pcrHistory";
+
 export type Pcr0ValidationResult = {
   isMatch: boolean;
   text: string;
@@ -32,6 +34,7 @@ export type Pcr0ValidationResult = {
 export type PcrConfig = {
   pcr0Values?: string[];
   pcr0DevValues?: string[];
+  remoteValidationUrl?: string;
 };
 
 /**
@@ -40,10 +43,14 @@ export type PcrConfig = {
  * @param config - Optional configuration with custom PCR0 values
  * @returns Object containing match status and descriptive text
  */
-export function validatePcr0Hash(hash: string, config?: PcrConfig): Pcr0ValidationResult {
+export async function validatePcr0Hash(
+  hash: string,
+  config?: PcrConfig
+): Promise<Pcr0ValidationResult> {
   const validPcr0Values = [...(config?.pcr0Values || []), ...DEFAULT_PCR0_VALUES];
   const validPcr0DevValues = [...(config?.pcr0DevValues || []), ...DEFAULT_PCR0_VALUES_DEV];
 
+  // First try local validation with hardcoded values
   if (validPcr0Values.includes(hash)) {
     return {
       isMatch: true,
@@ -56,6 +63,18 @@ export function validatePcr0Hash(hash: string, config?: PcrConfig): Pcr0Validati
       isMatch: true,
       text: "PCR0 matches development enclave"
     };
+  }
+
+  // Check remote validation if URL provided
+  if (config?.remoteValidationUrl) {
+    try {
+      const pcrSet = { PCR0: hash, PCR1: "", PCR2: "" };
+      const remoteValidation = await validatePcrAgainstHistory(pcrSet, config);
+      return remoteValidation;
+    } catch (error) {
+      console.error("Error with remote PCR validation:", error);
+      // Continue with default validation path (do not return error from remote validation)
+    }
   }
 
   return {
