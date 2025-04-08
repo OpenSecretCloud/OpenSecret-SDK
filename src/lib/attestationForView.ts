@@ -61,7 +61,12 @@ export async function parseAttestationForView(
 
   // Find PCR0 and validate it
   const pcr0 = pcrs.find((pcr) => pcr.id === 0);
-  const validatedPcr0Hash = pcr0 ? validatePcr0Hash(pcr0.value, pcrConfig) : null;
+
+  // Use the single entry point for PCR validation (async)
+  let validatedPcr0Hash: Pcr0ValidationResult | null = null;
+  if (pcr0) {
+    validatedPcr0Hash = await validatePcr0Hash(pcr0.value, pcrConfig);
+  }
 
   // Parse certificates - cabundle first, then leaf certificate
   const certificates = [...cabundle, document.certificate].map((certBytes) => {
