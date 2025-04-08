@@ -29,6 +29,7 @@ import { validatePcrAgainstHistory } from "./pcrHistory";
 export type Pcr0ValidationResult = {
   isMatch: boolean;
   text: string;
+  timestamp?: number;
 };
 
 export type PcrConfig = {

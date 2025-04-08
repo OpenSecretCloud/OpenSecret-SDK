@@ -3,11 +3,10 @@ import { Pcr0ValidationResult, PcrConfig } from "./pcr";
 
 // The PCR verification public key provided in DER format, base64-encoded
 const PCR_VERIFICATION_PUBLIC_KEY_B64 =
-  "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEsT4fLLWwA2IyUQbRjhsjz46Ts14mxVzvu8eC68rM7r9b3tZ1yYX311WaQcDOhNbT5vCYivkqA0EXN3aDFSmXHyFzKKxqyOEGBgnRxSBpMQNrc2yumBMDvseiEdCSpQwR";
+  "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE49ROLyUMmn73mVuJ6yZAQviAo24MSPxofK+AiHK/e6ZBewF7x5sbjKDVWRVIUxLdt7iuY8SMG8DofuT+slMY8CHzK17tiuN0BeAyLR4I7c7MlfgoBwXbb8aPGh3f0T7b";
 
 // Interface for PCR history entries
 export interface PcrEntry {
-  HashAlgorithm: string;
   PCR0: string;
   PCR1: string;
   PCR2: string;
@@ -112,20 +111,8 @@ export async function verifyPcrSignature(entry: PcrEntry, publicKey: CryptoKey):
   try {
     const encoder = new TextEncoder();
 
-    // Create the same message format that was signed on the backend
-    // Note: To match signature implementation, we need to exclude the signature field
-    const dataToSign = {
-      HashAlgorithm: entry.HashAlgorithm,
-      PCR0: entry.PCR0,
-      PCR1: entry.PCR1,
-      PCR2: entry.PCR2,
-      timestamp: entry.timestamp
-    };
-
-    // Convert to JSON string with deterministic ordering to match backend signature
-    // This ensures key ordering is consistent for proper signature verification
-    const orderedJson = JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
-    const message = encoder.encode(orderedJson);
+    // Create the message - only the PCR0 string value is signed
+    const message = encoder.encode(entry.PCR0);
 
     // Decode the base64 signature
     const signatureBuf = decode(entry.signature);
@@ -171,14 +158,18 @@ export async function validatePcrAgainstHistory(
     const publicKey = await loadPcrPublicKey();
 
     for (const entry of history) {
-      // Check if PCRs match
-      if (entry.PCR0 === pcr.PCR0 && entry.PCR1 === pcr.PCR1 && entry.PCR2 === pcr.PCR2) {
-        // Verify signature
+      // Check if PCR values match
+      if (entry.PCR0 === pcr.PCR0 &&
+          entry.PCR1 === pcr.PCR1 &&
+          entry.PCR2 === pcr.PCR2) {
+        
+        // Verify signature of PCR0
         const isValid = await verifyPcrSignature(entry, publicKey);
         if (isValid) {
+          const verifiedDate = new Date(entry.timestamp * 1000).toLocaleString();
           return {
             isMatch: true,
-            text: "PCR matches history with valid signature"
+            text: `Verified PCR with signature from ${verifiedDate}`
           };
         }
       }
