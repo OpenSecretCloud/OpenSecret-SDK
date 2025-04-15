@@ -380,6 +380,104 @@ To deploy:
 NPM_CONFIG_TOKEN=$NPM_CONFIG_TOKEN bun publish --access public
 ```
 
+### Documentation Development
+
+The SDK documentation is built using [Docusaurus](https://docusaurus.io/), a modern documentation framework. The documentation is automatically generated from TypeScript code comments and supplemented with manually written guides.
+
+#### Getting Started with Documentation
+
+To start the documentation development server:
+
+```bash
+bun run docs:dev
+```
+
+This will start the Docusaurus development server and open the documentation in your browser at http://localhost:3000/. The server supports hot-reloading, so any changes you make to the documentation will be immediately reflected in the browser.
+
+#### Building Documentation
+
+To build the documentation for production:
+
+```bash
+bun run docs:build
+```
+
+This will generate static HTML, JavaScript, and CSS files in the `website/build` directory.
+
+To serve the built documentation locally:
+
+```bash
+bun run docs:serve
+```
+
+#### Documentation Structure
+
+The documentation is organized into the following directories:
+
+- `/website/docs/` - Contains all manual documentation files
+  - `index.md` - The documentation landing page
+  - `/guides/` - Step-by-step guides for using the SDK
+  - `/api/` - API reference documentation (mostly auto-generated)
+
+#### API Reference Documentation
+
+The API reference documentation is automatically generated from TypeScript code comments using [TypeDoc](https://typedoc.org/). To update the API documentation:
+
+1. Write proper JSDoc comments in the TypeScript source code
+2. Run `bun run docs:build` to regenerate the documentation
+
+Important notes for API documentation:
+
+- Use standard JSDoc syntax for documenting parameters, return types, and descriptions
+- For Markdown in JSDoc comments, be aware that backticks (`) must be properly escaped
+- For code examples with apostrophes (e.g., BIP paths like `m/44'/0'/0'/0/0`), use backslash escaping: `m/44\'/0\'/0\'/0/0`
+
+#### Adding New Guides
+
+To add a new guide:
+
+1. Create a new Markdown file in the `/website/docs/guides/` directory
+2. Add frontmatter at the top of the file:
+   ```md
+   ---
+   title: Your Guide Title
+   sidebar_position: X  # Controls the order in the sidebar
+   ---
+   ```
+3. Update the sidebar configuration in `/website/sidebars.ts` if needed
+
+#### Customizing the Documentation
+
+The main configuration files for Docusaurus are:
+
+- `/website/docusaurus.config.ts` - Main Docusaurus configuration
+- `/website/sidebars.ts` - Sidebar configuration
+- `/website/typedoc.json` - TypeDoc configuration for API docs
+
+To customize the appearance:
+
+- Edit `/website/src/css/custom.css` for global styles
+- Create or modify components in `/website/src/components/`
+
+#### Deployment
+
+The documentation can be deployed to various platforms like GitHub Pages, Netlify, or Vercel. For CloudFlare Pages deployment, as mentioned in our guideline:
+
+1. In CloudFlare Pages, create a new project connected to your GitHub repo
+2. Use these build settings:
+   - Build command: `cd website && bun run build`
+   - Build output directory: `website/build`
+3. Set up a custom domain through CloudFlare's dashboard
+
+#### Troubleshooting
+
+Common issues:
+
+- If TypeDoc fails to generate documentation, check the JSDoc comments for syntax errors
+- If you see "Could not parse expression with acorn" errors, there are likely unescaped characters in code examples
+- If links are broken, check that the referenced pages exist and paths are correct
+- For sidebar issues, verify that the sidebar configuration in `sidebars.ts` is correct
+
 ## License
 
 This project is licensed under the MIT License.

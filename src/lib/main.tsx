@@ -22,23 +22,23 @@ export type OpenSecretContextType = {
   auth: OpenSecretAuthState;
 
   /**
-   * The client ID for this project/tenant
-   * @description A UUID that identifies which project/tenant this instance belongs to
+   * The client ID for this project/tenant.
+   * A UUID that identifies which project/tenant this instance belongs to.
    */
   clientId: string;
 
   /**
-   * Authenticates a user with email and password
-   * @param email - User's email address
-   * @param password - User's password
-   * @returns A promise that resolves when authentication is complete
-   * @throws {Error} If login fails
-   *
-   * @description
+   * Authenticates a user with email and password.
+   * 
    * - Calls the login API endpoint with the configured clientId
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with user information
    * - Throws an error if authentication fails
+   * 
+   * @param email - User's email address
+   * @param password - User's password
+   * @returns A promise that resolves when authentication is complete
+   * @throws {Error} If login fails
    */
   signIn: (email: string, password: string) => Promise<void>;
 
@@ -51,7 +51,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when account creation is complete
    * @throws {Error} If signup fails
    *
-   * @description
+   * 
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with new user information
@@ -66,7 +66,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when authentication is complete
    * @throws {Error} If login fails
    *
-   * @description
+   * 
    * - Calls the login API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with user information
@@ -81,7 +81,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves to the login response containing the guest ID
    * @throws {Error} If signup fails
    *
-   * @description
+   * 
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with new user information
@@ -100,7 +100,7 @@ export type OpenSecretContextType = {
    * - The email address is already in use
    * - The user is not authenticated
    *
-   * @description
+   * 
    * - Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
    * - Requires the user to be currently authenticated as a guest
    * - Updates the auth state with new user information
@@ -117,7 +117,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when logout is complete
    * @throws {Error} If logout fails
    *
-   * @description
+   * 
    * - Calls the logout API endpoint with the current refresh_token
    * - Removes access_token, refresh_token from localStorage
    * - Removes session-related items from sessionStorage
@@ -131,7 +131,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the stored value
    * @throws {Error} If the key cannot be retrieved
    *
-   * @description
+   * 
    * - Calls the authenticated API endpoint to fetch a value
    * - Returns undefined if the key does not exist
    * - Requires an active authentication session
@@ -146,7 +146,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the server's response
    * @throws {Error} If the value cannot be stored
    *
-   * @description
+   * 
    * - Calls the authenticated API endpoint to store a value
    * - Requires an active authentication session
    * - Overwrites any existing value for the given key
@@ -159,7 +159,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to an array of stored items
    * @throws {Error} If the list cannot be retrieved
    *
-   * @description
+   * 
    * - Calls the authenticated API endpoint to fetch all stored items
    * - Returns an array of key-value pairs with metadata
    * - Requires an active authentication session
@@ -174,7 +174,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving when the deletion is complete
    * @throws {Error} If the key cannot be deleted
    *
-   * @description
+   * 
    * - Calls the authenticated API endpoint to remove a specific key
    * - Requires an active authentication session
    * - Throws an error if the deletion fails (including for non-existent keys)
@@ -206,7 +206,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the private key response
    * @throws {Error} If the private key cannot be retrieved
    *
-   * @description
+   * 
    * This function supports two modes:
    *
    * 1. Master mnemonic (no parameters)
@@ -227,7 +227,7 @@ export type OpenSecretContextType = {
    * - The private key bytes cannot be retrieved
    * - The derivation paths are invalid
    *
-   * @description
+   * 
    * This function supports multiple derivation approaches:
    *
    * 1. Master key only (no parameters)
@@ -263,7 +263,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the public key response
    * @throws {Error} If the public key cannot be retrieved
    *
-   * @description
+   * 
    * The derivation paths determine which key is used to generate the public key:
    *
    * 1. Master key (no derivation parameters)
@@ -282,27 +282,15 @@ export type OpenSecretContextType = {
   getPublicKey: typeof api.fetchPublicKey;
 
   /**
-   * Signs a message using the specified algorithm
+   * Signs a message using the specified algorithm.
+   * This function supports multiple signing approaches: master key (no derivation),
+   * BIP-32 derived key, BIP-85 derived key, or combined BIP-85 and BIP-32 derivation.
+   * 
    * @param messageBytes - The message to sign as a Uint8Array
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
    * @param options - Optional key derivation options or legacy BIP32 derivation path string
    * @returns A promise resolving to the signature response
    * @throws {Error} If the message signing fails
-   *
-   * @description
-   * This function supports multiple signing approaches:
-   *
-   * 1. Sign with master key (no derivation parameters)
-   *
-   * 2. Sign with BIP-32 derived key
-   *    - Derives a child key from the master seed using BIP-32
-   *
-   * 3. Sign with BIP-85 derived key
-   *    - Derives a child mnemonic using BIP-85, then uses its master key
-   *
-   * 4. Sign with combined BIP-85 and BIP-32 derivation
-   *    - First derives a child mnemonic via BIP-85
-   *    - Then applies BIP-32 derivation to derive a key from that seed
    */
   signMessage: typeof api.signMessage;
 
@@ -372,7 +360,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the parsed attestation document
    * @throws {Error} If attestation fails or is invalid
    *
-   * @description
+   * 
    * This is a convenience function that:
    * 1. Fetches the attestation document with a random nonce
    * 2. Authenticates the document
@@ -388,7 +376,7 @@ export type OpenSecretContextType = {
    * - The user is not authenticated
    * - The audience URL is invalid (if provided)
    *
-   * @description
+   * 
    * - Generates a signed JWT token for use with third-party services
    * - If audience is provided, it can be any valid URL
    * - If audience is omitted, a token with no audience restriction will be generated
@@ -407,25 +395,25 @@ export type OpenSecretContextType = {
    * - Authentication fails
    * - Server-side encryption error occurs
    *
-   * @description
+   * 
    * This function supports multiple encryption approaches:
    *
    * 1. Encrypt with master key (no derivation parameters)
    *
    * 2. Encrypt with BIP-32 derived key
    *    - Derives a child key from the master seed using BIP-32
-   *    - Example: "m/44'/0'/0'/0/0"
+   *    - Example: "m/44\'/0\'/0\'/0/0"
    *
    * 3. Encrypt with BIP-85 derived key
    *    - Derives a child mnemonic using BIP-85, then uses its master key
-   *    - Example: { seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'" }
+   *    - Example: { seed_phrase_derivation_path: "m/83696968\'/39\'/0\'/12\'/0\'" }
    *
    * 4. Encrypt with combined BIP-85 and BIP-32 derivation
    *    - First derives a child mnemonic via BIP-85
    *    - Then applies BIP-32 derivation to derive a key from that seed
    *    - Example: {
-   *        seed_phrase_derivation_path: "m/83696968'/39'/0'/12'/0'",
-   *        private_key_derivation_path: "m/44'/0'/0'/0/0"
+   *        seed_phrase_derivation_path: "m/83696968\'/39\'/0\'/12\'/0\'",
+   *        private_key_derivation_path: "m/44\'/0\'/0\'/0/0"
    *      }
    *
    * Technical details:
@@ -446,7 +434,7 @@ export type OpenSecretContextType = {
    * - Authentication fails
    * - Server-side decryption error occurs
    *
-   * @description
+   * 
    * This function supports multiple decryption approaches:
    *
    * 1. Decrypt with master key (no derivation parameters)

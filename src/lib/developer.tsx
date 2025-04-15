@@ -48,7 +48,7 @@ export type OpenSecretDeveloperContextType = {
    * @param password - Developer's password
    * @returns A promise that resolves to the login response with access and refresh tokens
    *
-   * @description
+   * 
    * - Calls the login API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the developer state with user information
@@ -62,7 +62,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves when verification is complete
    * @throws {Error} If verification fails
    *
-   * @description
+   * 
    * - Takes the verification code from the verification email link
    * - Calls the verification API endpoint
    * - Updates email_verified status if successful
@@ -74,7 +74,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves to a success message
    * @throws {Error} If the user is already verified or request fails
    *
-   * @description
+   * 
    * - Used when the user needs a new verification email
    * - Requires the user to be authenticated
    * - Sends a new verification email to the user's registered email address
@@ -93,7 +93,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves when the reset request is successfully processed
    * @throws {Error} If the request fails or the email doesn't exist
    *
-   * @description
+   * 
    * - Sends a password reset request for a platform developer
    * - The server will send an email with an alphanumeric code
    * - The email and hashed_secret are paired for the reset process
@@ -110,7 +110,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves when the password is successfully reset
    * @throws {Error} If the verification fails or the request is invalid
    *
-   * @description
+   * 
    * - Completes the password reset process using the code from the email
    * - Requires the plaintext_secret that matches the previously sent hashed_secret
    * - Sets the new password if all verification succeeds
@@ -125,7 +125,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves when the password is successfully changed
    * @throws {Error} If current password is incorrect or the request fails
    *
-   * @description
+   * 
    * - Requires the user to be authenticated
    * - Verifies the current password before allowing the change
    * - Updates to the new password if verification succeeds
@@ -140,7 +140,7 @@ export type OpenSecretDeveloperContextType = {
    * @param name - Optional developer name
    * @returns A promise that resolves to the login response with access and refresh tokens
    *
-   * @description
+   * 
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the developer state with new user information
@@ -156,7 +156,7 @@ export type OpenSecretDeveloperContextType = {
   /**
    * Signs out the current developer by removing authentication tokens
    *
-   * @description
+   * 
    * - Calls the logout API endpoint with the current refresh_token
    * - Removes access_token, refresh_token from localStorage
    * - Resets the developer state to show no user is authenticated
@@ -168,7 +168,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise that resolves when the refresh is complete
    * @throws {Error} If the refresh fails
    *
-   * @description
+   * 
    * - Retrieves the latest developer information from the server
    * - Updates the developer state with fresh data
    * - Useful after making changes that affect developer profile or organization membership
@@ -214,7 +214,7 @@ export type OpenSecretDeveloperContextType = {
    * @returns A promise resolving to the parsed attestation document
    * @throws {Error} If attestation fails or is invalid
    *
-   * @description
+   * 
    * This is a convenience function that:
    * 1. Fetches the attestation document with a random nonce
    * 2. Authenticates the document
