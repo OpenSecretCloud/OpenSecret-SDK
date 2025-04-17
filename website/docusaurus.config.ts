@@ -75,6 +75,8 @@ const config: Config = {
             'https://github.com/OpenSecretCloud/OpenSecret-SDK/tree/master/',
           routeBasePath: 'docs',
           path: 'docs',
+          sidebarCollapsible: true,
+          sidebarCollapsed: false,
         },
         blog: false,
         theme: {

@@ -24,20 +24,73 @@ try {
 
 const sidebars: SidebarsConfig = {
   // Main documentation sidebar for guides and general documentation
-  tutorialSidebar: [
-    'index', // Introduction first
+  docs: [
+    {
+      type: 'doc',
+      id: 'index',
+      label: 'Introduction',
+    },
+    {
+      type: 'doc',
+      id: 'registration',
+      label: 'Registration & Project Setup',
+    },
     {
       type: 'category',
       label: 'Guides',
+      collapsed: false,
       items: [
-        'guides/getting-started',
-        'guides/authentication'
-      ]
-    }
+        {
+          type: 'doc',
+          id: 'guides/getting-started',
+          label: 'Getting Started',
+        },
+        {
+          type: 'doc',
+          id: 'guides/authentication',
+          label: 'Authentication',
+        },
+        {
+          type: 'doc',
+          id: 'guides/guest-accounts',
+          label: 'Guest Accounts',
+        },
+        {
+          type: 'doc',
+          id: 'guides/key-value-storage',
+          label: 'Key-Value Storage',
+        },
+        {
+          type: 'doc',
+          id: 'guides/cryptographic-operations',
+          label: 'Cryptographic Operations',
+        },
+        {
+          type: 'doc',
+          id: 'guides/data-encryption',
+          label: 'Data Encryption',
+        },
+        {
+          type: 'doc',
+          id: 'guides/ai-integration',
+          label: 'AI Integration',
+        },
+        {
+          type: 'doc',
+          id: 'guides/remote-attestation',
+          label: 'Remote Attestation',
+        },
+        {
+          type: 'doc',
+          id: 'guides/third-party-tokens',
+          label: 'Third-Party Tokens',
+        },
+      ],
+    },
   ],
   
   // API Reference sidebar populated by TypeDoc, with key components highlighted
-  apiSidebar: [
+  api: [
     {
       type: 'category',
       label: 'TypeScript SDK API',
@@ -55,19 +108,6 @@ const sidebars: SidebarsConfig = {
             'api/variables/OpenSecretContext',
           ]
         },
-        // Developer API - Hidden for now
-        /* Hiding developer API for now to keep focus on Core API
-        {
-          type: 'category',
-          label: '👩‍💻 Developer API',
-          items: [
-            'api/type-aliases/OpenSecretDeveloperContextType',
-            'api/functions/OpenSecretDeveloper',
-            'api/functions/useOpenSecretDeveloper',
-            'api/variables/OpenSecretDeveloperContext',
-          ]
-        },
-        */
         // Other types and utilities
         {
           type: 'category',
