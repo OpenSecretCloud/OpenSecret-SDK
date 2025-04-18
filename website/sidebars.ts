@@ -22,9 +22,6 @@ try {
   console.log('TypeDoc sidebar not found. This is expected during first build.');
 }
 
-// Check if we're running in CI
-const isCI = process.env.CI === 'true';
-
 // Define types for sidebar items
 type DocItem = {
   type: 'doc';
@@ -49,24 +46,7 @@ type CategoryWithLinkItem = {
   items: (DocItem | CategoryItem | CategoryWithLinkItem)[];
 };
 
-// Simplified sidebar for CI
-const simpleSidebar = [
-  {
-    type: 'doc' as const,
-    id: 'api/index',
-    label: 'API Overview',
-  },
-  {
-    type: 'category' as const,
-    label: 'Interfaces',
-    collapsed: false,
-    items: [
-      'api/interfaces/ApiEndpoint',
-    ],
-  },
-];
-
-// Full sidebar with TypeDoc integration
+// Main sidebar with TypeDoc integration
 const fullSidebar = [
   {
     type: 'category' as const,
@@ -118,8 +98,7 @@ const fullSidebar = [
   },
 ];
 
-// Choose sidebar based on environment
-const apiSidebarItems = isCI ? simpleSidebar : fullSidebar;
+const apiSidebarItems = fullSidebar;
 
 const sidebars: SidebarsConfig = {
   // Main documentation sidebar for guides and general documentation
