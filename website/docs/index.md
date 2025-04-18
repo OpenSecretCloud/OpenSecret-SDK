@@ -59,12 +59,7 @@ Step-by-step guides to help you implement specific features:
 
 ### API Reference
 
-Detailed reference documentation for all SDK classes, methods, and types:
-
-- [Functions](./api/functions/index) - Core SDK functions
-- [Interfaces](./api/interfaces/index) - SDK interfaces
-- [Type Aliases](./api/type-aliases/index) - SDK type definitions
-- [Variables](./api/variables/index) - SDK constants and exports
+- [TypeScript SDK](/docs/api) - Complete reference documentation for all SDK classes, methods, and types
 
 ## Installation
 
@@ -91,8 +86,8 @@ bun add @opensecret/react
 
 If you encounter any issues or have questions about the SDK:
 
-- Check the [API Reference](./api/index) for detailed documentation
-- Search the [Community Forum](https://community.opensecret.cloud) for similar issues
+- Check the [API Reference](/docs/api) for detailed documentation 
+- Search the [Discord](https://discord.gg/ch2gjZAMGy) for similar issues
 - Contact us at [support@opensecret.cloud](mailto:support@opensecret.cloud)
 
 Ready to get started? [Register for an account](./registration) or jump into the [Getting Started Guide](./guides/getting-started).
