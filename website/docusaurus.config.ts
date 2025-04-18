@@ -8,9 +8,12 @@ const config: Config = {
   title: 'OpenSecret SDK',
   tagline: 'Secure SDK for OpenSecret Cloud',
   favicon: 'img/favicon.ico',
+  customFields: {
+    description: 'OpenSecret SDK provides developers with a secure cloud-native platform for confidential computing with encryption, remote attestation, and privacy-preserving AI capabilities',
+  },
 
   // Set the production url of your site here
-  url: 'https://docs.opensecretcloud.com',
+  url: 'https://docs.opensecret.cloud',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
@@ -87,13 +90,19 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
+    // OpenSecret brand social card
     image: 'img/docusaurus-social-card.jpg',
+    colorMode: {
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
+    },
     navbar: {
-      title: 'OpenSecret SDK Docs',
+      title: '',
       logo: {
         alt: 'OpenSecret Logo',
         src: 'img/logo.svg',
+        srcDark: 'img/logo-dark.svg',
       },
       items: [
         {
@@ -109,6 +118,11 @@ const config: Config = {
         {
           href: 'https://github.com/OpenSecretCloud/OpenSecret-SDK',
           label: 'GitHub',
+          position: 'right',
+        },
+        {
+          href: 'https://opensecret.cloud',
+          label: 'OpenSecret Cloud',
           position: 'right',
         },
       ],
@@ -130,16 +144,20 @@ const config: Config = {
           ],
         },
         {
-          title: 'Community',
+          title: 'Resources',
           items: [
             {
               label: 'GitHub',
               href: 'https://github.com/OpenSecretCloud/OpenSecret-SDK',
             },
+            {
+              label: 'OpenSecret Cloud',
+              href: 'https://opensecret.cloud',
+            },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} OpenSecret Cloud. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} OpenSecret Cloud. All rights reserved.`,
     },
     prism: {
       theme: prismThemes.github,

@@ -19,14 +19,15 @@ function HomepageHeader() {
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <div className={styles.buttons}>
           <Link
-            className="button button--secondary button--lg"
-            to="/docs/">
+            className="button button--primary button--lg"
+            to="/docs/guides/getting-started"
+            aria-label="Get started with OpenSecret SDK documentation">
             Get Started →
           </Link>
           <Link
             className="button button--outline button--lg button--secondary"
             to="/docs/api/"
-            style={{ marginLeft: '12px' }}>
+            aria-label="View the OpenSecret SDK API reference">
             API Reference
           </Link>
         </div>
@@ -40,7 +41,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={`${siteConfig.title} - ${siteConfig.tagline}`}
-      description="Security-first SDK for OpenSecret Cloud - with encryption, remote attestation, and privacy-preserving AI capabilities">
+      description={siteConfig.customFields.description as string}>
       <HomepageHeader />
       <main>
         <HomepageFeatures />
