@@ -1,6 +1,9 @@
 import type {ReactNode} from 'react';
 import clsx from 'clsx';
 import Heading from '@theme/Heading';
+import SecuritySvg from '@site/static/img/branding-fixed/security.svg';
+import UxSvg from '@site/static/img/branding-fixed/ux.svg';
+import AiSvg from '@site/static/img/branding-fixed/ai.svg';
 import styles from './styles.module.css';
 
 type FeatureItem = {
@@ -12,7 +15,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: 'Secure by Design',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    Svg: SecuritySvg,
     description: (
       <>
         OpenSecret SDK is built with security as the core principle, leveraging
@@ -22,7 +25,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'React Integration',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    Svg: UxSvg,
     description: (
       <>
         Seamlessly integrate with your React applications using our purpose-built
@@ -32,7 +35,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Privacy-Preserving AI',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    Svg: AiSvg,
     description: (
       <>
         Leverage AI capabilities while maintaining data privacy through our secure
