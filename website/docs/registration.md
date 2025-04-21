@@ -30,9 +30,7 @@ To register for an OpenSecret account:
 4. Click "Create Account"
 5. Verify your email address by clicking the link sent to your email
 
-![Registration Page](https://placeholder-for-signup-screenshot.png)
-
-:::note Invitation Codes
+::: note Invitation Codes
 During the preview phase, an invitation code may be required to register. If you need an invitation code, please contact the OpenSecret team at [team@opensecret.cloud](mailto:team@opensecret.cloud).
 :::
 
@@ -47,8 +45,6 @@ After registering and verifying your email:
    - Provide a brief description (optional)
 3. Click "Create Organization"
 
-![Create Organization](https://placeholder-for-create-org-screenshot.png)
-
 Organizations help you manage projects and team members. You can create multiple organizations if needed.
 
 ## Inviting Team Members
@@ -61,8 +57,6 @@ To invite team members to your organization:
 4. Enter the email address of the person you want to invite
 5. Select their role (Admin, Developer, or Viewer)
 6. Click "Send Invitation"
-
-![Invite Team Members](https://placeholder-for-invite-members-screenshot.png)
 
 ## Creating a Project
 
@@ -77,8 +71,6 @@ Once you have an organization:
    - Authentication methods (Email, Guest, Social logins)
 6. Click "Create Project"
 
-![Create Project](https://placeholder-for-create-project-screenshot.png)
-
 ## Getting Your Client ID
 
 After creating a project, you need to get your client ID:
@@ -87,8 +79,6 @@ After creating a project, you need to get your client ID:
 2. Go to the "Settings" tab
 3. Look for the "Client ID" section
 4. Copy the UUID shown - this is your client ID
-
-![Client ID](https://placeholder-for-client-id-screenshot.png)
 
 The client ID is a UUID that identifies your project and is required when setting up the OpenSecretProvider in your application:
 
@@ -116,8 +106,6 @@ You can configure authentication methods for your project:
 4. Set policies like password requirements and session duration
 5. Save your changes
 
-![Authentication Settings](https://placeholder-for-auth-settings-screenshot.png)
-
 ### Invite Codes
 
 To control who can access your application, you can manage invite codes:
@@ -128,8 +116,6 @@ To control who can access your application, you can manage invite codes:
 4. Set an expiration date and usage limit
 5. Click "Create Code"
 6. Share the generated code with your users
-
-![Invite Codes](https://placeholder-for-invite-codes-screenshot.png)
 
 Users will need to provide this invite code when signing up for your application.
 
@@ -142,8 +128,6 @@ Configure API settings for your project:
 3. Set CORS origins to allow requests from your application domains
 4. Configure rate limits for API endpoints
 5. Save your changes
-
-![API Configuration](https://placeholder-for-api-config-screenshot.png)
 
 ## Environments
 
