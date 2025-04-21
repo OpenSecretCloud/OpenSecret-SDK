@@ -113,8 +113,10 @@ export type OAuthProviderSettings = {
 export type OAuthSettings = {
   google_oauth_enabled: boolean;
   github_oauth_enabled: boolean;
+  apple_oauth_enabled: boolean;
   google_oauth_settings?: OAuthProviderSettings;
   github_oauth_settings?: OAuthProviderSettings;
+  apple_oauth_settings?: OAuthProviderSettings;
 };
 ```
 
@@ -531,8 +533,10 @@ export type OAuthProviderSettings = {
 export type OAuthSettings = {
   google_oauth_enabled: boolean;
   github_oauth_enabled: boolean;
+  apple_oauth_enabled: boolean;
   google_oauth_settings?: OAuthProviderSettings;
   github_oauth_settings?: OAuthProviderSettings;
+  apple_oauth_settings?: OAuthProviderSettings;
 };
 ```
 
@@ -548,9 +552,14 @@ const handleUpdateOAuthSettings = async (orgId, projectId) => {
     await dev.updateOAuthSettings(orgId, projectId, {
       google_oauth_enabled: true,
       github_oauth_enabled: false,
+      apple_oauth_enabled: true,
       google_oauth_settings: {
         client_id: "your-google-client-id",
         redirect_url: "https://yourdomain.com/auth/google/callback"
+      },
+      apple_oauth_settings: {
+        client_id: "your.apple.service.id",
+        redirect_url: "https://yourdomain.com/auth/apple/callback"
       }
     });
     console.log("OAuth settings updated");

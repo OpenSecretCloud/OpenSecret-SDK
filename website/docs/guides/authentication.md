@@ -174,7 +174,7 @@ function LoginForm() {
 
 ## OAuth Authentication
 
-OpenSecret supports authentication through OAuth providers like GitHub and Google. This allows your users to sign in using their existing accounts on these platforms.
+OpenSecret supports authentication through OAuth providers like GitHub, Google, and Apple. This allows your users to sign in using their existing accounts on these platforms.
 
 :::tip
 Before implementing OAuth authentication, you need to configure the OAuth providers in your project settings at [https://opensecret.cloud](https://opensecret.cloud). Navigate to your project's settings and look for the "Authentication" tab to set up each provider.
@@ -184,10 +184,16 @@ Before implementing OAuth authentication, you need to configure the OAuth provid
 
 For each OAuth provider, you'll need to:
 
-1. Register your application with the provider (GitHub, Google, etc.)
+1. Register your application with the provider (GitHub, Google, Apple, etc.)
 2. Obtain Client ID and Client Secret from the provider
 3. Configure redirect URLs (usually `https://api.opensecret.cloud/auth/[provider]/callback`)
 4. Add these credentials in your OpenSecret project settings
+
+For Apple authentication, you'll need to create:
+- An Apple Developer account
+- An App ID with "Sign In with Apple" capability
+- A Services ID for web authentication or a Bundle ID for iOS apps
+- A private key for creating client secrets
 
 ### GitHub Authentication
 
@@ -281,6 +287,108 @@ function GoogleLoginButton() {
 }
 ```
 
+### Apple Authentication
+
+Apple Sign-In is available in two forms:
+1. Web-based OAuth (similar to GitHub and Google)
+2. Native iOS integration
+
+#### Web OAuth Authentication
+
+To implement Apple OAuth login for web applications:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+
+function AppleLoginButton() {
+  const os = useOpenSecret();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  
+  async function handleAppleLogin() {
+    setLoading(true);
+    setError("");
+    
+    try {
+      const inviteCode = "your-invite-code"; // Or from a state/prop
+      
+      // Initiate Apple authentication
+      const { auth_url } = await os.initiateAppleAuth(inviteCode);
+      
+      // Redirect to Apple for authentication
+      window.location.href = auth_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apple login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  return (
+    <button 
+      onClick={handleAppleLogin} 
+      disabled={loading}
+      className="apple-login-button"
+    >
+      {loading ? "Connecting..." : "Sign in with Apple"}
+    </button>
+  );
+}
+```
+
+#### Native iOS Authentication
+
+For iOS apps using the native Sign in with Apple:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+
+function NativeAppleAuth({ appleAuthResponse }) {
+  const os = useOpenSecret();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  
+  // appleAuthResponse would come from your native iOS Sign in with Apple
+  // integration, typically using a Tauri plugin or other native bridge
+  async function completeAppleSignIn(appleAuthResponse) {
+    setLoading(true);
+    setError("");
+    
+    try {
+      // Format the response for the API
+      const appleUser = {
+        user_identifier: appleAuthResponse.user,
+        identity_token: appleAuthResponse.identityToken,
+        email: appleAuthResponse.email,
+        given_name: appleAuthResponse.fullName?.givenName,
+        family_name: appleAuthResponse.fullName?.familyName
+      };
+      
+      const inviteCode = "your-invite-code"; // Optional
+      
+      // Complete the native Apple Sign-In
+      await os.handleAppleNativeSignIn(appleUser, inviteCode);
+      
+      // User is now authenticated
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apple login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  // Use this function when you receive the Apple Sign-In response
+  return (
+    <div>
+      {/* Your button to trigger Apple Sign-In through native APIs */}
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+```
+
 ### Handling OAuth Callbacks
 
 After a user authenticates with an OAuth provider, they are redirected back to your application. You need to handle this callback to complete the authentication process:
@@ -311,13 +419,20 @@ function OAuthCallback() {
       
       try {
         // Determine which OAuth provider based on your routing
-        const isGitHub = location.pathname.includes("github");
+        const provider = location.pathname.split('/').pop();
         
-        if (isGitHub) {
-          await os.handleGitHubCallback(code, state, inviteCode);
-        } else {
-          // Assume Google if not GitHub
-          await os.handleGoogleCallback(code, state, inviteCode);
+        switch (provider) {
+          case 'github':
+            await os.handleGitHubCallback(code, state, inviteCode);
+            break;
+          case 'google':
+            await os.handleGoogleCallback(code, state, inviteCode);
+            break;
+          case 'apple':
+            await os.handleAppleCallback(code, state, inviteCode);
+            break;
+          default:
+            throw new Error('Unknown OAuth provider');
         }
         
         // Authentication successful, redirect to dashboard
@@ -346,6 +461,29 @@ When setting up OAuth in your OpenSecret project settings, you will need to prov
 1. **Client ID**: The identifier for your application issued by the OAuth provider
 2. **Client Secret**: The secret key for your application (keep this secure)
 3. **Redirect URI**: The callback URL for your application (often automatically configured)
+
+For Apple Sign-In specifically:
+
+- **Client ID**: For web authentication, use your Services ID (e.g., com.example.web); for iOS apps, use your Bundle ID
+- **Client Secret**: The base64-encoded contents of your Apple private key (.p8 file)
+- **Redirect URI**: Configure this in your Apple Developer console and the OpenSecret platform
+
+When configuring your OpenSecret project settings:
+
+1. Create project secrets with the following keys:
+   - `APPLE_CLIENT_ID` - Your Apple Services ID or Bundle ID
+   - `APPLE_CLIENT_SECRET` - Your Apple private key (.p8 file) contents, base64-encoded
+
+2. To base64-encode your private key file, run this command in a terminal:
+   ```bash
+   base64 -i AuthKey_KEYID.p8 | tr -d '\n'
+   ```
+
+3. In your OAuth project settings, enable Apple Sign-In and configure the redirect URL.
+
+:::note
+The OpenSecret backend will handle generating the necessary JWT tokens for communicating with Apple. You don't need to pre-generate or manage JWT tokens yourself.
+:::
 
 ![OAuth Settings](https://placeholder-for-oauth-settings-screenshot.png)
 

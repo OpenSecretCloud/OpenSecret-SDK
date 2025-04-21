@@ -61,14 +61,17 @@ function createMockResponse(data: any, status = 200, ok = true): Response {
     arrayBuffer: async () => new ArrayBuffer(0),
     blob: async () => new Blob(),
     formData: async () => new FormData(),
-    clone: function() { return this; }
+    clone: function () {
+      return this;
+    }
   } as Response;
 }
 
 // Use more precise typing for the mock function
 global.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  
+  const url =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
   if (url.includes("pcr")) {
     return createMockResponse([
       {
@@ -138,9 +141,11 @@ test("prioritizes local PCR0 values over remote ones", async () => {
 
 test("handles fetch errors gracefully", async () => {
   // Mock a failing fetch call
-  const failingFetch = mock(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    throw new Error("Network error");
-  });
+  const failingFetch = mock(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      throw new Error("Network error");
+    }
+  );
 
   try {
     global.fetch = failingFetch;
@@ -156,22 +161,25 @@ test("handles fetch errors gracefully", async () => {
 });
 
 test("supports custom remote attestation URLs", async () => {
-  const customFetch = mock(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    
-    if (url.includes("custom.example.com")) {
-      return createMockResponse([
-        {
-          PCR0: VERIFIED_PCR0,
-          PCR1: VERIFIED_PCR1,
-          PCR2: VERIFIED_PCR2,
-          timestamp: 1743710235,
-          signature: VERIFIED_SIGNATURE
-        }
-      ]);
+  const customFetch = mock(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url.includes("custom.example.com")) {
+        return createMockResponse([
+          {
+            PCR0: VERIFIED_PCR0,
+            PCR1: VERIFIED_PCR1,
+            PCR2: VERIFIED_PCR2,
+            timestamp: 1743710235,
+            signature: VERIFIED_SIGNATURE
+          }
+        ]);
+      }
+      return createMockResponse(null, 404, false);
     }
-    return createMockResponse(null, 404, false);
-  });
+  );
 
   try {
     global.fetch = customFetch;
