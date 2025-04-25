@@ -364,6 +364,16 @@ export type GoogleAuthResponse = {
   csrf_token: string;
 };
 
+/**
+ * Response from initiating Apple OAuth authentication
+ * @property auth_url - The Apple authorization URL to redirect the user to
+ * @property state - The state parameter used to prevent CSRF attacks
+ */
+export type AppleAuthResponse = {
+  auth_url: string;
+  state: string;
+};
+
 export async function initiateGoogleAuth(
   client_id: string,
   inviteCode?: string
@@ -418,6 +428,175 @@ export async function handleGoogleCallback(
         );
       } else {
         throw new Error("Failed to authenticate with Google. Please try again.");
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Initiates Apple OAuth authentication flow
+ * @param client_id - The client ID for your OpenSecret project
+ * @param inviteCode - Optional invite code for new user registration
+ * @returns A promise resolving to the Apple auth response containing auth URL and state
+ * @description
+ * This function starts the Apple OAuth authentication process by:
+ * 1. Generating a secure state parameter to prevent CSRF attacks
+ * 2. Getting an authorization URL from the OpenSecret backend
+ * 3. Returning the URL that the client should redirect to
+ * 
+ * After the user authenticates with Apple, they will be redirected back to your application.
+ * The handleAppleCallback function should be used to complete the authentication process.
+ */
+export async function initiateAppleAuth(
+  client_id: string,
+  inviteCode?: string
+): Promise<AppleAuthResponse> {
+  try {
+    return await encryptedApiCall<{ invite_code?: string; client_id: string }, AppleAuthResponse>(
+      `${apiUrl}/auth/apple`,
+      "POST",
+      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      undefined,
+      "Failed to initiate Apple auth"
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes("Invalid invite code")) {
+        throw new Error("Invalid invite code. Please check and try again.");
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Completes Apple OAuth authentication after user is redirected back to your app
+ * @param code - The authorization code from Apple
+ * @param state - The state parameter returned by Apple (should match the original state)
+ * @param inviteCode - Invite code for new user registration
+ * @returns A promise resolving to login response with access and refresh tokens
+ * @description
+ * This function completes the Apple OAuth authentication process by:
+ * 1. Validating the state parameter to prevent CSRF attacks
+ * 2. Exchanging the authorization code for tokens
+ * 3. Creating or authenticating the user account
+ * 
+ * This function should be called in your OAuth callback route after
+ * the user is redirected back from Apple's authentication page.
+ */
+export async function handleAppleCallback(
+  code: string,
+  state: string,
+  inviteCode: string
+): Promise<LoginResponse> {
+  const callbackData = { code, state, invite_code: inviteCode };
+  try {
+    return await encryptedApiCall<typeof callbackData, LoginResponse>(
+      `${apiUrl}/auth/apple/callback`,
+      "POST",
+      callbackData,
+      undefined,
+      "Apple callback failed"
+    );
+  } catch (error) {
+    console.error("Detailed Apple callback error:", error);
+    if (error instanceof Error) {
+      if (
+        error.message.includes("User exists") ||
+        error.message.includes("Email already registered")
+      ) {
+        throw new Error(
+          "An account with this email already exists. Please sign in using your existing account."
+        );
+      } else if (error.message.includes("Invalid invite code")) {
+        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
+      } else if (error.message.includes("User not found")) {
+        throw new Error(
+          "User not found. Please sign up first before attempting to log in with Apple."
+        );
+      } else {
+        throw new Error("Failed to authenticate with Apple. Please try again.");
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Apple user information returned from native Apple Sign-In
+ * @property user_identifier - The user's unique ID from Apple
+ * @property identity_token - The JWT token from Apple used for authentication
+ * @property email - Optional email address (only provided on first sign-in)
+ * @property given_name - Optional user's first name (only provided on first sign-in)
+ * @property family_name - Optional user's last name (only provided on first sign-in)
+ */
+export type AppleUser = {
+  user_identifier: string; // The user's unique ID from Apple
+  identity_token: string; // The JWT token from Apple
+  email?: string; // Optional: only provided on first sign-in
+  given_name?: string; // Optional: only provided on first sign-in
+  family_name?: string; // Optional: only provided on first sign-in
+};
+
+/**
+ * Handles native Apple Sign-In for iOS devices
+ * @param appleUser - Apple user data from the native Sign in with Apple API
+ * @param client_id - The client ID for your OpenSecret project
+ * @param inviteCode - Optional invite code for new user registration
+ * @returns A promise resolving to login response with access and refresh tokens
+ * @description
+ * This function is specifically for use with iOS native Sign in with Apple:
+ * 1. Validates the Apple identity token and user information
+ * 2. Creates or authenticates the user account
+ * 3. Returns authentication tokens
+ *
+ * Unlike OAuth flow, this method doesn't require redirects and is used
+ * directly with the credential data from Apple's native authentication.
+ *
+ * Note: Email and name information are only provided by Apple on the first
+ * authentication. Your backend should store this information for future use.
+ */
+export async function handleAppleNativeSignIn(
+  appleUser: AppleUser,
+  client_id: string,
+  inviteCode?: string
+): Promise<LoginResponse> {
+  // Combine the Apple user data with our app's client ID
+  const signInData = {
+    ...appleUser,
+    client_id,
+    ...(inviteCode ? { invite_code: inviteCode } : {})
+  };
+
+  try {
+    return await encryptedApiCall<typeof signInData, LoginResponse>(
+      `${apiUrl}/auth/apple/native`,
+      "POST",
+      signInData,
+      undefined,
+      "Apple Sign-In failed"
+    );
+  } catch (error) {
+    console.error("Detailed Apple Sign-In error:", error);
+    if (error instanceof Error) {
+      if (
+        error.message.includes("User exists") ||
+        error.message.includes("Email already registered")
+      ) {
+        throw new Error(
+          "An account with this email already exists. Please sign in using your existing account."
+        );
+      } else if (error.message.includes("Invalid invite code")) {
+        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
+      } else if (error.message.includes("User not found")) {
+        throw new Error(
+          "User not found. Please sign up first before attempting to log in with Apple."
+        );
+      } else if (error.message.includes("No email found")) {
+        throw new Error("Unable to retrieve email from Apple. Please try another sign-in method.");
+      } else {
+        throw new Error("Failed to authenticate with Apple. Please try again.");
       }
     }
     throw error;

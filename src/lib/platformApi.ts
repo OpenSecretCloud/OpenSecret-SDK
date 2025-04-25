@@ -93,8 +93,10 @@ export type OAuthProviderSettings = {
 export type OAuthSettings = {
   google_oauth_enabled: boolean;
   github_oauth_enabled: boolean;
+  apple_oauth_enabled: boolean;
   google_oauth_settings?: OAuthProviderSettings;
   github_oauth_settings?: OAuthProviderSettings;
+  apple_oauth_settings?: OAuthProviderSettings;
 };
 
 export type OrganizationMember = {

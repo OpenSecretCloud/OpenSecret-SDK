@@ -29,12 +29,12 @@ export type OpenSecretContextType = {
 
   /**
    * Authenticates a user with email and password.
-   * 
+   *
    * - Calls the login API endpoint with the configured clientId
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with user information
    * - Throws an error if authentication fails
-   * 
+   *
    * @param email - User's email address
    * @param password - User's password
    * @returns A promise that resolves when authentication is complete
@@ -51,7 +51,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when account creation is complete
    * @throws {Error} If signup fails
    *
-   * 
+   *
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with new user information
@@ -66,7 +66,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when authentication is complete
    * @throws {Error} If login fails
    *
-   * 
+   *
    * - Calls the login API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with user information
@@ -81,7 +81,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves to the login response containing the guest ID
    * @throws {Error} If signup fails
    *
-   * 
+   *
    * - Calls the registration API endpoint
    * - Stores access_token and refresh_token in localStorage
    * - Updates the auth state with new user information
@@ -100,7 +100,7 @@ export type OpenSecretContextType = {
    * - The email address is already in use
    * - The user is not authenticated
    *
-   * 
+   *
    * - Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
    * - Requires the user to be currently authenticated as a guest
    * - Updates the auth state with new user information
@@ -117,7 +117,7 @@ export type OpenSecretContextType = {
    * @returns A promise that resolves when logout is complete
    * @throws {Error} If logout fails
    *
-   * 
+   *
    * - Calls the logout API endpoint with the current refresh_token
    * - Removes access_token, refresh_token from localStorage
    * - Removes session-related items from sessionStorage
@@ -131,7 +131,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the stored value
    * @throws {Error} If the key cannot be retrieved
    *
-   * 
+   *
    * - Calls the authenticated API endpoint to fetch a value
    * - Returns undefined if the key does not exist
    * - Requires an active authentication session
@@ -146,7 +146,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the server's response
    * @throws {Error} If the value cannot be stored
    *
-   * 
+   *
    * - Calls the authenticated API endpoint to store a value
    * - Requires an active authentication session
    * - Overwrites any existing value for the given key
@@ -159,7 +159,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to an array of stored items
    * @throws {Error} If the list cannot be retrieved
    *
-   * 
+   *
    * - Calls the authenticated API endpoint to fetch all stored items
    * - Returns an array of key-value pairs with metadata
    * - Requires an active authentication session
@@ -174,7 +174,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving when the deletion is complete
    * @throws {Error} If the key cannot be deleted
    *
-   * 
+   *
    * - Calls the authenticated API endpoint to remove a specific key
    * - Requires an active authentication session
    * - Throws an error if the deletion fails (including for non-existent keys)
@@ -199,6 +199,9 @@ export type OpenSecretContextType = {
   handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
   handleGoogleCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
+  initiateAppleAuth: (inviteCode: string) => Promise<api.AppleAuthResponse>;
+  handleAppleCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
+  handleAppleNativeSignIn: (appleUser: api.AppleUser, inviteCode?: string) => Promise<void>;
 
   /**
    * Retrieves the user's private key mnemonic phrase
@@ -206,7 +209,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the private key response
    * @throws {Error} If the private key cannot be retrieved
    *
-   * 
+   *
    * This function supports two modes:
    *
    * 1. Master mnemonic (no parameters)
@@ -227,7 +230,7 @@ export type OpenSecretContextType = {
    * - The private key bytes cannot be retrieved
    * - The derivation paths are invalid
    *
-   * 
+   *
    * This function supports multiple derivation approaches:
    *
    * 1. Master key only (no parameters)
@@ -263,7 +266,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the public key response
    * @throws {Error} If the public key cannot be retrieved
    *
-   * 
+   *
    * The derivation paths determine which key is used to generate the public key:
    *
    * 1. Master key (no derivation parameters)
@@ -285,7 +288,7 @@ export type OpenSecretContextType = {
    * Signs a message using the specified algorithm.
    * This function supports multiple signing approaches: master key (no derivation),
    * BIP-32 derived key, BIP-85 derived key, or combined BIP-85 and BIP-32 derivation.
-   * 
+   *
    * @param messageBytes - The message to sign as a Uint8Array
    * @param algorithm - The signing algorithm ('schnorr' or 'ecdsa')
    * @param options - Optional key derivation options or legacy BIP32 derivation path string
@@ -360,7 +363,7 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to the parsed attestation document
    * @throws {Error} If attestation fails or is invalid
    *
-   * 
+   *
    * This is a convenience function that:
    * 1. Fetches the attestation document with a random nonce
    * 2. Authenticates the document
@@ -376,7 +379,7 @@ export type OpenSecretContextType = {
    * - The user is not authenticated
    * - The audience URL is invalid (if provided)
    *
-   * 
+   *
    * - Generates a signed JWT token for use with third-party services
    * - If audience is provided, it can be any valid URL
    * - If audience is omitted, a token with no audience restriction will be generated
@@ -395,7 +398,7 @@ export type OpenSecretContextType = {
    * - Authentication fails
    * - Server-side encryption error occurs
    *
-   * 
+   *
    * This function supports multiple encryption approaches:
    *
    * 1. Encrypt with master key (no derivation parameters)
@@ -434,7 +437,7 @@ export type OpenSecretContextType = {
    * - Authentication fails
    * - Server-side decryption error occurs
    *
-   * 
+   *
    * This function supports multiple decryption approaches:
    *
    * 1. Decrypt with master key (no derivation parameters)
@@ -488,6 +491,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   handleGitHubCallback: async () => {},
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
   handleGoogleCallback: async () => {},
+  initiateAppleAuth: async () => ({ auth_url: "", state: "" }),
+  handleAppleCallback: async () => {},
+  handleAppleNativeSignIn: async () => {},
   getPrivateKey: api.fetchPrivateKey,
   getPrivateKeyBytes: api.fetchPrivateKeyBytes,
   getPublicKey: api.fetchPublicKey,
@@ -751,6 +757,47 @@ export function OpenSecretProvider({
     }
   };
 
+  const initiateAppleAuth = async (inviteCode: string) => {
+    try {
+      return await api.initiateAppleAuth(clientId, inviteCode);
+    } catch (error) {
+      console.error("Failed to initiate Apple auth:", error);
+      throw error;
+    }
+  };
+
+  const handleAppleCallback = async (code: string, state: string, inviteCode: string) => {
+    try {
+      const { access_token, refresh_token } = await api.handleAppleCallback(
+        code,
+        state,
+        inviteCode
+      );
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchUser();
+    } catch (error) {
+      console.error("Apple callback error:", error);
+      throw error;
+    }
+  };
+
+  const handleAppleNativeSignIn = async (appleUser: api.AppleUser, inviteCode?: string) => {
+    try {
+      const { access_token, refresh_token } = await api.handleAppleNativeSignIn(
+        appleUser,
+        clientId,
+        inviteCode
+      );
+      window.localStorage.setItem("access_token", access_token);
+      window.localStorage.setItem("refresh_token", refresh_token);
+      await fetchUser();
+    } catch (error) {
+      console.error("Apple native sign-in error:", error);
+      throw error;
+    }
+  };
+
   const getAttestationDocument = async () => {
     const nonce = window.crypto.randomUUID();
     const response = await fetch(`${apiUrl}/attestation/${nonce}`);
@@ -798,6 +845,9 @@ export function OpenSecretProvider({
     handleGitHubCallback,
     initiateGoogleAuth,
     handleGoogleCallback,
+    initiateAppleAuth,
+    handleAppleCallback,
+    handleAppleNativeSignIn,
     getPrivateKey: api.fetchPrivateKey,
     getPrivateKeyBytes: api.fetchPrivateKeyBytes,
     getPublicKey: api.fetchPublicKey,
