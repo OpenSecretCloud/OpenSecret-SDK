@@ -444,7 +444,7 @@ export async function handleGoogleCallback(
  * 1. Generating a secure state parameter to prevent CSRF attacks
  * 2. Getting an authorization URL from the OpenSecret backend
  * 3. Returning the URL that the client should redirect to
- * 
+ *
  * After the user authenticates with Apple, they will be redirected back to your application.
  * The handleAppleCallback function should be used to complete the authentication process.
  */
@@ -481,7 +481,7 @@ export async function initiateAppleAuth(
  * 1. Validating the state parameter to prevent CSRF attacks
  * 2. Exchanging the authorization code for tokens
  * 3. Creating or authenticating the user account
- * 
+ *
  * This function should be called in your OAuth callback route after
  * the user is redirected back from Apple's authentication page.
  */
@@ -530,6 +530,7 @@ export async function handleAppleCallback(
  * @property email - Optional email address (only provided on first sign-in)
  * @property given_name - Optional user's first name (only provided on first sign-in)
  * @property family_name - Optional user's last name (only provided on first sign-in)
+ * @property nonce - Optional nonce for preventing replay attacks
  */
 export type AppleUser = {
   user_identifier: string; // The user's unique ID from Apple
@@ -537,6 +538,7 @@ export type AppleUser = {
   email?: string; // Optional: only provided on first sign-in
   given_name?: string; // Optional: only provided on first sign-in
   family_name?: string; // Optional: only provided on first sign-in
+  nonce?: string; // Optional: nonce for validating the token
 };
 
 /**
@@ -556,6 +558,11 @@ export type AppleUser = {
  *
  * Note: Email and name information are only provided by Apple on the first
  * authentication. Your backend should store this information for future use.
+ *
+ * The nonce parameter (optional) can be provided as part of the appleUser object.
+ * When using Sign in with Apple, you can generate a nonce on your client and pass
+ * it both to Apple during authentication initiation and to this function for validation.
+ * The backend will verify that the nonce in the JWT matches what was provided.
  */
 export async function handleAppleNativeSignIn(
   appleUser: AppleUser,

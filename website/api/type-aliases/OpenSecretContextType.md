@@ -502,6 +502,50 @@ The derivation paths determine which key is used to generate the public key:
 
 ***
 
+### handleAppleCallback()
+
+> **handleAppleCallback**: (`code`, `state`, `inviteCode`) => `Promise`\<`void`\>
+
+#### Parameters
+
+##### code
+
+`string`
+
+##### state
+
+`string`
+
+##### inviteCode
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### handleAppleNativeSignIn()
+
+> **handleAppleNativeSignIn**: (`appleUser`, `inviteCode?`) => `Promise`\<`void`\>
+
+#### Parameters
+
+##### appleUser
+
+`api.AppleUser`
+
+##### inviteCode?
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### handleGitHubCallback()
 
 > **handleGitHubCallback**: (`code`, `state`, `inviteCode`) => `Promise`\<`void`\>
@@ -547,6 +591,22 @@ The derivation paths determine which key is used to generate the public key:
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### initiateAppleAuth()
+
+> **initiateAppleAuth**: (`inviteCode`) => `Promise`\<`api.AppleAuthResponse`\>
+
+#### Parameters
+
+##### inviteCode
+
+`string`
+
+#### Returns
+
+`Promise`\<`api.AppleAuthResponse`\>
 
 ***
 
