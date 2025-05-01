@@ -341,17 +341,49 @@ function AppleLoginButton() {
 
 For iOS apps using the native Sign in with Apple:
 
+:::info Security Tip: Using a Nonce
+For added security, you should generate a random nonce value when initiating Apple Sign In. This nonce:
+- Must be passed to the Apple authentication request
+- Must be included in the request to the OpenSecret backend
+- Will be verified by the OpenSecret backend to ensure the identity token was generated for your specific authentication request
+- Helps prevent replay attacks where an attacker might try to reuse a stolen token
+
+The OpenSecret backend will validate that the nonce in the JWT matches what you provided in the request.
+:::
+
 ```tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useOpenSecret } from "@opensecret/react";
 
-function NativeAppleAuth({ appleAuthResponse }) {
+function NativeAppleAuth() {
   const os = useOpenSecret();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Store the generated nonce to use in both Apple authentication and backend verification
+  const [nonce, setNonce] = useState("");
   
-  // appleAuthResponse would come from your native iOS Sign in with Apple
-  // integration, typically using a Tauri plugin or other native bridge
+  // Generate a secure random nonce when component mounts
+  useEffect(() => {
+    // Generate a random nonce - in a real app, use a cryptographically secure method
+    const generateNonce = () => {
+      const randBytes = new Uint8Array(32);
+      window.crypto.getRandomValues(randBytes);
+      return Array.from(randBytes)
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+    };
+    
+    setNonce(generateNonce());
+  }, []);
+  
+  // Initiate Apple Sign In with the generated nonce
+  function initiateAppleSignIn() {
+    // In a real implementation, you would pass this nonce to your native Apple Sign In
+    // This is platform-specific and might use a bridge to native code
+    appleSignInNative(nonce); // This function would be provided by your native bridge
+  }
+  
+  // This function would be called when you receive the Apple Sign-In response
   async function completeAppleSignIn(appleAuthResponse) {
     setLoading(true);
     setError("");
@@ -363,7 +395,8 @@ function NativeAppleAuth({ appleAuthResponse }) {
         identity_token: appleAuthResponse.identityToken,
         email: appleAuthResponse.email,
         given_name: appleAuthResponse.fullName?.givenName,
-        family_name: appleAuthResponse.fullName?.familyName
+        family_name: appleAuthResponse.fullName?.familyName,
+        nonce: nonce // Include the same nonce used during Apple authentication
       };
       
       const inviteCode = "your-invite-code"; // Optional
@@ -379,10 +412,15 @@ function NativeAppleAuth({ appleAuthResponse }) {
     }
   }
   
-  // Use this function when you receive the Apple Sign-In response
   return (
     <div>
-      {/* Your button to trigger Apple Sign-In through native APIs */}
+      <button 
+        onClick={initiateAppleSignIn} 
+        disabled={loading || !nonce}
+        className="apple-login-button"
+      >
+        {loading ? "Connecting..." : "Sign in with Apple"}
+      </button>
       {error && <div className="error">{error}</div>}
     </div>
   );
