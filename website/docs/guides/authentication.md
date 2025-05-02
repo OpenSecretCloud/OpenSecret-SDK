@@ -343,12 +343,34 @@ For iOS apps using the native Sign in with Apple:
 
 :::info Security Tip: Using a Nonce
 For added security, you should generate a random nonce value when initiating Apple Sign In. This nonce:
-- Must be passed to the Apple authentication request
-- Must be included in the request to the OpenSecret backend
+- Must be passed to the Apple authentication request as a SHA256 hash of your raw nonce value
+- Must be included as the raw (un-hashed) value in your request to the OpenSecret backend
 - Will be verified by the OpenSecret backend to ensure the identity token was generated for your specific authentication request
 - Helps prevent replay attacks where an attacker might try to reuse a stolen token
 
-The OpenSecret backend will validate that the nonce in the JWT matches what you provided in the request.
+Important implementation detail:
+- When sending the nonce to Apple, you must hash it using SHA256
+- When sending the nonce to OpenSecret's `handleAppleNativeSignIn`, provide the original raw nonce value (not the hash)
+- The backend will perform the same SHA256 hash and compare it with what's in the Apple JWT
+
+Example nonce handling:
+```typescript
+// Generate a random nonce
+const rawNonce = generateSecureRandomString();
+
+// When initiating Sign in with Apple, pass the SHA256 hash of the nonce
+const hashedNonce = sha256(rawNonce);
+appleSignInNative({ nonce: hashedNonce }); // The nonce Apple receives
+
+// When handling the callback, pass the original raw nonce to OpenSecret
+const appleUser = {
+  // ... other fields ...
+  nonce: rawNonce // The raw value, not the hash
+};
+await os.handleAppleNativeSignIn(appleUser, inviteCode);
+```
+
+The OpenSecret backend will validate that the SHA256 hash of your provided nonce matches what's in the Apple JWT.
 :::
 
 ```tsx
@@ -378,9 +400,19 @@ function NativeAppleAuth() {
   
   // Initiate Apple Sign In with the generated nonce
   function initiateAppleSignIn() {
-    // In a real implementation, you would pass this nonce to your native Apple Sign In
+    // Hash the nonce before sending it to Apple
+    const sha256 = async (text) => {
+      const msgBuffer = new TextEncoder().encode(text);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+    
+    // In a real implementation, you would hash the nonce and pass it to your native Apple Sign In
     // This is platform-specific and might use a bridge to native code
-    appleSignInNative(nonce); // This function would be provided by your native bridge
+    sha256(nonce).then(hashedNonce => {
+      appleSignInNative(hashedNonce); // Pass the HASHED nonce to Apple
+    });
   }
   
   // This function would be called when you receive the Apple Sign-In response
