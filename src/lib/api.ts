@@ -1060,7 +1060,7 @@ export async function decryptData(
  * This function:
  * 1. Requires the user to be logged in (uses authenticatedApiCall)
  * 2. Sends a verification email to the user's email address
- * 3. The email contains a UUID that will be needed for confirmation
+ * 3. The email contains a confirmation code that will be needed for confirmation
  * 4. The client must store the plaintext secret for confirmation
  */
 export async function requestAccountDeletion(hashedSecret: string): Promise<void> {
@@ -1077,20 +1077,23 @@ export async function requestAccountDeletion(hashedSecret: string): Promise<void
 
 /**
  * Confirms and completes the account deletion process
- * @param uuid - The UUID from the verification email
+ * @param confirmationCode - The confirmation code from the verification email
  * @param plaintextSecret - The plaintext secret that was hashed in the request step
  * @returns A promise resolving to void
  *
  * @description
  * This function:
  * 1. Requires the user to be logged in (uses authenticatedApiCall)
- * 2. Verifies both the UUID from email and the secret known only to the client
+ * 2. Verifies both the confirmation code from email and the secret known only to the client
  * 3. Permanently deletes the user account and all associated data
  * 4. After successful deletion, the client should clear all local storage and tokens
  */
-export async function confirmAccountDeletion(uuid: string, plaintextSecret: string): Promise<void> {
+export async function confirmAccountDeletion(
+  confirmationCode: string,
+  plaintextSecret: string
+): Promise<void> {
   const confirmData = {
-    uuid,
+    confirmation_code: confirmationCode,
     plaintext_secret: plaintextSecret
   };
   return authenticatedApiCall<typeof confirmData, void>(

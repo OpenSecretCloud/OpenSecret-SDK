@@ -649,8 +649,8 @@ OpenSecret provides a secure two-step verification process for account deletion,
 
 The process works as follows:
 1. The user requests account deletion, generating a secure client-side secret
-2. OpenSecret sends a verification email with a UUID to the user's email address
-3. The user confirms deletion by providing both the UUID from the email and the original client-side secret
+2. OpenSecret sends a verification email with a confirmation code to the user's email address
+3. The user confirms deletion by providing both the confirmation code from the email and the original client-side secret
 4. The account and all associated data are permanently deleted
 
 To implement account deletion in your application:
@@ -664,7 +664,7 @@ function AccountDeletionFlow() {
   const os = useOpenSecret();
   const [step, setStep] = useState("request"); // 'request' or 'confirm'
   const [secret, setSecret] = useState("");
-  const [uuid, setUuid] = useState("");
+  const [confirmationCode, setConfirmationCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -696,14 +696,14 @@ function AccountDeletionFlow() {
     }
   };
 
-  // Step 2: Confirm the deletion with UUID from email
+  // Step 2: Confirm the deletion with confirmation code from email
   const handleConfirmDeletion = async () => {
     setLoading(true);
     setError("");
 
     try {
-      // Use the UUID from email and the stored secret
-      await os.confirmAccountDeletion(uuid, secret);
+      // Use the confirmation code from email and the stored secret
+      await os.confirmAccountDeletion(confirmationCode, secret);
 
       // Account deleted successfully
       setSuccess(true);
@@ -752,12 +752,12 @@ function AccountDeletionFlow() {
           <input
             type="text"
             placeholder="Enter confirmation code from email"
-            value={uuid}
-            onChange={(e) => setUuid(e.target.value)}
+            value={confirmationCode}
+            onChange={(e) => setConfirmationCode(e.target.value)}
           />
           <button 
             onClick={handleConfirmDeletion}
-            disabled={loading || !uuid}
+            disabled={loading || !confirmationCode}
           >
             {loading ? "Processing..." : "Confirm Deletion"}
           </button>
