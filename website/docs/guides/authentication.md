@@ -643,6 +643,166 @@ function SignOutButton() {
 }
 ```
 
+### Account Deletion
+
+OpenSecret provides a secure two-step verification process for account deletion, requiring both email verification and a client-side secret to prevent unauthorized deletion requests.
+
+The process works as follows:
+1. The user requests account deletion, generating a secure client-side secret
+2. OpenSecret sends a verification email with a UUID to the user's email address
+3. The user confirms deletion by providing both the UUID from the email and the original client-side secret
+4. The account and all associated data are permanently deleted
+
+To implement account deletion in your application:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+import { generateSecureSecret, hashSecret } from "./utils"; // Implement these utility functions
+
+function AccountDeletionFlow() {
+  const os = useOpenSecret();
+  const [step, setStep] = useState("request"); // 'request' or 'confirm'
+  const [secret, setSecret] = useState("");
+  const [uuid, setUuid] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  // Step 1: Initialize the deletion process
+  const handleInitiateDeletion = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      // Generate a random secret and store it
+      const newSecret = generateSecureSecret(16); // Implement this function to generate a secure random string
+      setSecret(newSecret);
+
+      // Hash the secret before sending to server
+      const hashedSecret = await hashSecret(newSecret); // Implement this function to securely hash the secret
+
+      // Request account deletion
+      await os.requestAccountDeletion(hashedSecret);
+
+      // Move to confirmation step
+      setStep("confirm");
+      setSuccess(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to request account deletion");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Confirm the deletion with UUID from email
+  const handleConfirmDeletion = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      // Use the UUID from email and the stored secret
+      await os.confirmAccountDeletion(uuid, secret);
+
+      // Account deleted successfully
+      setSuccess(true);
+
+      // Redirect to logout or homepage
+      setTimeout(() => {
+        // Clear local storage, cookies, etc.
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/";
+      }, 2000);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to confirm account deletion");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Render UI based on current step
+  return (
+    <div className="account-deletion-container">
+      <h2>Delete Your Account</h2>
+
+      {step === "request" && (
+        <div>
+          <p>
+            Warning: This action will permanently delete your account and all associated data.
+            This cannot be undone.
+          </p>
+          <button 
+            onClick={handleInitiateDeletion}
+            disabled={loading}
+          >
+            {loading ? "Processing..." : "Delete My Account"}
+          </button>
+        </div>
+      )}
+
+      {step === "confirm" && success && (
+        <div>
+          <p>
+            A confirmation email has been sent to your email address.
+            Please check your email and enter the confirmation code below.
+          </p>
+          <input
+            type="text"
+            placeholder="Enter confirmation code from email"
+            value={uuid}
+            onChange={(e) => setUuid(e.target.value)}
+          />
+          <button 
+            onClick={handleConfirmDeletion}
+            disabled={loading || !uuid}
+          >
+            {loading ? "Processing..." : "Confirm Deletion"}
+          </button>
+        </div>
+      )}
+
+      {error && <p className="error">{error}</p>}
+
+      {success && step === "confirm" && (
+        <p className="success">Your account has been successfully deleted.</p>
+      )}
+    </div>
+  );
+}
+```
+
+The `generateSecureSecret` and `hashSecret` utility functions might be implemented as follows:
+
+```tsx
+// Generate a secure random string of specified length
+export function generateSecureSecret(length: number): string {
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
+  return Array.from(array)
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Hash a string using SHA-256
+export async function hashSecret(secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(secret);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  return hashHex;
+}
+```
+
+:::important
+The account deletion process is permanent and cannot be undone. Make sure to clearly communicate this to users before they initiate the process.
+:::
+
 ## Creating Third-Party Tokens
 
 OpenSecret allows you to generate JWT tokens for third-party services:

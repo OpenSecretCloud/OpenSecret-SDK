@@ -195,6 +195,34 @@ export type OpenSecretContextType = {
     plaintextSecret: string,
     newPassword: string
   ) => Promise<void>;
+  /**
+   * Initiates the account deletion process for logged-in users
+   * @param hashedSecret - Client-side hashed secret for verification
+   * @returns A promise resolving to void
+   * @throws {Error} If request fails
+   *
+   * This function:
+   * 1. Requires the user to be logged in (uses authenticatedApiCall)
+   * 2. Sends a verification email to the user's email address
+   * 3. The email contains a UUID that will be needed for confirmation
+   * 4. The client must store the plaintext secret for confirmation
+   */
+  requestAccountDeletion: (hashedSecret: string) => Promise<void>;
+
+  /**
+   * Confirms and completes the account deletion process
+   * @param uuid - The UUID from the verification email
+   * @param plaintextSecret - The plaintext secret that was hashed in the request step
+   * @returns A promise resolving to void
+   * @throws {Error} If confirmation fails
+   *
+   * This function:
+   * 1. Requires the user to be logged in (uses authenticatedApiCall)
+   * 2. Verifies both the UUID from email and the secret known only to the client
+   * 3. Permanently deletes the user account and all associated data
+   * 4. After successful deletion, the client should clear all local storage and tokens
+   */
+  confirmAccountDeletion: (uuid: string, plaintextSecret: string) => Promise<void>;
   initiateGitHubAuth: (inviteCode: string) => Promise<api.GithubAuthResponse>;
   handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
@@ -487,6 +515,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   refreshAccessToken: api.refreshToken,
   requestPasswordReset: async () => {},
   confirmPasswordReset: async () => {},
+  requestAccountDeletion: async () => {},
+  confirmAccountDeletion: async () => {},
   initiateGitHubAuth: async () => ({ auth_url: "", csrf_token: "" }),
   handleGitHubCallback: async () => {},
   initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
@@ -841,6 +871,8 @@ export function OpenSecretProvider({
       plaintextSecret: string,
       newPassword: string
     ) => api.confirmPasswordReset(email, alphanumericCode, plaintextSecret, newPassword, clientId),
+    requestAccountDeletion: api.requestAccountDeletion,
+    confirmAccountDeletion: api.confirmAccountDeletion,
     initiateGitHubAuth,
     handleGitHubCallback,
     initiateGoogleAuth,
