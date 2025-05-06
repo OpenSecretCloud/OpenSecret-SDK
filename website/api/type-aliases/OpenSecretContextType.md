@@ -91,6 +91,44 @@ A UUID that identifies which project/tenant this instance belongs to.
 
 ***
 
+### confirmAccountDeletion()
+
+> **confirmAccountDeletion**: (`uuid`, `plaintextSecret`) => `Promise`\<`void`\>
+
+Confirms and completes the account deletion process
+
+#### Parameters
+
+##### uuid
+
+`string`
+
+The UUID from the verification email
+
+##### plaintextSecret
+
+`string`
+
+The plaintext secret that was hashed in the request step
+
+#### Returns
+
+`Promise`\<`void`\>
+
+A promise resolving to void
+
+#### Throws
+
+If confirmation fails
+
+This function:
+1. Requires the user to be logged in (uses authenticatedApiCall)
+2. Verifies both the UUID from email and the secret known only to the client
+3. Permanently deletes the user account and all associated data
+4. After successful deletion, the client should clear all local storage and tokens
+
+***
+
 ### confirmPasswordReset()
 
 > **confirmPasswordReset**: (`email`, `alphanumericCode`, `plaintextSecret`, `newPassword`) => `Promise`\<`void`\>
@@ -740,6 +778,38 @@ If the value cannot be stored
 ### refreshAccessToken
 
 > **refreshAccessToken**: *typeof* `api.refreshToken`
+
+***
+
+### requestAccountDeletion()
+
+> **requestAccountDeletion**: (`hashedSecret`) => `Promise`\<`void`\>
+
+Initiates the account deletion process for logged-in users
+
+#### Parameters
+
+##### hashedSecret
+
+`string`
+
+Client-side hashed secret for verification
+
+#### Returns
+
+`Promise`\<`void`\>
+
+A promise resolving to void
+
+#### Throws
+
+If request fails
+
+This function:
+1. Requires the user to be logged in (uses authenticatedApiCall)
+2. Sends a verification email to the user's email address
+3. The email contains a UUID that will be needed for confirmation
+4. The client must store the plaintext secret for confirmation
 
 ***
 

@@ -10,7 +10,8 @@ import {
   // convertGuestToEmailAccount,
   generateThirdPartyToken,
   encryptData,
-  decryptData
+  decryptData,
+  requestAccountDeletion
 } from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -247,4 +248,24 @@ test("Encrypt and decrypt data", async () => {
   } catch (error: any) {
     expect(error.message).toBe("Bad Request");
   }
+});
+
+test("Account deletion request endpoint", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // In a real app, we would generate a secure random string and hash it
+  // For testing, we can use a mock hashed secret
+  const mockHashedSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  // This should succeed as it just sends an email and doesn't actually delete the account
+  // We can't test the confirmation because we need the UUID from the email
+  await requestAccountDeletion(mockHashedSecret);
+
+  // Make sure the user is still authenticated after requesting deletion
+  // If we can still fetch user data, it means the account wasn't deleted yet
+  const userResponse = await fetchUser();
+  expect(userResponse.user.email).toBe(TEST_EMAIL);
 });
