@@ -93,17 +93,17 @@ A UUID that identifies which project/tenant this instance belongs to.
 
 ### confirmAccountDeletion()
 
-> **confirmAccountDeletion**: (`uuid`, `plaintextSecret`) => `Promise`\<`void`\>
+> **confirmAccountDeletion**: (`confirmationCode`, `plaintextSecret`) => `Promise`\<`void`\>
 
 Confirms and completes the account deletion process
 
 #### Parameters
 
-##### uuid
+##### confirmationCode
 
 `string`
 
-The UUID from the verification email
+The confirmation code from the verification email
 
 ##### plaintextSecret
 
@@ -123,7 +123,7 @@ If confirmation fails
 
 This function:
 1. Requires the user to be logged in (uses authenticatedApiCall)
-2. Verifies both the UUID from email and the secret known only to the client
+2. Verifies both the confirmation code from email and the secret known only to the client
 3. Permanently deletes the user account and all associated data
 4. After successful deletion, the client should clear all local storage and tokens
 
@@ -808,7 +808,7 @@ If request fails
 This function:
 1. Requires the user to be logged in (uses authenticatedApiCall)
 2. Sends a verification email to the user's email address
-3. The email contains a UUID that will be needed for confirmation
+3. The email contains a confirmation code that will be needed for confirmation
 4. The client must store the plaintext secret for confirmation
 
 ***
