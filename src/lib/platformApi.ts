@@ -88,6 +88,8 @@ export type EmailSettings = {
 export type OAuthProviderSettings = {
   client_id: string;
   redirect_url: string;
+  team_id?: string; // Apple-specific: The Apple Developer Team ID
+  key_id?: string; // Apple-specific: The Apple Developer Key ID for Sign in with Apple
 };
 
 export type OAuthSettings = {

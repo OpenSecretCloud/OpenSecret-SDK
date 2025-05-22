@@ -194,6 +194,8 @@ For Apple authentication, you'll need to create:
 - An App ID with "Sign In with Apple" capability
 - A Services ID for web authentication or a Bundle ID for iOS apps
 - A private key for creating client secrets
+- Your Apple Developer Team ID
+- Your Apple Developer Key ID for the private key
 
 ### GitHub Authentication
 
@@ -543,6 +545,8 @@ When configuring your OpenSecret project settings:
 1. Create project secrets with the following keys:
    - `APPLE_CLIENT_ID` - Your Apple Services ID or Bundle ID
    - `APPLE_CLIENT_SECRET` - Your Apple private key (.p8 file) contents, base64-encoded
+   - `APPLE_TEAM_ID` - Your Apple Developer Team ID
+   - `APPLE_KEY_ID` - Your Apple Developer Key ID for the private key
 
 2. To base64-encode your private key file, run this command in a terminal:
    ```bash

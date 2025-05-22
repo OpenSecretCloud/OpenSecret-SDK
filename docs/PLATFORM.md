@@ -559,7 +559,9 @@ const handleUpdateOAuthSettings = async (orgId, projectId) => {
       },
       apple_oauth_settings: {
         client_id: "your.apple.service.id",
-        redirect_url: "https://yourdomain.com/auth/apple/callback"
+        redirect_url: "https://yourdomain.com/auth/apple/callback",
+        team_id: "YOURTEAMID",     // Apple Developer Team ID
+        key_id: "YOURKEYID"       // Key ID for Sign in with Apple
       }
     });
     console.log("OAuth settings updated");
