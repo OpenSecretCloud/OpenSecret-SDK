@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
-import { createCustomFetch, fetchModels } from "./ai";
+import { createCustomFetch } from "./ai";
 import { getAttestation } from "./getAttestation";
 import type { Model } from "openai/resources/models.js";
 import { authenticate } from "./attestation";
@@ -913,7 +913,7 @@ export function OpenSecretProvider({
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
     decryptData: api.decryptData,
-    fetchModels
+    fetchModels: api.fetchModels
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

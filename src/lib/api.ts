@@ -1,5 +1,6 @@
 import { encode } from "@stablelib/base64";
 import { authenticatedApiCall, encryptedApiCall } from "./encryptedApi";
+import type { Model } from "openai/resources/models.js";
 
 let apiUrl = "";
 
@@ -1102,4 +1103,42 @@ export async function confirmAccountDeletion(
     confirmData,
     "Failed to confirm account deletion"
   );
+}
+
+type ModelsListResponse = {
+  object: "list";
+  data: Model[];
+};
+
+/**
+ * Fetches available AI models from the OpenAI-compatible API
+ * @returns A promise resolving to an array of Model objects
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ * - The response format is invalid
+ */
+export async function fetchModels(): Promise<Model[]> {
+  try {
+    const response = await authenticatedApiCall<void, ModelsListResponse>(
+      `${apiUrl}/v1/models`,
+      "GET",
+      undefined,
+      "Failed to fetch models"
+    );
+
+    // Validate response structure
+    if (!response || typeof response !== "object") {
+      throw new Error("Invalid response from models endpoint");
+    }
+
+    if (response.object !== "list" || !Array.isArray(response.data)) {
+      throw new Error("Models response missing expected 'object' or 'data' fields");
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching models:", error);
+    throw error;
+  }
 }
