@@ -1,6 +1,22 @@
 import { decryptMessage, encryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import * as api from "./api";
+import type { Model } from "openai/resources/models.js";
+
+export async function fetchModels(): Promise<Model[]> {
+  const customFetch = createCustomFetch();
+  const response = await customFetch(`${api.getApiUrl()}/v1/models`, {
+    method: "GET"
+  });
+
+  const text = await response.text();
+  const decrypted = decryptMessage(
+    (await getAttestation()).sessionKey!,
+    JSON.parse(text).encrypted
+  );
+  const parsed = JSON.parse(decrypted);
+  return parsed.data;
+}
 
 export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
   return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {

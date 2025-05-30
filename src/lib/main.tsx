@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
-import { createCustomFetch } from "./ai";
+import { createCustomFetch, fetchModels } from "./ai";
 import { getAttestation } from "./getAttestation";
+import type { Model } from "openai/resources/models.js";
 import { authenticate } from "./attestation";
 import {
   parseAttestationForView,
@@ -484,6 +485,21 @@ export type OpenSecretContextType = {
    * that were used for encryption.
    */
   decryptData: typeof api.decryptData;
+
+  /**
+   * Fetches available AI models from the OpenAI-compatible API
+   * @returns A promise resolving to an array of Model objects
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The request fails
+   *
+   *
+   * - Returns a list of available AI models from the configured OpenAI-compatible API
+   * - Response is encrypted and automatically decrypted
+   * - Guest users will receive a 401 Unauthorized error
+   * - Requires an active authentication session
+   */
+  fetchModels: () => Promise<Model[]>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -541,7 +557,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   },
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
-  decryptData: api.decryptData
+  decryptData: api.decryptData,
+  fetchModels: async () => []
 });
 
 /**
@@ -895,7 +912,8 @@ export function OpenSecretProvider({
     getAttestationDocument,
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
-    decryptData: api.decryptData
+    decryptData: api.decryptData,
+    fetchModels
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
