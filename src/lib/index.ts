@@ -7,6 +7,9 @@ export type {
   GoogleAuthResponse
 } from "./api";
 
+// Re-export Model type from OpenAI for convenience
+export type { Model } from "openai/resources/models.js";
+
 // Export API configuration
 export { apiConfig, type ApiContext, type ApiEndpoint } from "./apiConfig";
 
