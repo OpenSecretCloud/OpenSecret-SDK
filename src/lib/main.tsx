@@ -558,7 +558,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
-  fetchModels: async () => []
+  fetchModels: api.fetchModels
 });
 
 /**
