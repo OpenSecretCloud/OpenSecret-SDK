@@ -333,6 +333,31 @@ Expected hash of the AWS root certificate
 
 ***
 
+### fetchModels()
+
+> **fetchModels**: () => `Promise`\<[`Model`](../interfaces/Model.md)[]\>
+
+Fetches available AI models from the OpenAI-compatible API
+
+#### Returns
+
+`Promise`\<[`Model`](../interfaces/Model.md)[]\>
+
+A promise resolving to an array of Model objects
+
+#### Throws
+
+If:
+- The user is not authenticated
+- The request fails
+
+- Returns a list of available AI models from the configured OpenAI-compatible API
+- Response is encrypted and automatically decrypted
+- Guest users will receive a 401 Unauthorized error
+- Requires an active authentication session
+
+***
+
 ### generateThirdPartyToken()
 
 > **generateThirdPartyToken**: (`audience?`) => `Promise`\<`ThirdPartyTokenResponse`\>
@@ -1055,6 +1080,53 @@ If signup fails
 - Stores access_token and refresh_token in localStorage
 - Updates the auth state with new user information
 - Throws an error if account creation fails
+
+***
+
+### uploadDocument()
+
+> **uploadDocument**: (`file`) => `Promise`\<[`DocumentResponse`](DocumentResponse.md)\>
+
+Uploads a document for text extraction and processing
+
+#### Parameters
+
+##### file
+
+The file to upload (File or Blob object)
+
+`File` | `Blob`
+
+#### Returns
+
+`Promise`\<[`DocumentResponse`](DocumentResponse.md)\>
+
+A promise resolving to the extracted document text and metadata
+
+#### Throws
+
+If:
+- The file exceeds 10MB size limit
+- The user is not authenticated (or is a guest user)
+- Usage limits are exceeded (403)
+- Processing fails (500)
+
+#### Description
+
+This function uploads a document to the Tinfoil processing service which:
+1. Extracts text from various document formats (PDF, DOCX, TXT, etc.)
+2. Returns the extracted text ready for use in chat prompts
+3. Maintains end-to-end encryption using session keys
+
+Common supported formats include PDF, DOCX, XLSX, PPTX, TXT, RTF, and more.
+Guest users will receive a 401 Unauthorized error.
+
+Example usage:
+```typescript
+const file = new File(["content"], "document.pdf", { type: "application/pdf" });
+const result = await context.uploadDocument(file);
+console.log(result.text); // Extracted text from the document
+```
 
 ***
 

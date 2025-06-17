@@ -3,12 +3,14 @@
 ## Interfaces
 
 - [ApiEndpoint](interfaces/ApiEndpoint.md)
+- [Model](interfaces/Model.md)
 
 ## Type Aliases
 
 - [ApiContext](type-aliases/ApiContext.md)
 - [AttestationDocument](type-aliases/AttestationDocument.md)
 - [DeveloperRole](type-aliases/DeveloperRole.md)
+- [DocumentResponse](type-aliases/DocumentResponse.md)
 - [GithubAuthResponse](type-aliases/GithubAuthResponse.md)
 - [GoogleAuthResponse](type-aliases/GoogleAuthResponse.md)
 - [KVListItem](type-aliases/KVListItem.md)

@@ -1142,3 +1142,70 @@ export async function fetchModels(): Promise<Model[]> {
     throw error;
   }
 }
+
+export type DocumentUploadRequest = {
+  filename: string;
+  content_base64: string;
+};
+
+export type DocumentResponse = {
+  text: string;
+  filename: string;
+  size: number;
+};
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+/**
+ * Uploads a document for text extraction and processing
+ * @param file - The file to upload (File or Blob object)
+ * @returns A promise resolving to the extracted document text and metadata
+ * @throws {Error} If:
+ * - The file exceeds 10MB size limit
+ * - The user is not authenticated
+ * - The user is a guest (401)
+ * - Usage limits are exceeded (403)
+ * - Processing fails (500)
+ *
+ * @description
+ * This function uploads a document to the Tinfoil processing service which:
+ * 1. Extracts text from various document formats (PDF, DOCX, TXT, etc.)
+ * 2. Returns the extracted text ready for use in chat prompts
+ * 3. Maintains end-to-end encryption using session keys
+ *
+ * The file is converted to base64 before upload due to encryption requirements.
+ * Common supported formats include PDF, DOCX, XLSX, PPTX, TXT, RTF, and more.
+ *
+ * Example usage:
+ * ```typescript
+ * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
+ * const result = await uploadDocument(file);
+ * console.log(result.text); // Extracted text from the document
+ * ```
+ */
+export async function uploadDocument(file: File | Blob): Promise<DocumentResponse> {
+  // Validate file size
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+  }
+
+  // Convert file to base64
+  const arrayBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  const base64Data = encode(bytes);
+
+  // Get filename
+  const filename = file instanceof File ? file.name : "document";
+
+  const requestData: DocumentUploadRequest = {
+    filename,
+    content_base64: base64Data
+  };
+
+  return authenticatedApiCall<DocumentUploadRequest, DocumentResponse>(
+    `${apiUrl}/v1/documents/upload`,
+    "POST",
+    requestData,
+    "Failed to upload document"
+  );
+}
