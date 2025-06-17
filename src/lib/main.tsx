@@ -11,7 +11,7 @@ import {
   ParsedAttestationView
 } from "./attestationForView";
 import type { AttestationDocument } from "./attestation";
-import type { LoginResponse, ThirdPartyTokenResponse } from "./api";
+import type { LoginResponse, ThirdPartyTokenResponse, DocumentResponse } from "./api";
 import { PcrConfig } from "./pcr";
 
 export type OpenSecretAuthState = {
@@ -500,6 +500,34 @@ export type OpenSecretContextType = {
    * - Requires an active authentication session
    */
   fetchModels: () => Promise<Model[]>;
+
+  /**
+   * Uploads a document for text extraction and processing
+   * @param file - The file to upload (File or Blob object)
+   * @returns A promise resolving to the extracted document text and metadata
+   * @throws {Error} If:
+   * - The file exceeds 10MB size limit
+   * - The user is not authenticated (or is a guest user)
+   * - Usage limits are exceeded (403)
+   * - Processing fails (500)
+   *
+   * @description
+   * This function uploads a document to the Tinfoil processing service which:
+   * 1. Extracts text from various document formats (PDF, DOCX, TXT, etc.)
+   * 2. Returns the extracted text ready for use in chat prompts
+   * 3. Maintains end-to-end encryption using session keys
+   *
+   * Common supported formats include PDF, DOCX, XLSX, PPTX, TXT, RTF, and more.
+   * Guest users will receive a 401 Unauthorized error.
+   *
+   * Example usage:
+   * ```typescript
+   * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
+   * const result = await context.uploadDocument(file);
+   * console.log(result.text); // Extracted text from the document
+   * ```
+   */
+  uploadDocument: (file: File | Blob) => Promise<DocumentResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -558,7 +586,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
-  fetchModels: api.fetchModels
+  fetchModels: api.fetchModels,
+  uploadDocument: api.uploadDocument
 });
 
 /**
@@ -913,7 +942,8 @@ export function OpenSecretProvider({
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
     decryptData: api.decryptData,
-    fetchModels: api.fetchModels
+    fetchModels: api.fetchModels,
+    uploadDocument: api.uploadDocument
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

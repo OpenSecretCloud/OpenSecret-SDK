@@ -32,3 +32,5 @@ dist-ssr
 
 # ai 
 *.pbmd
+
+.claude

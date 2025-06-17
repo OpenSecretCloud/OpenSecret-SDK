@@ -558,8 +558,80 @@ async function encryptedAIRequest(prompt: string) {
 3. **Enclave limitations**: While secure, enclaves have specific security boundaries
 4. **Data residency**: Understand where data is processed for compliance purposes
 
+## Document-Based AI Chat
+
+You can combine document upload with AI chat for intelligent document analysis:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+import OpenAI from "openai";
+
+function DocumentAIChat() {
+  const os = useOpenSecret();
+  const [documentContext, setDocumentContext] = useState("");
+  const [fileName, setFileName] = useState("");
+  
+  async function handleDocumentUpload(file: File) {
+    try {
+      // Upload and extract text from document
+      const result = await os.uploadDocument(file);
+      setDocumentContext(result.text);
+      setFileName(result.filename);
+      
+      // Now you can use the document text as context for AI chat
+      return result;
+    } catch (error) {
+      console.error("Document upload failed:", error);
+      throw error;
+    }
+  }
+  
+  async function askQuestionAboutDocument(question: string) {
+    if (!documentContext || !os.auth.user) return;
+    
+    const openai = new OpenAI({
+      baseURL: `${os.apiUrl}/v1/`,
+      dangerouslyAllowBrowser: true,
+      apiKey: "api-key-doesnt-matter",
+      fetch: os.aiCustomFetch,
+    });
+    
+    const messages = [
+      {
+        role: "system" as const,
+        content: "You are a helpful assistant that answers questions based on the provided document."
+      },
+      {
+        role: "user" as const,
+        content: `Document: ${fileName}\n\n${documentContext}\n\nQuestion: ${question}`
+      }
+    ];
+    
+    const stream = await openai.beta.chat.completions.stream({
+      model: "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+      messages,
+      stream: true,
+    });
+    
+    let response = "";
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      response += content;
+    }
+    
+    return response;
+  }
+  
+  // Rest of your component...
+}
+```
+
+For a complete example of document-based AI chat, see the [Document Upload Guide](./document-upload).
+
 ## What's Next
 
+- [Document Upload](./document-upload) - Upload and process documents for AI analysis
 - [Remote Attestation](./remote-attestation) - Learn how OpenSecret verifies its enclave security
 - [Key-Value Storage](./key-value-storage) - Store AI conversations and context securely
 - [Data Encryption](./data-encryption) - Add additional encryption layers

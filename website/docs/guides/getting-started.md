@@ -173,5 +173,6 @@ Now that you have OpenSecret set up, you can explore more advanced features:
 - [Key-Value Storage](./key-value-storage) - Store and retrieve encrypted data
 - [Cryptographic Operations](./cryptographic-operations) - Work with keys and signatures
 - [AI Integration](./ai-integration) - Use AI with privacy guarantees
+- [Document Upload](./document-upload) - Upload and process documents securely
 
 For a complete reference of all available methods, check the [API Reference](../api).
