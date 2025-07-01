@@ -1154,12 +1154,29 @@ export type DocumentResponse = {
   size: number;
 };
 
+export type DocumentUploadInitResponse = {
+  task_id: string;
+  filename: string;
+  size: number;
+};
+
+export type DocumentStatusRequest = {
+  task_id: string;
+};
+
+export type DocumentStatusResponse = {
+  status: string; // "pending", "started", "success", "failure"
+  progress?: number;
+  error?: string;
+  document?: DocumentResponse;
+};
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 /**
  * Uploads a document for text extraction and processing
  * @param file - The file to upload (File or Blob object)
- * @returns A promise resolving to the extracted document text and metadata
+ * @returns A promise resolving to the task ID and initial metadata
  * @throws {Error} If:
  * - The file exceeds 10MB size limit
  * - The user is not authenticated
@@ -1169,8 +1186,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  *
  * @description
  * This function uploads a document to the Tinfoil processing service which:
- * 1. Extracts text from various document formats (PDF, DOCX, TXT, etc.)
- * 2. Returns the extracted text ready for use in chat prompts
+ * 1. Accepts the document and returns a task ID immediately
+ * 2. Processes the document asynchronously in the background
  * 3. Maintains end-to-end encryption using session keys
  *
  * The file is converted to base64 before upload due to encryption requirements.
@@ -1180,10 +1197,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * ```typescript
  * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
  * const result = await uploadDocument(file);
- * console.log(result.text); // Extracted text from the document
+ * console.log(result.task_id); // Task ID to check status
  * ```
  */
-export async function uploadDocument(file: File | Blob): Promise<DocumentResponse> {
+export async function uploadDocument(file: File | Blob): Promise<DocumentUploadInitResponse> {
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
@@ -1202,10 +1219,126 @@ export async function uploadDocument(file: File | Blob): Promise<DocumentRespons
     content_base64: base64Data
   };
 
-  return authenticatedApiCall<DocumentUploadRequest, DocumentResponse>(
+  return authenticatedApiCall<DocumentUploadRequest, DocumentUploadInitResponse>(
     `${apiUrl}/v1/documents/upload`,
     "POST",
     requestData,
     "Failed to upload document"
   );
+}
+
+/**
+ * Checks the status of a document processing task
+ * @param taskId - The task ID returned from uploadDocument
+ * @returns A promise resolving to the current status and optionally the processed document
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The task ID is not found (404)
+ * - The user doesn't have access to the task (403)
+ *
+ * @description
+ * This function checks the status of an async document processing task.
+ * Status values include:
+ * - "pending": Document is queued for processing
+ * - "started": Document processing has begun
+ * - "success": Processing completed successfully (document field will be populated)
+ * - "failure": Processing failed (error field will contain details)
+ *
+ * Example usage:
+ * ```typescript
+ * const status = await checkDocumentStatus(taskId);
+ * if (status.status === "success" && status.document) {
+ *   console.log(status.document.text);
+ * }
+ * ```
+ */
+export async function checkDocumentStatus(taskId: string): Promise<DocumentStatusResponse> {
+  const requestData: DocumentStatusRequest = {
+    task_id: taskId
+  };
+
+  return authenticatedApiCall<DocumentStatusRequest, DocumentStatusResponse>(
+    `${apiUrl}/v1/documents/status`,
+    "POST",
+    requestData,
+    "Failed to check document status"
+  );
+}
+
+/**
+ * Uploads a document and polls for completion
+ * @param file - The file to upload (File or Blob object)
+ * @param options - Optional configuration for polling behavior
+ * @returns A promise resolving to the processed document
+ * @throws {Error} If:
+ * - Upload fails (see uploadDocument errors)
+ * - Processing fails (error from server)
+ * - Processing times out (exceeds maxAttempts)
+ *
+ * @description
+ * This is a convenience function that combines uploadDocument and checkDocumentStatus
+ * to provide a simple interface that handles the async processing automatically.
+ * It uploads the document, then polls the status endpoint until processing completes.
+ *
+ * Options:
+ * - pollInterval: Time between status checks in milliseconds (default: 2000)
+ * - maxAttempts: Maximum number of status checks before timeout (default: 150 = 5 minutes)
+ * - onProgress: Callback function called on each status update
+ *
+ * Example usage:
+ * ```typescript
+ * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
+ * const result = await uploadDocumentWithPolling(file, {
+ *   onProgress: (status, progress) => {
+ *     console.log(`Status: ${status}, Progress: ${progress || 0}%`);
+ *   }
+ * });
+ * console.log(result.text);
+ * ```
+ */
+export async function uploadDocumentWithPolling(
+  file: File | Blob,
+  options?: {
+    pollInterval?: number; // milliseconds, default 2000
+    maxAttempts?: number; // default 150 (5 minutes with 2s interval)
+    onProgress?: (status: string, progress?: number) => void;
+  }
+): Promise<DocumentResponse> {
+  const { pollInterval = 2000, maxAttempts = 150, onProgress } = options || {};
+
+  // Upload the document and get task ID
+  const initResponse = await uploadDocument(file);
+  let attempts = 0;
+
+  // Poll for completion
+  while (attempts < maxAttempts) {
+    const statusResponse = await checkDocumentStatus(initResponse.task_id);
+
+    if (onProgress) {
+      onProgress(statusResponse.status, statusResponse.progress);
+    }
+
+    switch (statusResponse.status) {
+      case "success":
+        if (!statusResponse.document) {
+          throw new Error("Document processing succeeded but no document returned");
+        }
+        return statusResponse.document;
+
+      case "failure":
+        throw new Error(statusResponse.error || "Document processing failed");
+
+      case "pending":
+      case "started":
+        // Continue polling
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        attempts++;
+        break;
+
+      default:
+        throw new Error(`Unknown document status: ${statusResponse.status}`);
+    }
+  }
+
+  throw new Error("Document processing timed out");
 }
