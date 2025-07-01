@@ -1174,6 +1174,15 @@ export type DocumentStatusResponse = {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 /**
+ * Utility function to delay execution for a specified time
+ * @param ms - Milliseconds to delay
+ * @returns Promise that resolves after the delay
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Uploads a document for text extraction and processing
  * @param file - The file to upload (File or Blob object)
  * @returns A promise resolving to the task ID and initial metadata
@@ -1331,7 +1340,7 @@ export async function uploadDocumentWithPolling(
       case "pending":
       case "started":
         // Continue polling
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        await delay(pollInterval);
         attempts++;
         break;
 
