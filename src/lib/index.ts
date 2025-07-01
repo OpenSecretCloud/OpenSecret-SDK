@@ -5,7 +5,10 @@ export type {
   UserResponse,
   GithubAuthResponse,
   GoogleAuthResponse,
-  DocumentResponse
+  DocumentResponse,
+  DocumentUploadInitResponse,
+  DocumentStatusRequest,
+  DocumentStatusResponse
 } from "./api";
 
 // Re-export Model type from OpenAI for convenience

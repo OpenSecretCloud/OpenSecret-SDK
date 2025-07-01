@@ -504,7 +504,7 @@ export type OpenSecretContextType = {
   /**
    * Uploads a document for text extraction and processing
    * @param file - The file to upload (File or Blob object)
-   * @returns A promise resolving to the extracted document text and metadata
+   * @returns A promise resolving to the task ID and initial metadata
    * @throws {Error} If:
    * - The file exceeds 10MB size limit
    * - The user is not authenticated (or is a guest user)
@@ -513,8 +513,8 @@ export type OpenSecretContextType = {
    *
    * @description
    * This function uploads a document to the Tinfoil processing service which:
-   * 1. Extracts text from various document formats (PDF, DOCX, TXT, etc.)
-   * 2. Returns the extracted text ready for use in chat prompts
+   * 1. Accepts the document and returns a task ID immediately
+   * 2. Processes the document asynchronously in the background
    * 3. Maintains end-to-end encryption using session keys
    *
    * Common supported formats include PDF, DOCX, XLSX, PPTX, TXT, RTF, and more.
@@ -524,10 +524,76 @@ export type OpenSecretContextType = {
    * ```typescript
    * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
    * const result = await context.uploadDocument(file);
-   * console.log(result.text); // Extracted text from the document
+   * console.log(result.task_id); // Task ID to check status
    * ```
    */
-  uploadDocument: (file: File | Blob) => Promise<DocumentResponse>;
+  uploadDocument: (file: File | Blob) => Promise<api.DocumentUploadInitResponse>;
+
+  /**
+   * Checks the status of a document processing task
+   * @param taskId - The task ID returned from uploadDocument
+   * @returns A promise resolving to the current status and optionally the processed document
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The task ID is not found (404)
+   * - The user doesn't have access to the task (403)
+   *
+   * @description
+   * This function checks the status of an async document processing task.
+   * Status values include:
+   * - "pending": Document is queued for processing
+   * - "started": Document processing has begun
+   * - "success": Processing completed successfully (document field will be populated)
+   * - "failure": Processing failed (error field will contain details)
+   *
+   * Example usage:
+   * ```typescript
+   * const status = await context.checkDocumentStatus(taskId);
+   * if (status.status === "success" && status.document) {
+   *   console.log(status.document.text);
+   * }
+   * ```
+   */
+  checkDocumentStatus: (taskId: string) => Promise<api.DocumentStatusResponse>;
+
+  /**
+   * Uploads a document and polls for completion
+   * @param file - The file to upload (File or Blob object)
+   * @param options - Optional configuration for polling behavior
+   * @returns A promise resolving to the processed document
+   * @throws {Error} If:
+   * - Upload fails (see uploadDocument errors)
+   * - Processing fails (error from server)
+   * - Processing times out (exceeds maxAttempts)
+   *
+   * @description
+   * This is a convenience function that combines uploadDocument and checkDocumentStatus
+   * to provide a simple interface that handles the async processing automatically.
+   *
+   * Options:
+   * - pollInterval: Time between status checks in milliseconds (default: 2000)
+   * - maxAttempts: Maximum number of status checks before timeout (default: 150 = 5 minutes)
+   * - onProgress: Callback function called on each status update
+   *
+   * Example usage:
+   * ```typescript
+   * const file = new File(["content"], "document.pdf", { type: "application/pdf" });
+   * const result = await context.uploadDocumentWithPolling(file, {
+   *   onProgress: (status, progress) => {
+   *     console.log(`Status: ${status}, Progress: ${progress || 0}%`);
+   *   }
+   * });
+   * console.log(result.text);
+   * ```
+   */
+  uploadDocumentWithPolling: (
+    file: File | Blob,
+    options?: {
+      pollInterval?: number;
+      maxAttempts?: number;
+      onProgress?: (status: string, progress?: number) => void;
+    }
+  ) => Promise<DocumentResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -587,7 +653,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   encryptData: api.encryptData,
   decryptData: api.decryptData,
   fetchModels: api.fetchModels,
-  uploadDocument: api.uploadDocument
+  uploadDocument: api.uploadDocument,
+  checkDocumentStatus: api.checkDocumentStatus,
+  uploadDocumentWithPolling: api.uploadDocumentWithPolling
 });
 
 /**
@@ -943,7 +1011,9 @@ export function OpenSecretProvider({
     encryptData: api.encryptData,
     decryptData: api.decryptData,
     fetchModels: api.fetchModels,
-    uploadDocument: api.uploadDocument
+    uploadDocument: api.uploadDocument,
+    checkDocumentStatus: api.checkDocumentStatus,
+    uploadDocumentWithPolling: api.uploadDocumentWithPolling
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

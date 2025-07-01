@@ -17,6 +17,15 @@ The document upload feature:
 - Requires JWT authentication (guest users are not supported)
 - Includes usage limit enforcement
 - Returns extracted text ready for use in chat prompts
+- Supports asynchronous processing with status polling
+
+## Upload Methods
+
+OpenSecret SDK provides three methods for document upload:
+
+1. **`uploadDocument`** - Initiates upload and returns a task ID immediately
+2. **`checkDocumentStatus`** - Checks the status of a processing task
+3. **`uploadDocumentWithPolling`** - Convenient wrapper that handles polling automatically
 
 ## Prerequisites
 
@@ -28,7 +37,9 @@ Before using document upload, ensure:
 
 ## Basic Document Upload
 
-### Simple Upload Example
+### Method 1: Upload with Automatic Polling (Recommended)
+
+The simplest way to upload a document is using `uploadDocumentWithPolling`, which handles the async processing automatically:
 
 ```tsx
 import { useState } from "react";
@@ -48,8 +59,12 @@ function DocumentUploader() {
     setError("");
 
     try {
-      // Upload the document
-      const result = await os.uploadDocument(file);
+      // Upload and process the document with automatic polling
+      const result = await os.uploadDocumentWithPolling(file, {
+        onProgress: (status, progress) => {
+          console.log(`Status: ${status}, Progress: ${progress || 0}%`);
+        }
+      });
       
       // The result contains the extracted text
       setExtractedText(result.text);
@@ -108,6 +123,190 @@ function DocumentUploader() {
 }
 ```
 
+### Method 2: Manual Status Polling
+
+For more control over the polling process, you can use `uploadDocument` and `checkDocumentStatus` separately:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+
+function DocumentUploaderManual() {
+  const os = useOpenSecret();
+  const [file, setFile] = useState<File | null>(null);
+  const [taskId, setTaskId] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+  const [extractedText, setExtractedText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleUpload() {
+    if (!file || loading || !os.auth.user) return;
+
+    setLoading(true);
+    setError("");
+    setStatus("uploading");
+
+    try {
+      // Step 1: Upload the document and get task ID
+      const initResponse = await os.uploadDocument(file);
+      setTaskId(initResponse.task_id);
+      setStatus("pending");
+      
+      // Step 2: Poll for status
+      let attempts = 0;
+      const maxAttempts = 150; // 5 minutes with 2s interval
+      
+      while (attempts < maxAttempts) {
+        const statusResponse = await os.checkDocumentStatus(initResponse.task_id);
+        setStatus(statusResponse.status);
+        
+        if (statusResponse.status === "success") {
+          if (statusResponse.document) {
+            setExtractedText(statusResponse.document.text);
+            console.log(`Extracted ${statusResponse.document.size} bytes`);
+          }
+          break;
+        } else if (statusResponse.status === "failure") {
+          throw new Error(statusResponse.error || "Processing failed");
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+      }
+      
+      if (attempts >= maxAttempts) {
+        throw new Error("Document processing timed out");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setError(error instanceof Error ? error.message : "Failed to process document");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="document-uploader">
+      <h3>Document Upload (Manual Polling)</h3>
+      
+      {error && <div className="error">{error}</div>}
+      {taskId && <div>Task ID: {taskId}</div>}
+      {status && <div>Status: {status}</div>}
+      
+      <input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        accept=".pdf,.docx,.doc,.txt,.rtf"
+        disabled={loading}
+      />
+      
+      <button 
+        onClick={handleUpload} 
+        disabled={!file || loading}
+      >
+        {loading ? `Processing (${status})...` : "Upload & Extract Text"}
+      </button>
+      
+      {extractedText && (
+        <div className="extracted-text">
+          <h4>Extracted Text:</h4>
+          <pre>{extractedText}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Method 3: Upload with Progress Tracking
+
+Use the `onProgress` callback to show detailed progress to users:
+
+```tsx
+import { useState } from "react";
+import { useOpenSecret } from "@opensecret/react";
+
+function DocumentUploaderWithProgress() {
+  const os = useOpenSecret();
+  const [file, setFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<{ status: string; percent: number }>({
+    status: "",
+    percent: 0
+  });
+  const [extractedText, setExtractedText] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleUpload() {
+    if (!file || loading || !os.auth.user) return;
+
+    setLoading(true);
+    setProgress({ status: "uploading", percent: 0 });
+
+    try {
+      const result = await os.uploadDocumentWithPolling(file, {
+        pollInterval: 1000, // Check every second
+        maxAttempts: 300,   // 5 minutes total
+        onProgress: (status, progressPercent) => {
+          setProgress({
+            status,
+            percent: progressPercent || (status === "started" ? 50 : 0)
+          });
+        }
+      });
+      
+      setExtractedText(result.text);
+      setProgress({ status: "completed", percent: 100 });
+    } catch (error) {
+      console.error("Upload error:", error);
+      setProgress({ status: "failed", percent: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="document-uploader">
+      <h3>Document Upload with Progress</h3>
+      
+      <input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        accept=".pdf,.docx,.doc,.txt,.rtf"
+        disabled={loading}
+      />
+      
+      <button 
+        onClick={handleUpload} 
+        disabled={!file || loading}
+      >
+        Upload & Extract Text
+      </button>
+      
+      {loading && (
+        <div className="progress">
+          <div>Status: {progress.status}</div>
+          <div className="progress-bar">
+            <div 
+              className="progress-fill" 
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+      
+      {extractedText && (
+        <div className="extracted-text">
+          <h4>Extracted Text:</h4>
+          <pre>{extractedText}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
 ## Document Q&A Integration
 
 Combine document upload with AI chat for intelligent document analysis:
@@ -134,7 +333,7 @@ function DocumentQA() {
     setError("");
 
     try {
-      const result = await os.uploadDocument(file);
+      const result = await os.uploadDocumentWithPolling(file);
       setDocumentText(result.text);
     } catch (error) {
       console.error("Upload error:", error);
@@ -304,10 +503,10 @@ function MultiDocumentProcessor() {
     setError("");
 
     try {
-      // Process files in parallel
+      // Process files in parallel with polling
       const uploadPromises = files.map(async (file) => {
         try {
-          const result = await os.uploadDocument(file);
+          const result = await os.uploadDocumentWithPolling(file);
           return result;
         } catch (error) {
           console.error(`Failed to upload ${file.name}:`, error);
@@ -491,7 +690,7 @@ async function uploadWithErrorHandling(file: File) {
   const os = useOpenSecret();
   
   try {
-    const result = await os.uploadDocument(file);
+    const result = await os.uploadDocumentWithPolling(file);
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof Error) {
@@ -537,6 +736,67 @@ async function uploadWithErrorHandling(file: File) {
 }
 ```
 
+## API Reference
+
+### uploadDocument
+
+```typescript
+uploadDocument(file: File | Blob): Promise<DocumentUploadInitResponse>
+```
+
+Initiates document upload and returns immediately with a task ID.
+
+**Returns:**
+```typescript
+{
+  task_id: string;    // Unique identifier for the processing task
+  filename: string;   // Name of the uploaded file
+  size: number;       // Size of the file in bytes
+}
+```
+
+### checkDocumentStatus
+
+```typescript
+checkDocumentStatus(taskId: string): Promise<DocumentStatusResponse>
+```
+
+Checks the status of a document processing task.
+
+**Returns:**
+```typescript
+{
+  status: "pending" | "started" | "success" | "failure";
+  progress?: number;           // Optional progress percentage
+  error?: string;              // Error message if status is "failure"
+  document?: DocumentResponse; // Processed document if status is "success"
+}
+```
+
+### uploadDocumentWithPolling
+
+```typescript
+uploadDocumentWithPolling(
+  file: File | Blob,
+  options?: {
+    pollInterval?: number;    // Time between polls in ms (default: 2000)
+    maxAttempts?: number;     // Max polling attempts (default: 150)
+    onProgress?: (status: string, progress?: number) => void;
+  }
+): Promise<DocumentResponse>
+```
+
+Convenience method that uploads a document and automatically polls until completion.
+
+**Returns:**
+```typescript
+{
+  text: string;      // Extracted text content
+  filename: string;  // Original filename
+  size: number;      // Size in bytes
+}
+```
+
 ## Security Considerations
 
 1. **Authentication Required**: Only authenticated users can upload documents
@@ -544,6 +804,7 @@ async function uploadWithErrorHandling(file: File) {
 3. **End-to-End Encryption**: All uploads and responses are encrypted using session keys
 4. **File Size Limits**: 10MB limit prevents abuse and ensures performance
 5. **Usage Limits**: API enforces usage limits to prevent abuse
+6. **Async Processing**: Documents are processed asynchronously to handle large files reliably
 
 ## Best Practices
 
