@@ -594,6 +594,49 @@ export type OpenSecretContextType = {
       onProgress?: (status: string, progress?: number) => void;
     }
   ) => Promise<DocumentResponse>;
+
+  /**
+   * Performs a search using the Kagi search API proxy
+   * @param query - The search query
+   * @param workflow - The search workflow type (default: "search")
+   * @returns A promise resolving to the search results
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The search service is not configured (Kagi API key missing on server)
+   * - The search fails
+   *
+   * @description
+   * This function sends a search request through the OpenSecret proxy to Kagi's search API.
+   * All requests are encrypted end-to-end using session keys.
+   * Guest users will receive a 401 Unauthorized error.
+   *
+   * Available workflows:
+   * - "search": Standard web search (default)
+   * - "images": Image search
+   * - "videos": Video search
+   * - "news": News search
+   * - "podcasts": Podcast search
+   *
+   * Example usage:
+   * ```typescript
+   * // Standard web search
+   * const results = await context.search("best programming languages 2024");
+   * if (results.success && results.data) {
+   *   results.data.data.search?.forEach(result => {
+   *     console.log(result.title, result.url);
+   *   });
+   * }
+   *
+   * // Image search
+   * const images = await context.search("mountain landscape", "images");
+   * if (images.success && images.data) {
+   *   images.data.data.image?.forEach(result => {
+   *     console.log(result.title, result.image?.url);
+   *   });
+   * }
+   * ```
+   */
+  search: (query: string, workflow?: api.SearchWorkflow) => Promise<api.SearchResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -655,7 +698,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   fetchModels: api.fetchModels,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
-  uploadDocumentWithPolling: api.uploadDocumentWithPolling
+  uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+  search: api.search
 });
 
 /**
@@ -1013,7 +1057,8 @@ export function OpenSecretProvider({
     fetchModels: api.fetchModels,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
-    uploadDocumentWithPolling: api.uploadDocumentWithPolling
+    uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+    search: api.search
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

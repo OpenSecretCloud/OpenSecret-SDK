@@ -1179,7 +1179,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * @returns Promise that resolves after the delay
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -1350,4 +1350,105 @@ export async function uploadDocumentWithPolling(
   }
 
   throw new Error("Document processing timed out");
+}
+
+// Kagi Search API Types
+export type SearchWorkflow = "search" | "images" | "videos" | "news" | "podcasts";
+
+export type SearchRequest = {
+  query: string;
+  workflow?: SearchWorkflow;
+};
+
+export type SearchResult = {
+  url: string;
+  title: string;
+  snippet?: string;
+  time?: string;
+  image?: {
+    url: string;
+    width?: number;
+    height?: number;
+  };
+  props?: Record<string, any>;
+};
+
+export type SearchResponse = {
+  success: boolean;
+  data: {
+    meta: {
+      trace: string;
+      id: string;
+      node: string;
+      ms: number;
+    };
+    data: {
+      search?: SearchResult[];
+      image?: SearchResult[];
+      video?: SearchResult[];
+      podcast?: SearchResult[];
+      podcast_creator?: SearchResult[];
+      news?: SearchResult[];
+      adjacent_question?: SearchResult[];
+      direct_answer?: SearchResult[];
+      interesting_news?: SearchResult[];
+      interesting_finds?: SearchResult[];
+      infobox?: SearchResult[];
+      code?: SearchResult[];
+      package_tracking?: SearchResult[];
+      public_records?: SearchResult[];
+      weather?: SearchResult[];
+      related_search?: SearchResult[];
+      listicle?: SearchResult[];
+      web_archive?: SearchResult[];
+    };
+  } | null;
+  error: string | null;
+};
+
+/**
+ * Performs a search using the Kagi search API proxy
+ * @param query - The search query
+ * @param workflow - The search workflow type (default: "search")
+ * @returns A promise resolving to the search results
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The search service is not configured (Kagi API key missing)
+ * - The search fails
+ *
+ * @description
+ * This function sends a search request through the OpenSecret proxy to Kagi's search API.
+ * All requests are encrypted end-to-end using session keys.
+ *
+ * Available workflows:
+ * - "search": Standard web search (default)
+ * - "images": Image search
+ * - "videos": Video search
+ * - "news": News search
+ * - "podcasts": Podcast search
+ *
+ * Example usage:
+ * ```typescript
+ * // Standard web search
+ * const results = await search("best programming languages 2024");
+ *
+ * // Image search
+ * const images = await search("mountain landscape", "images");
+ * ```
+ */
+export async function search(
+  query: string,
+  workflow: SearchWorkflow = "search"
+): Promise<SearchResponse> {
+  const requestData: SearchRequest = {
+    query,
+    workflow
+  };
+
+  return authenticatedApiCall<SearchRequest, SearchResponse>(
+    `${apiUrl}/v1/search`,
+    "POST",
+    requestData,
+    "Search failed"
+  );
 }
