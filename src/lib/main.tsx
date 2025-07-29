@@ -357,7 +357,7 @@ export type OpenSecretContextType = {
    * });
    * ```
    */
-  aiCustomFetch: (url: RequestInfo, init?: RequestInit) => Promise<Response>;
+  aiCustomFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
   /**
    * Returns the current OpenSecret enclave API URL being used

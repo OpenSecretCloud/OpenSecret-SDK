@@ -6,8 +6,8 @@ export interface CustomFetchOptions {
   apiKey?: string; // Optional API key to use instead of JWT token
 }
 
-export function createCustomFetch(options?: CustomFetchOptions): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
-  return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
+export function createCustomFetch(options?: CustomFetchOptions): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
+  return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       // If an API key is provided, use it instead of JWT token
       if (options?.apiKey) {
