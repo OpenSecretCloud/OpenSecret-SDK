@@ -45,7 +45,7 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     { role: "user", content: 'please reply with exactly and only the word "echo"' } as ChatMessage
   ];
 
-  const stream = openai.beta.chat.completions.stream({
+  const stream = await openai.chat.completions.create({
     model,
     messages,
     stream: true
@@ -58,7 +58,6 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     fullResponse += content;
   }
 
-  await stream.finalChatCompletion();
 
   expect(fullResponse.trim()).toBe("echo");
 });
