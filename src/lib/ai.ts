@@ -137,11 +137,11 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
           // Try to parse as JSON to check for TTS response format
           try {
             const decryptedData = JSON.parse(decrypted);
-            
+
             // Check if this is a TTS response with content_base64 and content_type
             if (decryptedData.content_base64 && decryptedData.content_type) {
               console.log("TTS response detected with content_type:", decryptedData.content_type);
-              
+
               // Decode base64 audio data to binary
               let bytes: Uint8Array;
               try {
@@ -154,9 +154,9 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
                 console.error("Failed to decode base64 audio data:", e);
                 throw new Error("Invalid base64 audio data in TTS response");
               }
-              
+
               console.log("Decoded audio bytes length:", bytes.length);
-              
+
               // Return as a binary response with the proper content type
               const headersOut = new Headers(response.headers);
               headersOut.set('content-type', decryptedData.content_type);
@@ -164,7 +164,7 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
               headersOut.delete('content-encoding');
               headersOut.delete('content-length');
               headersOut.delete('transfer-encoding');
-              
+
               return new Response(bytes, {
                 headers: headersOut,
                 status: response.status,
