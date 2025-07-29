@@ -114,7 +114,33 @@ export function createCustomFetch(): (input: string | URL | Request, init?: Requ
         });
       }
 
-      return response;
+      // Decrypt regular JSON responses
+      const responseText = await response.text();
+      try {
+        const responseData = JSON.parse(responseText);
+        
+        // Check if the response has an encrypted field
+        if (responseData.encrypted) {
+          const decrypted = decryptMessage(sessionKey, responseData.encrypted);
+          
+          // Return a new Response with the decrypted data
+          return new Response(decrypted, {
+            headers: response.headers,
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+      } catch (e) {
+        // If it's not JSON or doesn't have encrypted field, return original response
+        console.log("Response is not encrypted JSON, returning as-is");
+      }
+      
+      // Return the original response text as a new Response
+      return new Response(responseText, {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText
+      });
     } catch (error) {
       console.error("Error during fetch process:", error);
       throw error;

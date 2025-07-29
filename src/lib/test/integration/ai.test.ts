@@ -113,3 +113,35 @@ test("streams chat completion", async () => {
 
   expect(response?.trim()).toBe("echo");
 });
+
+test("OpenAI responses endpoint returns in_progress status", async () => {
+  await setupTestUser();
+
+  const openai = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  const response = await openai.responses.create({
+    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
+    input: 'please reply with exactly and only the word "echo"'
+  });
+
+  console.log("Response:", response);
+  
+  // Check that the response has the expected structure
+  expect(response).toHaveProperty("id");
+  expect(response).toHaveProperty("object", "response");
+  expect(response).toHaveProperty("status");
+  
+  // Since you mentioned the response is in_progress, let's check for that
+  expect(response.status).toBe("in_progress");
+  
+  // TODO: Once the backend implements polling/completion for responses endpoint:
+  // expect(response.output_text.trim()).toBe("echo");
+});
