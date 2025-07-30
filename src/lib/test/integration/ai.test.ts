@@ -114,7 +114,7 @@ test("streams chat completion", async () => {
   expect(response?.trim()).toBe("echo");
 });
 
-test("OpenAI responses endpoint returns in_progress status", async () => {
+test("OpenAI responses endpoint streams response", async () => {
   await setupTestUser();
 
   const openai = new OpenAI({
@@ -127,21 +127,48 @@ test("OpenAI responses endpoint returns in_progress status", async () => {
     fetch: createCustomFetch()
   });
 
-  const response = await openai.responses.create({
+  const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: 'please reply with exactly and only the word "echo"'
+    input: 'please reply with exactly and only the word "echo"',
+    stream: true
   });
 
-  console.log("Response:", response);
+  let fullResponse = "";
+  let hasInProgressEvent = false;
+  let hasDeltaEvents = false;
+  let hasDoneEvent = false;
+  let eventCount = 0;
+
+  try {
+    for await (const event of stream) {
+      eventCount++;
+      
+      if (event.type === "response.created" || event.type === "response.in_progress") {
+        hasInProgressEvent = true;
+      } else if (event.type === "response.output_text.delta") {
+        hasDeltaEvents = true;
+        // Text delta events have delta field
+        if (event.delta) {
+          fullResponse += event.delta;
+        }
+      } else if (event.type === "response.completed" || event.type === "response.done") {
+        hasDoneEvent = true;
+      }
+    }
+  } catch (error) {
+    console.error("Error processing stream:", error);
+    throw error;
+  }
+
   
-  // Check that the response has the expected structure
-  expect(response).toHaveProperty("id");
-  expect(response).toHaveProperty("object", "response");
-  expect(response).toHaveProperty("status");
+  // First check if we got any events at all
+  expect(eventCount).toBeGreaterThan(0);
   
-  // Since you mentioned the response is in_progress, let's check for that
-  expect(response.status).toBe("in_progress");
+  // Verify we got all expected event types
+  expect(hasInProgressEvent).toBe(true);
+  expect(hasDeltaEvents).toBe(true);
+  expect(hasDoneEvent).toBe(true);
   
-  // TODO: Once the backend implements polling/completion for responses endpoint:
-  // expect(response.output_text.trim()).toBe("echo");
+  // Verify the accumulated response
+  expect(fullResponse.trim()).toBe("echo");
 });

@@ -70,35 +70,39 @@ export function createCustomFetch(): (input: string | URL | Request, init?: Requ
               let event;
               while ((event = extractEvent(buffer))) {
                 buffer = buffer.slice(event.length);
-                if (event.trim().startsWith("data: ")) {
-                  const data = event.slice(6).trim();
-                  if (data === "[DONE]") {
-                    controller.enqueue(`data: [DONE]\n\n`);
-                  } else {
-                    try {
-                      console.groupCollapsed("Decrypting chunk");
-                      console.log("Attempting to decrypt, data length:", data.length);
-                      const decrypted = decryptMessage(sessionKey, data);
-                      console.log("Decrypted data length:", decrypted.length);
-                      console.log("Decrypted data:", decrypted);
-
+                
+                // Split the event into individual lines
+                const lines = event.split('\n');
+                let eventType = '';
+                
+                for (const line of lines) {
+                  // Handle event: lines - pass them through as-is
+                  if (line.trim().startsWith("event: ")) {
+                    eventType = line.trim().slice(7);
+                    controller.enqueue(line + '\n');
+                  }
+                  // Handle data: lines - decrypt them
+                  else if (line.trim().startsWith("data: ")) {
+                    const data = line.slice(6).trim();
+                    if (data === "[DONE]") {
+                      controller.enqueue(`data: [DONE]\n\n`);
+                    } else {
                       try {
-                        const parsedJson = JSON.parse(decrypted);
-                        console.log("Parsed JSON:", parsedJson);
-                        controller.enqueue(`data: ${JSON.stringify(parsedJson)}\n\n`);
-                      } catch (jsonError) {
-                        if (jsonError instanceof SyntaxError) {
-                          console.log("Failed to parse JSON:", decrypted);
-                          controller.enqueue(`data: ${decrypted}\n\n`);
-                        }
+                        const decrypted = decryptMessage(sessionKey, data);
+                        
+                        // Always enqueue the decrypted data
+                        // Note: We don't add \n\n here because the empty line will be added separately
+                        controller.enqueue(`data: ${decrypted}\n`);
+                      } catch (error) {
+                        console.error("Decryption error:", error, "Data:", data);
+                        // Instead of sending the encrypted data, we'll skip this chunk
+                        console.log("Skipping corrupted chunk");
                       }
-                    } catch (error) {
-                      console.error("Decryption error:", error, "Data:", data);
-                      // Instead of sending the encrypted data, we'll skip this chunk
-                      console.log("Skipping corrupted chunk");
-                    } finally {
-                      console.groupEnd();
                     }
+                  }
+                  // Pass through empty lines
+                  else if (line === "") {
+                    controller.enqueue('\n');
                   }
                 }
               }
