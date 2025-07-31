@@ -670,6 +670,45 @@ export type OpenSecretContextType = {
    * ```
    */
   transcribeAudio: typeof api.transcribeAudio;
+
+  /**
+   * Lists user's responses with pagination
+   * @param params - Optional parameters for pagination and filtering
+   * @returns A promise resolving to a paginated list of responses
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The request fails
+   * - Invalid pagination parameters
+   *
+   * @description
+   * This function fetches a paginated list of the user's responses.
+   * In list view, the usage and output fields are always null for performance reasons.
+   * 
+   * Query Parameters:
+   * - limit: Number of results per page (1-100, default: 20)
+   * - after: UUID cursor for forward pagination  
+   * - before: UUID cursor for backward pagination
+   * - order: Sort order (currently not implemented, reserved for future use)
+   *
+   * Pagination Examples:
+   * ```typescript
+   * // First page
+   * const responses = await context.fetchResponsesList({ limit: 20 });
+   * 
+   * // Next page
+   * const nextPage = await context.fetchResponsesList({ 
+   *   limit: 20, 
+   *   after: responses.last_id 
+   * });
+   * 
+   * // Previous page
+   * const prevPage = await context.fetchResponsesList({ 
+   *   limit: 20, 
+   *   before: responses.first_id 
+   * });
+   * ```
+   */
+  fetchResponsesList: (params?: api.ResponsesListParams) => Promise<api.ResponsesListResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -737,7 +776,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   createApiKey: api.createApiKey,
   listApiKeys: api.listApiKeys,
   deleteApiKey: api.deleteApiKey,
-  transcribeAudio: api.transcribeAudio
+  transcribeAudio: api.transcribeAudio,
+  fetchResponsesList: api.fetchResponsesList
 });
 
 /**
@@ -1138,7 +1178,8 @@ export function OpenSecretProvider({
     createApiKey: api.createApiKey,
     listApiKeys: api.listApiKeys,
     deleteApiKey: api.deleteApiKey,
-    transcribeAudio: api.transcribeAudio
+    transcribeAudio: api.transcribeAudio,
+    fetchResponsesList: api.fetchResponsesList
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
