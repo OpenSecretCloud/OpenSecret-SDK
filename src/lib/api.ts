@@ -1351,3 +1351,104 @@ export async function uploadDocumentWithPolling(
 
   throw new Error("Document processing timed out");
 }
+
+export type ResponsesRetrieveResponse = {
+  id: string;              
+  object: "response";     
+  created_at: number;        
+  status: "queued" | "in_progress" | "completed" | "failed" | "cancelled";
+  model: string;          
+  usage?: {               
+    input_tokens: number;
+    input_tokens_details: {
+      cached_tokens: number;
+    };
+    output_tokens: number;
+    output_tokens_details: {
+      reasoning_tokens: number;
+    };
+    total_tokens: number;
+  };
+  output?: string;        
+};
+
+export type ResponsesListResponse = {
+  object: "list";          
+  data: ResponsesRetrieveResponse[];  
+  has_more: boolean;       
+  first_id?: string;       
+  last_id?: string;        
+};
+
+export type ResponsesListParams = {
+  limit?: number;    // 1-100, default: 20
+  after?: string;    // UUID cursor for forward pagination
+  before?: string;   // UUID cursor for backward pagination
+  order?: string;    // Currently not implemented, reserved for future use
+};
+
+/**
+ * Lists user's responses with pagination
+ * @param params - Optional parameters for pagination and filtering
+ * @returns A promise resolving to a paginated list of responses
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ * - Invalid pagination parameters
+ *
+ * @description
+ * This function fetches a paginated list of the user's responses.
+ * In list view, the usage and output fields are always null for performance reasons.
+ * 
+ * Query Parameters:
+ * - limit: Number of results per page (1-100, default: 20)
+ * - after: UUID cursor for forward pagination  
+ * - before: UUID cursor for backward pagination
+ * - order: Sort order (currently not implemented, reserved for future use)
+ *
+ * Pagination Examples:
+ * ```typescript
+ * // First page
+ * const responses = await fetchResponsesList({ limit: 20 });
+ * 
+ * // Next page
+ * const nextPage = await fetchResponsesList({ 
+ *   limit: 20, 
+ *   after: responses.last_id 
+ * });
+ * 
+ * // Previous page
+ * const prevPage = await fetchResponsesList({ 
+ *   limit: 20, 
+ *   before: responses.first_id 
+ * });
+ * ```
+ */
+export async function fetchResponsesList(params?: ResponsesListParams): Promise<ResponsesListResponse> {
+  let url = `${apiUrl}/v1/responses`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ResponsesListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list responses"
+  );
+}
