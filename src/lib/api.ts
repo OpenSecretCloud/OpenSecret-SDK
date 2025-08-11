@@ -49,11 +49,17 @@ export async function fetchLogin(
   password: string
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  return encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
+  const response = await encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
     { email, password, client_id: clientId }
   );
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchGuestLogin(
@@ -61,11 +67,17 @@ export async function fetchGuestLogin(
   password: string
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  return encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
+  const response = await encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
     { id, password, client_id: clientId }
   );
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchSignUp(
@@ -75,7 +87,7 @@ export async function fetchSignUp(
   name?: string | null
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  return encryptedApiCall<
+  const response = await encryptedApiCall<
     {
       email: string;
       password: string;
@@ -91,6 +103,12 @@ export async function fetchSignUp(
     client_id: clientId,
     name
   });
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchGuestSignUp(
@@ -98,7 +116,7 @@ export async function fetchGuestSignUp(
   inviteCode: string
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  return encryptedApiCall<
+  const response = await encryptedApiCall<
     { password: string; inviteCode: string; client_id: string },
     LoginResponse
   >(`${apiUrl}/register`, "POST", {
@@ -106,6 +124,12 @@ export async function fetchGuestSignUp(
     inviteCode: inviteCode.toLowerCase(),
     client_id: clientId
   });
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function refreshToken(): Promise<RefreshResponse> {
@@ -334,13 +358,19 @@ export async function handleGitHubCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${apiUrl}/auth/github/callback`,
       "POST",
       callbackData,
       undefined,
       "GitHub callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed GitHub callback error:", error);
     if (error instanceof Error) {
@@ -414,13 +444,19 @@ export async function handleGoogleCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${apiUrl}/auth/google/callback`,
       "POST",
       callbackData,
       undefined,
       "Google callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Google callback error:", error);
     if (error instanceof Error) {
@@ -503,13 +539,19 @@ export async function handleAppleCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${apiUrl}/auth/apple/callback`,
       "POST",
       callbackData,
       undefined,
       "Apple callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Apple callback error:", error);
     if (error instanceof Error) {
@@ -588,13 +630,19 @@ export async function handleAppleNativeSignIn(
   };
 
   try {
-    return await encryptedApiCall<typeof signInData, LoginResponse>(
+    const response = await encryptedApiCall<typeof signInData, LoginResponse>(
       `${apiUrl}/auth/apple/native`,
       "POST",
       signInData,
       undefined,
       "Apple Sign-In failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Apple Sign-In error:", error);
     if (error instanceof Error) {

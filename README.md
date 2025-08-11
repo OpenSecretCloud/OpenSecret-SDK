@@ -31,6 +31,7 @@ function App() {
     try {
       await signIn("email", "password");
       // Handle successful sign in
+      // Tokens are automatically stored in localStorage
     } catch (error) {
       // Handle error
     }
