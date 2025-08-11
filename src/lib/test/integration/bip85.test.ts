@@ -11,18 +11,19 @@ import {
 } from "../../api";
 import { schnorr } from "@noble/curves/secp256k1";
 
+import "../setup"; // Configure the SDK
+
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
-const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 
-if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID) {
+if (!TEST_EMAIL || !TEST_PASSWORD) {
   throw new Error("Test credentials must be set in .env.local");
 }
 
 async function setupTestUser() {
   try {
     // Try to login
-    const { access_token } = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    const { access_token } = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
     window.localStorage.setItem("access_token", access_token);
 
     // Add a small delay to ensure tokens are properly set

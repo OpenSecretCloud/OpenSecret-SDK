@@ -1,6 +1,7 @@
 import { encode } from "@stablelib/base64";
 import { authenticatedApiCall, encryptedApiCall, openAiAuthenticatedApiCall } from "./encryptedApi";
 import type { Model } from "openai/resources/models.js";
+import { getConfig } from "./config";
 
 let apiUrl = "";
 
@@ -31,7 +32,7 @@ export type UserResponse = {
   };
 };
 
-type RefreshResponse = {
+export type RefreshResponse = {
   access_token: string;
   refresh_token: string;
 };
@@ -45,25 +46,25 @@ export type KVListItem = {
 
 export async function fetchLogin(
   email: string,
-  password: string,
-  client_id: string
+  password: string
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   return encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
-    { email, password, client_id }
+    { email, password, client_id: clientId }
   );
 }
 
 export async function fetchGuestLogin(
   id: string,
-  password: string,
-  client_id: string
+  password: string
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   return encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
     `${apiUrl}/login`,
     "POST",
-    { id, password, client_id }
+    { id, password, client_id: clientId }
   );
 }
 
@@ -71,9 +72,9 @@ export async function fetchSignUp(
   email: string,
   password: string,
   inviteCode: string,
-  client_id: string,
   name?: string | null
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   return encryptedApiCall<
     {
       email: string;
@@ -87,23 +88,23 @@ export async function fetchSignUp(
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
-    client_id,
+    client_id: clientId,
     name
   });
 }
 
 export async function fetchGuestSignUp(
   password: string,
-  inviteCode: string,
-  client_id: string
+  inviteCode: string
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   return encryptedApiCall<
     { password: string; inviteCode: string; client_id: string },
     LoginResponse
   >(`${apiUrl}/register`, "POST", {
     password,
     inviteCode: inviteCode.toLowerCase(),
-    client_id
+    client_id: clientId
   });
 }
 
@@ -251,13 +252,13 @@ export async function keyExchange(
 
 export async function requestPasswordReset(
   email: string,
-  hashedSecret: string,
-  client_id: string
+  hashedSecret: string
 ): Promise<void> {
+  const { clientId } = getConfig();
   const resetData = {
     email,
     hashed_secret: hashedSecret,
-    client_id
+    client_id: clientId
   };
   return encryptedApiCall<typeof resetData, void>(
     `${apiUrl}/password-reset/request`,
@@ -272,15 +273,15 @@ export async function confirmPasswordReset(
   email: string,
   alphanumericCode: string,
   plaintextSecret: string,
-  newPassword: string,
-  client_id: string
+  newPassword: string
 ): Promise<void> {
+  const { clientId } = getConfig();
   const confirmData = {
     email,
     alphanumeric_code: alphanumericCode,
     plaintext_secret: plaintextSecret,
     new_password: newPassword,
-    client_id
+    client_id: clientId
   };
   return encryptedApiCall<typeof confirmData, void>(
     `${apiUrl}/password-reset/confirm`,
@@ -305,14 +306,14 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function initiateGitHubAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<GithubAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GithubAuthResponse>(
       `${apiUrl}/auth/github`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate GitHub auth"
     );
@@ -385,14 +386,14 @@ export type AppleAuthResponse = {
 };
 
 export async function initiateGoogleAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<GoogleAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GoogleAuthResponse>(
       `${apiUrl}/auth/google`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate Google auth"
     );
@@ -459,14 +460,14 @@ export async function handleGoogleCallback(
  * The handleAppleCallback function should be used to complete the authentication process.
  */
 export async function initiateAppleAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<AppleAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, AppleAuthResponse>(
       `${apiUrl}/auth/apple`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate Apple auth"
     );
@@ -576,13 +577,13 @@ export type AppleUser = {
  */
 export async function handleAppleNativeSignIn(
   appleUser: AppleUser,
-  client_id: string,
   inviteCode?: string
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   // Combine the Apple user data with our app's client ID
   const signInData = {
     ...appleUser,
-    client_id,
+    client_id: clientId,
     ...(inviteCode ? { invite_code: inviteCode } : {})
   };
 

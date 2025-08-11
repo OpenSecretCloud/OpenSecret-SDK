@@ -12,12 +12,98 @@ npm install @opensecret/react
 
 ## Usage
 
-Wrap your application in the `OpenSecretProvider` component and provide:
-1. The URL of your OpenSecret backend
-2. Your project's client ID (a UUID that identifies your project)
+### Direct API Usage (Recommended)
+
+Configure the SDK once in your application and then use the API functions directly. This approach is compatible with React Suspense and gives you full control over state management.
 
 ```tsx
-import { OpenSecretProvider } from "@opensecret/react";
+import { configure, signIn, signUp, signOut, get, put, list, del } from "@opensecret/react";
+
+// Configure once at app initialization
+configure({
+  apiUrl: "{URL}",
+  clientId: "{PROJECT_UUID}"
+});
+
+// Use functions directly in your components
+function App() {
+  const handleSignIn = async () => {
+    try {
+      await signIn("email", "password");
+      // Handle successful sign in
+    } catch (error) {
+      // Handle error
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={handleSignIn}>Sign In</button>
+      <button onClick={() => signUp("email", "password", "inviteCode")}>Sign Up</button>
+      <button onClick={() => signOut()}>Sign Out</button>
+      <button onClick={async () => console.log(await get("key"))}>Get Value</button>
+      <button onClick={() => put("key", "value")}>Put Value</button>
+      <button onClick={async () => console.log(await list())}>List Values</button>
+      <button onClick={() => del("key")}>Delete Value</button>
+    </div>
+  );
+}
+```
+
+### With React Suspense and TanStack Query
+
+The direct API approach works seamlessly with modern data fetching libraries:
+
+```tsx
+import { useSuspenseQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { configure, fetchUser, signIn, signOut } from '@opensecret/react';
+
+// Configure once
+configure({
+  apiUrl: "{URL}",
+  clientId: "{PROJECT_UUID}"
+});
+
+function UserProfile() {
+  const queryClient = useQueryClient();
+  
+  // This will suspend while loading
+  const { data: user } = useSuspenseQuery({
+    queryKey: ['user'],
+    queryFn: fetchUser
+  });
+
+  const signOutMutation = useMutation({
+    mutationFn: signOut,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+    }
+  });
+
+  return (
+    <div>
+      <p>Welcome {user.email}</p>
+      <button onClick={() => signOutMutation.mutate()}>Sign Out</button>
+    </div>
+  );
+}
+
+// Wrap with Suspense boundary
+function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <UserProfile />
+    </Suspense>
+  );
+}
+```
+
+### Legacy Provider Usage (Deprecated)
+
+The provider-based approach is still available but deprecated:
+
+```tsx
+import { OpenSecretProvider, useOpenSecret } from "@opensecret/react";
 
 function App() {
   return (
@@ -25,29 +111,17 @@ function App() {
       apiUrl="{URL}"
       clientId="{PROJECT_UUID}"
     >
-      <App />
+      <MyApp />
     </OpenSecretProvider>
   );
 }
-```
 
-Now import the `useOpenSecret` hook and use it to access the OpenSecret API:
-
-```tsx
-import { useOpenSecret } from "@opensecret/react";
-
-function App() {
+function MyApp() {
   const os = useOpenSecret();
-
+  
   return (
     <div>
       <button onClick={() => os.signIn("email", "password")}>Sign In</button>
-      <button onClick={() => os.signUp("name", "email", "password")}>Sign Up</button>
-      <button onClick={() => os.signOut()}>Sign Out</button>
-      <button onClick={() => os.get("key")}>Get Value</button>
-      <button onClick={() => os.put("key", "value")}>Put Value</button>
-      <button onClick={() => os.list()}>List Values</button>
-      <button onClick={() => os.del("key")}>Delete Value</button>
     </div>
   );
 }
@@ -55,43 +129,84 @@ function App() {
 
 ## API Reference
 
-### `OpenSecretProvider`
+### Configuration
 
-The `OpenSecretProvider` component is the main entry point for the SDK. It requires two props:
-- `apiUrl`: The URL of your OpenSecret backend
-- `clientId`: A UUID that identifies your project/tenant. This is used to scope user accounts and data to your specific project.
+#### `configure(options)`
 
-```tsx
-<OpenSecretProvider 
-  apiUrl="{URL}"
-  clientId="{PROJECT_UUID}"
->
-  <App />
-</OpenSecretProvider>
+Configures the OpenSecret SDK with your API URL and client ID. Must be called before using any other SDK functions.
+
+```typescript
+configure({
+  apiUrl: string,    // The URL of your OpenSecret backend
+  clientId: string   // A UUID that identifies your project/tenant
+})
 ```
 
-### `useOpenSecret`
+Example:
+```typescript
+import { configure } from '@opensecret/react';
 
-The `useOpenSecret` hook provides access to the OpenSecret API. It returns an object with the following methods:
+configure({
+  apiUrl: 'https://api.opensecret.cloud',
+  clientId: '550e8400-e29b-41d4-a716-446655440000'
+});
+```
+
+### Direct API Functions
+
+All functions can be imported directly from the package:
 
 #### Authentication Methods
-- `signIn(email: string, password: string): Promise<void>`: Signs in a user with the provided email and password.
-- `signUp(email: string, password: string, inviteCode: string, name?: string): Promise<void>`: Signs up a new user with the provided email, password, invite code, and optional name.
-- `signInGuest(id: string, password: string): Promise<void>`: Signs in a guest user with their ID and password. Guest accounts are scoped to the project specified by `clientId`.
-- `signUpGuest(password: string, inviteCode: string): Promise<LoginResponse>`: Creates a new guest account with just a password and invite code. Returns a response containing the guest's ID, access token, and refresh token. The guest account will be associated with the project specified by `clientId`.
-- `convertGuestToUserAccount(email: string, password: string, name?: string): Promise<void>`: Converts current guest account to a regular account with email authentication. Optionally sets the user's name. The account remains associated with the same project it was created under.
-- `signOut(): Promise<void>`: Signs out the current user.
+```typescript
+import { signIn, signUp, signInGuest, signUpGuest, convertGuestToUserAccount, signOut } from '@opensecret/react';
+
+// Sign in with email/password
+await signIn(email: string, password: string);
+
+// Sign up new user
+await signUp(email: string, password: string, inviteCode: string, name?: string);
+
+// Guest authentication
+await signInGuest(id: string, password: string);
+const { id, access_token, refresh_token } = await signUpGuest(password: string, inviteCode: string);
+
+// Convert guest to full account
+await convertGuestToUserAccount(email: string, password: string, name?: string);
+
+// Sign out
+await signOut();
+```
 
 #### Key-Value Storage Methods
-- `get(key: string): Promise<string | undefined>`: Retrieves the value associated with the provided key.
-- `put(key: string, value: string): Promise<string>`: Stores the provided value with the provided key.
-- `list(): Promise<KVListItem[]>`: Retrieves all key-value pairs stored by the user.
-- `del(key: string): Promise<void>`: Deletes the value associated with the provided key.
+```typescript
+import { get, put, list, del } from '@opensecret/react';
 
-#### Account Management Methods
-- `refetchUser(): Promise<void>`: Refreshes the user's authentication state.
-- `changePassword(currentPassword: string, newPassword: string): Promise<void>`: Changes the user's password.
-- `generateThirdPartyToken(audience?: string): Promise<{ token: string }>`: Generates a JWT token for use with third-party services. If an audience is provided, it can be any valid URL. If omitted, a token with no audience restriction will be generated.
+// Get a value
+const value = await get(key: string);
+
+// Store a value  
+await put(key: string, value: string);
+
+// List all key-value pairs
+const items = await list();
+
+// Delete a value
+await del(key: string);
+```
+
+#### User Management
+```typescript
+import { fetchUser, changePassword, generateThirdPartyToken } from '@opensecret/react';
+
+// Get current user
+const user = await fetchUser();
+
+// Change password
+await changePassword(currentPassword: string, newPassword: string);
+
+// Generate third-party JWT token
+const { token } = await generateThirdPartyToken(audience?: string);
+```
 
 #### Cryptographic Methods
 
@@ -302,7 +417,7 @@ const decrypted = await os.decryptData(encrypted_data, {
 
 ### AI Integration
 
-To get encrypted-to-the-gpu AI chat we provide a special version of `fetch` (`os.aiCustomFetch`) that handles all the encryption. Because we require the user to be logged in, and do the encryption client-side, this is safe to call from the client.
+To get encrypted-to-the-gpu AI chat, use the `createAiCustomFetch` function to create a special version of `fetch` that handles all the encryption. Because we require the user to be logged in, and do the encryption client-side, this is safe to call from the client.
 
 The easiest way to use this is through the OpenAI client:
 
@@ -312,25 +427,32 @@ npm install openai
 
 ```typescript
 import OpenAI from "openai";
-import { useOpenSecret } from "@opensecret/react";
+import { configure, createAiCustomFetch, getConfig } from "@opensecret/react";
 
-//...
+// Configure the SDK
+configure({
+  apiUrl: "https://api.opensecret.cloud",
+  clientId: "your-project-uuid"
+});
 
-// In a component
-const os = useOpenSecret();
-
+// Create the OpenAI client with encrypted fetch
 const openai = new OpenAI({
-  baseURL: `${os.apiUrl}/v1/`,
+  baseURL: `${getConfig().apiUrl}/v1/`,
   dangerouslyAllowBrowser: true,
   apiKey: "api-key-doesnt-matter", // The actual API key is handled by OpenSecret
   defaultHeaders: {
     "Accept-Encoding": "identity",
     "Content-Type": "application/json",
   },
-  fetch: os.aiCustomFetch, // Use OpenSecret's encrypted fetch
+  fetch: createAiCustomFetch(), // Use OpenSecret's encrypted fetch
 });
 
-//...
+// Use the OpenAI client as normal
+const completion = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [{ role: "user", content: "Hello!" }],
+  stream: true
+});
 ```
 
 You can now use the OpenAI client as normal. (Right now only streaming responses are supported.) See the example in `src/AI.tsx` in the SDK source code for a complete example.

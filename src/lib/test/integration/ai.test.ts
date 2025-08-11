@@ -9,13 +9,13 @@ import {
 } from "../../api";
 import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
+import "../setup"; // Configure the SDK
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
-const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
-const API_URL = process.env.VITE_OPEN_SECRET_API_URL;
+const API_URL = process.env.VITE_API_URL;
 
-if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID || !API_URL) {
+if (!TEST_EMAIL || !TEST_PASSWORD || !API_URL) {
   throw new Error("Test credentials must be set in .env.local");
 }
 
@@ -28,18 +28,16 @@ async function setupTestUser() {
   try {
     const { access_token, refresh_token } = await fetchLogin(
       TEST_EMAIL!,
-      TEST_PASSWORD!,
-      TEST_CLIENT_ID!
+      TEST_PASSWORD!
     );
     window.localStorage.setItem("access_token", access_token);
     window.localStorage.setItem("refresh_token", refresh_token);
   } catch (error) {
     console.log("Login failed, attempting signup");
-    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", TEST_CLIENT_ID!, "Test User");
+    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", "Test User");
     const { access_token, refresh_token } = await fetchLogin(
       TEST_EMAIL!,
-      TEST_PASSWORD!,
-      TEST_CLIENT_ID!
+      TEST_PASSWORD!
     );
     window.localStorage.setItem("access_token", access_token);
     window.localStorage.setItem("refresh_token", refresh_token);
