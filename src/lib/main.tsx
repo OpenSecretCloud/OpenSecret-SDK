@@ -1137,19 +1137,7 @@ export function OpenSecretProvider({
   }
 
   async function signOut() {
-    const refresh_token = window.localStorage.getItem("refresh_token");
-    if (refresh_token) {
-      try {
-        await api.fetchLogout(refresh_token);
-      } catch (error) {
-        console.error("Error during logout:", error);
-      }
-    }
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    sessionStorage.removeItem("sessionKey");
-    sessionStorage.removeItem("sessionId");
-    // Clear any in-memory API key so no post-logout calls can use it
+    await api.fetchLogout();
     setApiKey(undefined);
     setAuth({
       loading: false,

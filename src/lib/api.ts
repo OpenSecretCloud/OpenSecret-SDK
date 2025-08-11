@@ -216,9 +216,22 @@ export async function fetchList(): Promise<KVListItem[]> {
   );
 }
 
-export async function fetchLogout(refresh_token: string): Promise<void> {
-  const refreshData = { refresh_token };
-  return encryptedApiCall<typeof refreshData, void>(`${apiUrl}/logout`, "POST", refreshData);
+export async function fetchLogout(): Promise<void> {
+  const refresh_token = window.localStorage.getItem("refresh_token");
+  
+  if (refresh_token) {
+    try {
+      const refreshData = { refresh_token };
+      await encryptedApiCall<typeof refreshData, void>(`${apiUrl}/logout`, "POST", refreshData);
+    } catch (error) {
+      console.error("Error during logout API call:", error);
+    }
+  }
+  
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  sessionStorage.removeItem("sessionKey");
+  sessionStorage.removeItem("sessionId");
 }
 
 export async function verifyEmail(code: string): Promise<void> {
