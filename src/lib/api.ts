@@ -1179,7 +1179,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * @returns Promise that resolves after the delay
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -1353,12 +1353,12 @@ export async function uploadDocumentWithPolling(
 }
 
 export type ResponsesRetrieveResponse = {
-  id: string;              
-  object: "response";     
-  created_at: number;        
+  id: string;
+  object: "response";
+  created_at: number;
   status: "queued" | "in_progress" | "completed" | "failed" | "cancelled";
-  model: string;          
-  usage?: {               
+  model: string;
+  usage?: {
     input_tokens: number;
     input_tokens_details: {
       cached_tokens: number;
@@ -1369,22 +1369,22 @@ export type ResponsesRetrieveResponse = {
     };
     total_tokens: number;
   };
-  output?: string;        
+  output?: string;
 };
 
 export type ResponsesListResponse = {
-  object: "list";          
-  data: ResponsesRetrieveResponse[];  
-  has_more: boolean;       
-  first_id?: string;       
-  last_id?: string;        
+  object: "list";
+  data: ResponsesRetrieveResponse[];
+  has_more: boolean;
+  first_id?: string;
+  last_id?: string;
 };
 
 export type ResponsesListParams = {
-  limit?: number;    // 1-100, default: 20
-  after?: string;    // UUID cursor for forward pagination
-  before?: string;   // UUID cursor for backward pagination
-  order?: string;    // Currently not implemented, reserved for future use
+  limit?: number; // 1-100, default: 20
+  after?: string; // UUID cursor for forward pagination
+  before?: string; // UUID cursor for backward pagination
+  order?: string; // Currently not implemented, reserved for future use
 };
 
 /**
@@ -1399,10 +1399,10 @@ export type ResponsesListParams = {
  * @description
  * This function fetches a paginated list of the user's responses.
  * In list view, the usage and output fields are always null for performance reasons.
- * 
+ *
  * Query Parameters:
  * - limit: Number of results per page (1-100, default: 20)
- * - after: UUID cursor for forward pagination  
+ * - after: UUID cursor for forward pagination
  * - before: UUID cursor for backward pagination
  * - order: Sort order (currently not implemented, reserved for future use)
  *
@@ -1410,21 +1410,23 @@ export type ResponsesListParams = {
  * ```typescript
  * // First page
  * const responses = await fetchResponsesList({ limit: 20 });
- * 
+ *
  * // Next page
- * const nextPage = await fetchResponsesList({ 
- *   limit: 20, 
- *   after: responses.last_id 
+ * const nextPage = await fetchResponsesList({
+ *   limit: 20,
+ *   after: responses.last_id
  * });
- * 
+ *
  * // Previous page
- * const prevPage = await fetchResponsesList({ 
- *   limit: 20, 
- *   before: responses.first_id 
+ * const prevPage = await fetchResponsesList({
+ *   limit: 20,
+ *   before: responses.first_id
  * });
  * ```
  */
-export async function fetchResponsesList(params?: ResponsesListParams): Promise<ResponsesListResponse> {
+export async function fetchResponsesList(
+  params?: ResponsesListParams
+): Promise<ResponsesListResponse> {
   let url = `${apiUrl}/v1/responses`;
   const queryParams = [];
 
@@ -1450,5 +1452,111 @@ export async function fetchResponsesList(params?: ResponsesListParams): Promise<
     "GET",
     undefined,
     "Failed to list responses"
+  );
+}
+
+/**
+ * Retrieves a single response by ID
+ * @param responseId - The UUID of the response to retrieve
+ * @returns A promise resolving to the response details
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function fetches detailed information about a specific response,
+ * including full output and usage statistics.
+ *
+ * @example
+ * ```typescript
+ * const response = await fetchResponse("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(response.output); // The full response text
+ * console.log(response.usage);  // Token usage statistics
+ * ```
+ */
+export async function fetchResponse(responseId: string): Promise<ResponsesRetrieveResponse> {
+  return authenticatedApiCall<void, ResponsesRetrieveResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve response"
+  );
+}
+
+export type ResponsesCancelResponse = {
+  id: string;
+  object: "response";
+  created_at: number;
+  status: "cancelled";
+  model: string;
+};
+
+/**
+ * Cancels an in-progress response
+ * @param responseId - The UUID of the response to cancel
+ * @returns A promise resolving to the cancelled response
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The response is not in 'in_progress' status
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function cancels a response that is currently being processed.
+ * Only responses with status 'in_progress' can be cancelled.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const cancelled = await cancelResponse("550e8400-e29b-41d4-a716-446655440000");
+ *   console.log("Response cancelled:", cancelled.status);
+ * } catch (error) {
+ *   console.error("Cannot cancel:", error.message);
+ * }
+ * ```
+ */
+export async function cancelResponse(responseId: string): Promise<ResponsesCancelResponse> {
+  return authenticatedApiCall<void, ResponsesCancelResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
+    "POST",
+    undefined,
+    "Failed to cancel response"
+  );
+}
+
+export type ResponsesDeleteResponse = {
+  id: string;
+  object: "response.deleted";
+  deleted: boolean;
+};
+
+/**
+ * Deletes a response permanently
+ * @param responseId - The UUID of the response to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function permanently deletes a response and all associated data.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteResponse("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Response deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteResponse(responseId: string): Promise<ResponsesDeleteResponse> {
+  return authenticatedApiCall<void, ResponsesDeleteResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete response"
   );
 }

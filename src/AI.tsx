@@ -63,7 +63,6 @@ export function AI() {
         fullResponse += content;
         setResponse(fullResponse);
       }
-
     } catch (error) {
       console.error("Chat error:", error);
       if (error instanceof Error) {

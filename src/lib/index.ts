@@ -8,7 +8,12 @@ export type {
   DocumentResponse,
   DocumentUploadInitResponse,
   DocumentStatusRequest,
-  DocumentStatusResponse
+  DocumentStatusResponse,
+  ResponsesRetrieveResponse,
+  ResponsesListResponse,
+  ResponsesListParams,
+  ResponsesCancelResponse,
+  ResponsesDeleteResponse
 } from "./api";
 
 // Re-export Model type from OpenAI for convenience

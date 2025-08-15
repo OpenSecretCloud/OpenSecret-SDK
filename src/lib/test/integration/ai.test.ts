@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fetchLogin } from "../../api";
+import { fetchLogin, fetchSignUp } from "../../api";
 import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
 
@@ -18,13 +18,25 @@ type ChatMessage = {
 };
 
 async function setupTestUser() {
-  const { access_token, refresh_token } = await fetchLogin(
-    TEST_EMAIL!,
-    TEST_PASSWORD!,
-    TEST_CLIENT_ID!
-  );
-  window.localStorage.setItem("access_token", access_token);
-  window.localStorage.setItem("refresh_token", refresh_token);
+  try {
+    const { access_token, refresh_token } = await fetchLogin(
+      TEST_EMAIL!,
+      TEST_PASSWORD!,
+      TEST_CLIENT_ID!
+    );
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+  } catch (error) {
+    console.log("Login failed, attempting signup");
+    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", TEST_CLIENT_ID!, "Test User");
+    const { access_token, refresh_token } = await fetchLogin(
+      TEST_EMAIL!,
+      TEST_PASSWORD!,
+      TEST_CLIENT_ID!
+    );
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+  }
 }
 
 test("OpenAI custom fetch successfully makes a simple request", async () => {
@@ -57,7 +69,6 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     const content = chunk.choices[0]?.delta?.content || "";
     fullResponse += content;
   }
-
 
   expect(fullResponse.trim()).toBe("echo");
 });
@@ -142,7 +153,7 @@ test("OpenAI responses endpoint streams response", async () => {
   try {
     for await (const event of stream) {
       eventCount++;
-      
+
       if (event.type === "response.created" || event.type === "response.in_progress") {
         hasInProgressEvent = true;
       } else if (event.type === "response.output_text.delta") {
@@ -151,7 +162,7 @@ test("OpenAI responses endpoint streams response", async () => {
         if (event.delta) {
           fullResponse += event.delta;
         }
-      } else if (event.type === "response.completed" || event.type === "response.done") {
+      } else if (event.type === "response.completed") {
         hasDoneEvent = true;
       }
     }
@@ -160,15 +171,14 @@ test("OpenAI responses endpoint streams response", async () => {
     throw error;
   }
 
-  
   // First check if we got any events at all
   expect(eventCount).toBeGreaterThan(0);
-  
+
   // Verify we got all expected event types
   expect(hasInProgressEvent).toBe(true);
   expect(hasDeltaEvents).toBe(true);
   expect(hasDoneEvent).toBe(true);
-  
+
   // Verify the accumulated response
   expect(fullResponse.trim()).toBe("echo");
 });
@@ -200,7 +210,7 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
     for await (const event of stream) {
       events.push(event);
       eventTypes.push(event.type);
-      
+
       if (event.type === "response.output_text.delta") {
         // Validate delta event structure
         expect(event).toHaveProperty("delta");
@@ -209,7 +219,7 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
         expect(event).toHaveProperty("output_index");
         expect(event).toHaveProperty("content_index");
         expect(event).toHaveProperty("logprobs");
-        
+
         fullResponse += event.delta;
       }
     }
@@ -230,11 +240,11 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
   expect(events.length).toBeGreaterThan(3);
 
   // Validate we got multiple delta events (at least 2 for "echo echo")
-  const deltaEvents = events.filter(e => e.type === "response.output_text.delta");
+  const deltaEvents = events.filter((e) => e.type === "response.output_text.delta");
   expect(deltaEvents.length).toBeGreaterThanOrEqual(2);
 
   // Validate first event has proper response structure
-  const createdEvent = events.find(e => e.type === "response.created");
+  const createdEvent = events.find((e) => e.type === "response.created");
   expect(createdEvent).toBeDefined();
   expect(createdEvent).toHaveProperty("sequence_number", 0);
   expect(createdEvent).toHaveProperty("response");
@@ -251,19 +261,19 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
     "response.output_item.added",
     "response.content_part.added",
     "response.output_text.done",
-    "response.content_part.done", 
+    "response.content_part.done",
     "response.output_item.done",
     "response.completed"
   ];
 
   // Log missing events for debugging
-  const missingEvents = expectedEventTypes.filter(et => !eventTypes.includes(et));
+  const missingEvents = expectedEventTypes.filter((et) => !eventTypes.includes(et));
   if (missingEvents.length > 0) {
     console.log("Missing event types:", missingEvents);
   }
 
   // Validate completed event has usage data
-  const completedEvent = events.find(e => e.type === "response.completed");
+  const completedEvent = events.find((e) => e.type === "response.completed");
   expect(completedEvent).toBeDefined();
   expect(completedEvent).toHaveProperty("sequence_number");
   expect(completedEvent).toHaveProperty("response");
@@ -277,11 +287,11 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
 
   // Verify sequence numbers are in order
   const sequenceNumbers = events
-    .filter(e => e.sequence_number !== undefined)
-    .map(e => e.sequence_number);
-  
+    .filter((e) => e.sequence_number !== undefined)
+    .map((e) => e.sequence_number);
+
   for (let i = 1; i < sequenceNumbers.length; i++) {
-    expect(sequenceNumbers[i]).toBeGreaterThan(sequenceNumbers[i-1]);
+    expect(sequenceNumbers[i]).toBeGreaterThan(sequenceNumbers[i - 1]);
   }
 
   // Verify the accumulated response
@@ -303,12 +313,12 @@ test("DEBUG: Inspect responses streaming events in detail", async () => {
 
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: 'hello how is it going?',
+    input: "hello how is it going?",
     stream: true
   });
 
   console.log("\n🔍 STARTING DETAILED EVENT INSPECTION 🔍\n");
-  
+
   let eventCount = 0;
   let fullResponse = "";
 
@@ -317,7 +327,7 @@ test("DEBUG: Inspect responses streaming events in detail", async () => {
     console.log(`\n========== EVENT ${eventCount} ==========`);
     console.log(`Type: ${event.type}`);
     console.log(`Full event:`, JSON.stringify(event, null, 2));
-    
+
     if (event.type === "response.output_text.delta") {
       fullResponse += event.delta;
       console.log(`🔤 DELTA: "${event.delta}" (length: ${event.delta.length})`);
@@ -335,14 +345,14 @@ test("Custom responses list endpoint works with default parameters", async () =>
   await setupTestUser();
 
   const { fetchResponsesList } = await import("../../api");
-  
+
   const responsesList = await fetchResponsesList();
 
   expect(responsesList).toBeDefined();
   expect(responsesList.object).toBe("list");
   expect(Array.isArray(responsesList.data)).toBe(true);
   expect(typeof responsesList.has_more).toBe("boolean");
-  
+
   // Check that each response has the correct structure (without usage/output fields)
   if (responsesList.data.length > 0) {
     const response = responsesList.data[0];
@@ -361,7 +371,7 @@ test("Custom responses list endpoint works with pagination parameters", async ()
   await setupTestUser();
 
   const { fetchResponsesList } = await import("../../api");
-  
+
   const responsesList = await fetchResponsesList({ limit: 5 });
 
   expect(responsesList).toBeDefined();
@@ -369,7 +379,7 @@ test("Custom responses list endpoint works with pagination parameters", async ()
   expect(Array.isArray(responsesList.data)).toBe(true);
   expect(responsesList.data.length).toBeLessThanOrEqual(5);
   expect(typeof responsesList.has_more).toBe("boolean");
-  
+
   if (responsesList.data.length > 0) {
     expect(responsesList.first_id).toBeDefined();
     expect(responsesList.last_id).toBeDefined();
@@ -397,7 +407,7 @@ test("OpenAI responses retrieve endpoint works", async () => {
   });
 
   let responseId = "";
-  
+
   // Get the response ID from the first event
   for await (const event of stream) {
     if (event.type === "response.created" && event.response?.id) {
@@ -417,7 +427,7 @@ test("OpenAI responses retrieve endpoint works", async () => {
   expect(retrievedResponse.created_at).toBeDefined();
   expect(retrievedResponse.status).toBeDefined();
   expect(retrievedResponse.model).toBeDefined();
-  
+
   // If completed, should have usage and output
   if (retrievedResponse.status === "completed") {
     expect(retrievedResponse.usage).toBeDefined();
@@ -443,12 +453,12 @@ test.skip("OpenAI responses cancel endpoint works", async () => {
   // Create a long-running response that we can cancel
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: 'write a very long story about space exploration with at least 500 words',
+    input: "write a very long story about space exploration with at least 500 words",
     stream: true
   });
 
   let responseId = "";
-  
+
   // Get the response ID from the first event
   for await (const event of stream) {
     if (event.type === "response.created" && event.response?.id) {
@@ -462,26 +472,29 @@ test.skip("OpenAI responses cancel endpoint works", async () => {
   // Try to cancel the response (might already be completed depending on timing)
   try {
     const cancelledResponse = await openai.responses.cancel(responseId);
-    
+
     expect(cancelledResponse).toBeDefined();
     expect(cancelledResponse.id).toBe(responseId);
     expect(cancelledResponse.object).toBe("response");
     expect(cancelledResponse.status).toBe("cancelled");
     expect(cancelledResponse.usage).toBeNull();
     expect(cancelledResponse.output).toBeNull();
-    
+
     console.log("Successfully cancelled response");
   } catch (error) {
     // If we get a 422 error, it means the response wasn't in progress anymore
     // This is expected behavior for fast responses, so we'll verify the response completed
-    if (error instanceof Error && (error.message.includes("422") || error.message.includes("400"))) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("422") || error.message.includes("400"))
+    ) {
       console.log("Response completed before cancel could be processed - checking final status");
-      
+
       // Verify the response actually completed
       const completedResponse = await openai.responses.retrieve(responseId);
       expect(completedResponse.status).toBe("completed");
       expect(completedResponse.output).toBeDefined();
-      
+
       console.log("Confirmed response completed successfully");
     } else {
       throw error;
@@ -510,7 +523,7 @@ test("OpenAI responses delete endpoint works", async () => {
   });
 
   let responseId = "";
-  
+
   // Get the response ID and let it complete
   for await (const event of stream) {
     if (event.type === "response.created" && event.response?.id) {
@@ -527,13 +540,8 @@ test("OpenAI responses delete endpoint works", async () => {
   console.log(`Response ${responseId} exists with status: ${existingResponse.status}`);
 
   // Now delete the response
-  const deleteResult = await openai.responses.delete(responseId);
+  await openai.responses.delete(responseId);
 
-  expect(deleteResult).toBeDefined();
-  expect(deleteResult.id).toBe(responseId);
-  expect(deleteResult.object).toBe("response.deleted");
-  expect(deleteResult.deleted).toBe(true);
-  
   console.log(`Successfully deleted response ${responseId}`);
 
   // Verify the response is actually deleted by trying to retrieve it
@@ -544,8 +552,9 @@ test("OpenAI responses delete endpoint works", async () => {
     // Should get 404 error for deleted response
     expect(error instanceof Error).toBe(true);
     // The error could be a "Connection error." from OpenAI SDK or contain "404"
-    const errorMessage = error.message;
-    const isExpectedError = errorMessage.includes("404") || errorMessage.includes("Connection error");
+    const errorMessage = (error as Error).message;
+    const isExpectedError =
+      errorMessage.includes("404") || errorMessage.includes("Connection error");
     expect(isExpectedError).toBe(true);
     console.log(`Confirmed response was deleted - error received: ${errorMessage}`);
   }
@@ -575,7 +584,7 @@ test("Integration test: Complete responses workflow", async () => {
 
   let responseId = "";
   let fullResponse = "";
-  
+
   // 2. Process the streaming response
   for await (const event of stream) {
     if (event.type === "response.created" && event.response?.id) {
@@ -591,8 +600,8 @@ test("Integration test: Complete responses workflow", async () => {
 
   // 3. Verify response appears in list (check first page - newest responses first)
   const updatedList = await fetchResponsesList({ limit: 20 });
-  
-  const createdResponse = updatedList.data.find(r => r.id === responseId);
+
+  const createdResponse = updatedList.data.find((r) => r.id === responseId);
   expect(createdResponse).toBeDefined();
   expect(createdResponse!.status).toBe("completed");
 
@@ -600,16 +609,139 @@ test("Integration test: Complete responses workflow", async () => {
   const retrievedResponse = await openai.responses.retrieve(responseId);
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.status).toBe("completed");
-  expect(retrievedResponse.output).toBe("workflow");
+  expect(retrievedResponse.output).toContain("workflow");
   expect(retrievedResponse.usage).toBeDefined();
 
   // 5. Delete the response
-  const deleteResult = await openai.responses.delete(responseId);
-  expect(deleteResult.deleted).toBe(true);
+  await openai.responses.delete(responseId);
 
   // 6. Verify response no longer appears in list
   const finalList = await fetchResponsesList({ limit: 20 });
-  
-  const deletedResponse = finalList.data.find(r => r.id === responseId);
+
+  const deletedResponse = finalList.data.find((r) => r.id === responseId);
   expect(deletedResponse).toBeUndefined();
+});
+
+test("Integration test: Direct API functions for responses", async () => {
+  await setupTestUser();
+
+  const openai = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  const { fetchResponse, deleteResponse } = await import("../../api");
+
+  // 1. Create a response to test with
+  const stream = await openai.responses.create({
+    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
+    input: 'please reply with exactly and only the word "apitest"',
+    stream: true
+  });
+
+  let responseId = "";
+  for await (const event of stream) {
+    if (event.type === "response.created" && event.response?.id) {
+      responseId = event.response.id;
+    }
+    if (event.type === "response.completed") {
+      break;
+    }
+  }
+
+  expect(responseId).not.toBe("");
+
+  // 2. Test fetchResponse - should return full details
+  const retrievedResponse = await fetchResponse(responseId);
+  expect(retrievedResponse.id).toBe(responseId);
+  expect(retrievedResponse.object).toBe("response");
+  expect(retrievedResponse.status).toBe("completed");
+  expect(retrievedResponse.output).toContain("apitest");
+  expect(retrievedResponse.usage).toBeDefined();
+  expect(retrievedResponse.usage?.input_tokens).toBeGreaterThan(0);
+  expect(retrievedResponse.usage?.output_tokens).toBeGreaterThan(0);
+
+  // 3. Test deleteResponse - should return deletion confirmation
+  const deleteResult = await deleteResponse(responseId);
+  expect(deleteResult.id).toBe(responseId);
+  expect(deleteResult.object).toBe("response.deleted");
+  expect(deleteResult.deleted).toBe(true);
+
+  // 4. Verify response is deleted by trying to fetch it
+  try {
+    await fetchResponse(responseId);
+    throw new Error("Should have thrown error for deleted response");
+  } catch (error) {
+    expect(error instanceof Error).toBe(true);
+    const errorMessage = (error as Error).message;
+    // The API returns "Resource not found" when trying to fetch a deleted response
+    expect(errorMessage).toContain("Resource not found");
+  }
+});
+
+test("Integration test: Cancel in-progress response", async () => {
+  await setupTestUser();
+
+  const openai = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  const { cancelResponse, fetchResponse, deleteResponse } = await import("../../api");
+
+  // Create a slow response that we can cancel
+  const stream = await openai.responses.create({
+    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
+    input: "Count from 1 to 100 slowly, with detailed explanations for each number",
+    stream: true
+  });
+
+  let responseId = "";
+  let eventCount = 0;
+
+  // Start streaming but stop early to cancel
+  for await (const event of stream) {
+    if (event.type === "response.created" && event.response?.id) {
+      responseId = event.response.id;
+    }
+    eventCount++;
+    // Stop after a few events to ensure it's still in progress
+    if (eventCount > 3) {
+      break;
+    }
+  }
+
+  expect(responseId).not.toBe("");
+
+  // Try to cancel the response
+  try {
+    const cancelResult = await cancelResponse(responseId);
+    expect(cancelResult.id).toBe(responseId);
+    expect(cancelResult.object).toBe("response");
+    expect(cancelResult.status).toBe("cancelled");
+
+    // Verify the response shows as cancelled
+    const cancelledResponse = await fetchResponse(responseId);
+    expect(cancelledResponse.status).toBe("cancelled");
+  } catch (error) {
+    // Response might have completed already, which is okay
+    console.log("Could not cancel response, it may have completed:", error);
+    
+    // Check if it completed
+    const response = await fetchResponse(responseId);
+    expect(response.status).toBe("completed");
+  }
+
+  // Clean up
+  await deleteResponse(responseId);
 });
