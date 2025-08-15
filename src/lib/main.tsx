@@ -683,10 +683,10 @@ export type OpenSecretContextType = {
    * @description
    * This function fetches a paginated list of the user's responses.
    * In list view, the usage and output fields are always null for performance reasons.
-   * 
+   *
    * Query Parameters:
    * - limit: Number of results per page (1-100, default: 20)
-   * - after: UUID cursor for forward pagination  
+   * - after: UUID cursor for forward pagination
    * - before: UUID cursor for backward pagination
    * - order: Sort order (currently not implemented, reserved for future use)
    *
@@ -694,21 +694,42 @@ export type OpenSecretContextType = {
    * ```typescript
    * // First page
    * const responses = await context.fetchResponsesList({ limit: 20 });
-   * 
+   *
    * // Next page
-   * const nextPage = await context.fetchResponsesList({ 
-   *   limit: 20, 
-   *   after: responses.last_id 
+   * const nextPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   after: responses.last_id
    * });
-   * 
+   *
    * // Previous page
-   * const prevPage = await context.fetchResponsesList({ 
-   *   limit: 20, 
-   *   before: responses.first_id 
+   * const prevPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   before: responses.first_id
    * });
    * ```
    */
   fetchResponsesList: (params?: api.ResponsesListParams) => Promise<api.ResponsesListResponse>;
+
+  /**
+   * Retrieves a single response by ID
+   * @param responseId - The UUID of the response to retrieve
+   * @returns A promise resolving to the response details
+   */
+  fetchResponse: (responseId: string) => Promise<api.ResponsesRetrieveResponse>;
+
+  /**
+   * Cancels an in-progress response
+   * @param responseId - The UUID of the response to cancel
+   * @returns A promise resolving to the cancelled response
+   */
+  cancelResponse: (responseId: string) => Promise<api.ResponsesCancelResponse>;
+
+  /**
+   * Deletes a response permanently
+   * @param responseId - The UUID of the response to delete
+   * @returns A promise resolving to deletion confirmation
+   */
+  deleteResponse: (responseId: string) => Promise<api.ResponsesDeleteResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -777,7 +798,10 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   listApiKeys: api.listApiKeys,
   deleteApiKey: api.deleteApiKey,
   transcribeAudio: api.transcribeAudio,
-  fetchResponsesList: api.fetchResponsesList
+  fetchResponsesList: api.fetchResponsesList,
+  fetchResponse: api.fetchResponse,
+  cancelResponse: api.cancelResponse,
+  deleteResponse: api.deleteResponse
 });
 
 /**
@@ -1179,7 +1203,10 @@ export function OpenSecretProvider({
     listApiKeys: api.listApiKeys,
     deleteApiKey: api.deleteApiKey,
     transcribeAudio: api.transcribeAudio,
-    fetchResponsesList: api.fetchResponsesList
+    fetchResponsesList: api.fetchResponsesList,
+    fetchResponse: api.fetchResponse,
+    cancelResponse: api.cancelResponse,
+    deleteResponse: api.deleteResponse
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

@@ -6,7 +6,10 @@ export interface CustomFetchOptions {
   apiKey?: string; // Optional API key to use instead of JWT token
 }
 
-export function createCustomFetch(options?: CustomFetchOptions): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
+export function createCustomFetch(options?: CustomFetchOptions): (
+  input: string | URL | Request,
+  init?: RequestInit
+) => Promise<Response> {
   return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       // If an API key is provided, use it instead of JWT token
@@ -81,16 +84,14 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
               let event;
               while ((event = extractEvent(buffer))) {
                 buffer = buffer.slice(event.length);
-                
+
                 // Split the event into individual lines
-                const lines = event.split('\n');
-                let eventType = '';
-                
+                const lines = event.split("\n");
+
                 for (const line of lines) {
                   // Handle event: lines - pass them through as-is
                   if (line.trim().startsWith("event: ")) {
-                    eventType = line.trim().slice(7);
-                    controller.enqueue(line + '\n');
+                    controller.enqueue(line + "\n");
                   }
                   // Handle data: lines - decrypt them
                   else if (line.trim().startsWith("data: ")) {
@@ -100,7 +101,7 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
                     } else {
                       try {
                         const decrypted = decryptMessage(sessionKey, data);
-                        
+
                         // Always enqueue the decrypted data
                         // Note: We don't add \n\n here because the empty line will be added separately
                         controller.enqueue(`data: ${decrypted}\n`);
@@ -113,7 +114,7 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
                   }
                   // Pass through empty lines
                   else if (line === "") {
-                    controller.enqueue('\n');
+                    controller.enqueue("\n");
                   }
                 }
               }
@@ -178,7 +179,6 @@ export function createCustomFetch(options?: CustomFetchOptions): (input: string 
           } catch (jsonError) {
             // Not JSON, continue with regular text response
           }
-
           // Return a new Response with the decrypted data
           return new Response(decrypted, {
             headers: response.headers,
