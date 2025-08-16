@@ -6,6 +6,7 @@ use crate::{
     types::*,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
     Client,
@@ -497,6 +498,167 @@ impl OpenSecretClient {
 
     pub fn get_refresh_token(&self) -> Result<Option<String>> {
         self.session_manager.get_refresh_token()
+    }
+
+    // User Profile API
+    pub async fn get_user(&self) -> Result<UserResponse> {
+        self.encrypted_api_call("/protected/user", "GET", None::<()>)
+            .await
+    }
+
+    // Key-Value Storage APIs
+    pub async fn kv_get(&self, key: &str) -> Result<String> {
+        let url = format!("/protected/kv/{}", key);
+        self.encrypted_api_call(&url, "GET", None::<()>).await
+    }
+
+    pub async fn kv_put(&self, key: &str, value: String) -> Result<String> {
+        let url = format!("/protected/kv/{}", key);
+        self.encrypted_api_call(&url, "PUT", Some(value)).await
+    }
+
+    pub async fn kv_delete(&self, key: &str) -> Result<()> {
+        let url = format!("/protected/kv/{}", key);
+        let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
+        Ok(())
+    }
+
+    pub async fn kv_list(&self) -> Result<Vec<KVListItem>> {
+        self.encrypted_api_call("/protected/kv", "GET", None::<()>)
+            .await
+    }
+
+    // Private Key APIs
+    pub async fn get_private_key(&self, options: Option<KeyOptions>) -> Result<PrivateKeyResponse> {
+        let mut url = "/protected/private_key".to_string();
+        if let Some(opts) = &options {
+            let mut params = Vec::new();
+            if let Some(path) = &opts.seed_phrase_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                params.push(format!("seed_phrase_derivation_path={}", encoded));
+            }
+            if let Some(path) = &opts.private_key_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                params.push(format!("private_key_derivation_path={}", encoded));
+            }
+            if !params.is_empty() {
+                url.push('?');
+                url.push_str(&params.join("&"));
+            }
+        }
+        self.encrypted_api_call(&url, "GET", None::<()>).await
+    }
+
+    pub async fn get_private_key_bytes(
+        &self,
+        options: Option<KeyOptions>,
+    ) -> Result<PrivateKeyBytesResponse> {
+        let mut url = "/protected/private_key_bytes".to_string();
+        if let Some(opts) = &options {
+            let mut params = Vec::new();
+            if let Some(path) = &opts.seed_phrase_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                params.push(format!("seed_phrase_derivation_path={}", encoded));
+            }
+            if let Some(path) = &opts.private_key_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                params.push(format!("private_key_derivation_path={}", encoded));
+            }
+            if !params.is_empty() {
+                url.push('?');
+                url.push_str(&params.join("&"));
+            }
+        }
+        self.encrypted_api_call(&url, "GET", None::<()>).await
+    }
+
+    // Message Signing API
+    pub async fn sign_message(
+        &self,
+        message_bytes: &[u8],
+        algorithm: SigningAlgorithm,
+        key_options: Option<KeyOptions>,
+    ) -> Result<SignMessageResponse> {
+        let message_base64 = BASE64.encode(message_bytes);
+        let request = SignMessageRequest {
+            message_base64,
+            algorithm,
+            key_options: key_options.map(|opts| SigningKeyOptions {
+                private_key_derivation_path: opts.private_key_derivation_path,
+                seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
+            }),
+        };
+        self.encrypted_api_call("/protected/sign_message", "POST", Some(request))
+            .await
+    }
+
+    // Public Key API
+    pub async fn get_public_key(
+        &self,
+        algorithm: SigningAlgorithm,
+        key_options: Option<KeyOptions>,
+    ) -> Result<PublicKeyResponse> {
+        let mut url = format!(
+            "/protected/public_key?algorithm={}",
+            match algorithm {
+                SigningAlgorithm::Schnorr => "schnorr",
+                SigningAlgorithm::Ecdsa => "ecdsa",
+            }
+        );
+        if let Some(opts) = key_options {
+            if let Some(path) = &opts.private_key_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                url.push_str(&format!("&private_key_derivation_path={}", encoded));
+            }
+            if let Some(path) = &opts.seed_phrase_derivation_path {
+                let encoded = utf8_percent_encode(path, NON_ALPHANUMERIC).to_string();
+                url.push_str(&format!("&seed_phrase_derivation_path={}", encoded));
+            }
+        }
+        self.encrypted_api_call(&url, "GET", None::<()>).await
+    }
+
+    // Third Party Token API
+    pub async fn generate_third_party_token(
+        &self,
+        audience: Option<String>,
+    ) -> Result<ThirdPartyTokenResponse> {
+        let request = ThirdPartyTokenRequest { audience };
+        self.encrypted_api_call("/protected/third_party_token", "POST", Some(request))
+            .await
+    }
+
+    // Encryption/Decryption APIs
+    pub async fn encrypt_data(
+        &self,
+        data: String,
+        key_options: Option<KeyOptions>,
+    ) -> Result<EncryptDataResponse> {
+        let request = EncryptDataRequest {
+            data,
+            key_options: key_options.map(|opts| EncryptionKeyOptions {
+                private_key_derivation_path: opts.private_key_derivation_path,
+                seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
+            }),
+        };
+        self.encrypted_api_call("/protected/encrypt", "POST", Some(request))
+            .await
+    }
+
+    pub async fn decrypt_data(
+        &self,
+        encrypted_data: String,
+        key_options: Option<KeyOptions>,
+    ) -> Result<String> {
+        let request = DecryptDataRequest {
+            encrypted_data,
+            key_options: key_options.map(|opts| EncryptionKeyOptions {
+                private_key_derivation_path: opts.private_key_derivation_path,
+                seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
+            }),
+        };
+        self.encrypted_api_call("/protected/decrypt", "POST", Some(request))
+            .await
     }
 }
 
