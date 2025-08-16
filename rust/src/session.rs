@@ -1,11 +1,11 @@
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
-use crate::types::{SessionState, AuthTokens};
+use crate::types::{SessionState, TokenPair};
 use crate::error::{Error, Result};
 
 pub struct SessionManager {
     session: Arc<RwLock<Option<SessionState>>>,
-    tokens: Arc<RwLock<Option<AuthTokens>>>,
+    tokens: Arc<RwLock<Option<TokenPair>>>,
 }
 
 impl SessionManager {
@@ -47,7 +47,7 @@ impl SessionManager {
         let mut tokens_guard = self.tokens.write()
             .map_err(|e| Error::Authentication(format!("Failed to acquire tokens write lock: {}", e)))?;
         
-        *tokens_guard = Some(AuthTokens {
+        *tokens_guard = Some(TokenPair {
             access_token,
             refresh_token,
         });
@@ -55,7 +55,7 @@ impl SessionManager {
         Ok(())
     }
     
-    pub fn get_tokens(&self) -> Result<Option<AuthTokens>> {
+    pub fn get_tokens(&self) -> Result<Option<TokenPair>> {
         let tokens_guard = self.tokens.read()
             .map_err(|e| Error::Authentication(format!("Failed to acquire tokens read lock: {}", e)))?;
         

@@ -1,12 +1,11 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use reqwest::{Client, header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE}};
-use serde_json::json;
 use serde_cbor::Value as CborValue;
 use uuid::Uuid;
 use std::cell::RefCell;
 use crate::{
     attestation::{AttestationVerifier, AttestationDocument},
-    crypto::{self, decrypt_json, encrypt_json},
+    crypto::{self},
     error::{Error, Result},
     session::SessionManager,
     types::*,
@@ -34,33 +33,6 @@ impl OpenSecretClient {
         })
     }
     
-    pub async fn login(&self, email: &str, password: &str) -> Result<()> {
-        let url = format!("{}/login", self.base_url);
-        let body = json!({
-            "email": email,
-            "password": password
-        });
-        
-        let response = self.client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
-        
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::Api { status, message: text });
-        }
-        
-        let login_response: LoginResponse = response.json().await?;
-        self.session_manager.set_tokens(
-            login_response.access_token,
-            Some(login_response.refresh_token),
-        )?;
-        
-        Ok(())
-    }
     
     pub async fn perform_attestation_handshake(&self) -> Result<()> {
         // Generate a nonce
@@ -171,78 +143,18 @@ impl OpenSecretClient {
             &key_exchange_response.encrypted_session_key,
         )?;
         
+        // Parse session_id as UUID
+        let session_id = Uuid::parse_str(&key_exchange_response.session_id)
+            .map_err(|e| Error::Session(format!("Invalid session ID format: {}", e)))?;
+        
         self.session_manager.set_session(
-            key_exchange_response.session_id,
+            session_id,
             session_key,
         )?;
         
         Ok(())
     }
     
-    pub async fn make_encrypted_request<T: serde::Serialize, R: serde::de::DeserializeOwned>(
-        &self,
-        method: &str,
-        path: &str,
-        body: Option<&T>,
-    ) -> Result<R> {
-        // Ensure we have a session
-        let session = self.session_manager.get_session()?
-            .ok_or_else(|| Error::Session("No active session. Call perform_attestation_handshake first".to_string()))?;
-        
-        let url = format!("{}{}", self.base_url, path);
-        
-        // Prepare headers
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(
-            "x-session-id",
-            HeaderValue::from_str(&session.session_id.to_string())
-                .map_err(|e| Error::Other(format!("Invalid session ID: {}", e)))?,
-        );
-        
-        if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
-            );
-        }
-        
-        // Encrypt request body if present
-        let request_body = if let Some(data) = body {
-            let encrypted = encrypt_json(&session.session_key, data)?;
-            Some(json!({ "encrypted": encrypted }))
-        } else {
-            None
-        };
-        
-        // Make the request
-        let mut request = match method.to_uppercase().as_str() {
-            "GET" => self.client.get(&url),
-            "POST" => self.client.post(&url),
-            "PUT" => self.client.put(&url),
-            "DELETE" => self.client.delete(&url),
-            _ => return Err(Error::Other(format!("Unsupported HTTP method: {}", method))),
-        };
-        
-        request = request.headers(headers);
-        
-        if let Some(body) = request_body {
-            request = request.json(&body);
-        }
-        
-        let response = request.send().await?;
-        
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::Api { status, message: text });
-        }
-        
-        // Decrypt response
-        let encrypted_response: EncryptedResponse = response.json().await?;
-        decrypt_json(&session.session_key, &encrypted_response.encrypted)
-    }
     
     pub fn get_session_id(&self) -> Result<Option<Uuid>> {
         Ok(self.session_manager.get_session()?.map(|s| s.session_id))

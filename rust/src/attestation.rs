@@ -1,8 +1,7 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use ring::{digest, signature};
+use ring::signature;
 use serde::{Deserialize, Serialize};
 use serde_cbor::Value as CborValue;
-use sha2::{Digest, Sha384};
 use x509_parser::prelude::*;
 use crate::error::{Error, Result};
 

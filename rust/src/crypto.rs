@@ -2,9 +2,36 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Nonce},
     ChaCha20Poly1305,
 };
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
+use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, SharedSecret, StaticSecret};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use crate::error::{Error, Result};
+
+// Re-export for tests
+pub use x25519_dalek::PublicKey;
+
+// Public test utilities
+pub struct KeyPair {
+    pub secret: StaticSecret,
+    pub public: X25519PublicKey,
+}
+
+pub fn generate_key_pair() -> KeyPair {
+    let secret = StaticSecret::random_from_rng(rand::thread_rng());
+    let public = X25519PublicKey::from(&secret);
+    KeyPair { secret, public }
+}
+
+pub fn derive_shared_secret(secret: &StaticSecret, their_public: &X25519PublicKey) -> SharedSecret {
+    secret.diffie_hellman(their_public)
+}
+
+pub fn encrypt_message(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    encrypt_data(key, plaintext)
+}
+
+pub fn decrypt_message(ciphertext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    decrypt_data(key, ciphertext)
+}
 
 pub fn generate_random_bytes<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
@@ -67,18 +94,6 @@ pub fn decrypt_data(key: &[u8; 32], encrypted_data: &[u8]) -> Result<Vec<u8>> {
         .map_err(|e| Error::Decryption(format!("Decryption failed: {}", e)))
 }
 
-pub fn encrypt_json<T: serde::Serialize>(key: &[u8; 32], data: &T) -> Result<String> {
-    let json = serde_json::to_string(data)?;
-    let encrypted = encrypt_data(key, json.as_bytes())?;
-    Ok(BASE64.encode(encrypted))
-}
-
-pub fn decrypt_json<T: serde::de::DeserializeOwned>(key: &[u8; 32], encrypted_b64: &str) -> Result<T> {
-    let encrypted = BASE64.decode(encrypted_b64)?;
-    let decrypted = decrypt_data(key, &encrypted)?;
-    let json_str = String::from_utf8(decrypted)?;
-    Ok(serde_json::from_str(&json_str)?)
-}
 
 pub fn decrypt_session_key(
     shared_secret: &SharedSecret,

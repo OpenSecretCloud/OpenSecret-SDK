@@ -2,7 +2,6 @@ pub mod attestation;
 pub mod client;
 pub mod crypto;
 pub mod error;
-pub mod openai;
 pub mod session;
 pub mod types;
 
