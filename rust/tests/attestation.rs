@@ -1,4 +1,4 @@
-use opensecret_sdk::{Error, OpenSecretClient, Result};
+use opensecret_sdk::{OpenSecretClient, Result};
 use std::env;
 
 #[tokio::test]
@@ -38,9 +38,8 @@ async fn test_attestation_handshake_production() -> Result<()> {
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     if base_url.contains("localhost") || base_url.contains("127.0.0.1") {
-        return Err(Error::Configuration(
-            "Production test requires non-localhost URL".to_string(),
-        ));
+        println!("Skipping production attestation test - running against localhost");
+        return Ok(());
     }
 
     let client = OpenSecretClient::new(base_url.clone())?;

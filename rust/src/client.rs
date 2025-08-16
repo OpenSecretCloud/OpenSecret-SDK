@@ -10,6 +10,7 @@ use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
     Client,
 };
+use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::Value as CborValue;
 use std::cell::RefCell;
 use uuid::Uuid;
@@ -259,6 +260,243 @@ impl OpenSecretClient {
         }
 
         response.text().await.map_err(Into::into)
+    }
+
+    // Encrypted API call helper
+    async fn encrypted_api_call<T: Serialize, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+    ) -> Result<U> {
+        // Ensure we have a session
+        let session = self.session_manager.get_session()?.ok_or_else(|| {
+            Error::Session(
+                "No active session. Call perform_attestation_handshake first".to_string(),
+            )
+        })?;
+
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        // Encrypt the request data if provided
+        let encrypted_body = if let Some(data) = data {
+            let json = serde_json::to_string(&data)?;
+            let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
+            Some(EncryptedRequest {
+                encrypted: BASE64.encode(&encrypted),
+            })
+        } else {
+            None
+        };
+
+        // Build headers
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert(
+            "x-session-id",
+            HeaderValue::from_str(&session.session_id.to_string())
+                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
+        );
+
+        // Add authorization header if we have a token
+        if let Some(token) = self.session_manager.get_access_token()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", token))
+                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
+            );
+        }
+
+        // Make the request
+        let request_builder = match method {
+            "GET" => self.client.get(&url),
+            "POST" => self.client.post(&url),
+            "PUT" => self.client.put(&url),
+            "DELETE" => self.client.delete(&url),
+            _ => {
+                return Err(Error::Api {
+                    status: 0,
+                    message: format!("Unsupported HTTP method: {}", method),
+                })
+            }
+        };
+
+        let request_builder = request_builder.headers(headers);
+        let request_builder = if let Some(body) = encrypted_body {
+            request_builder.json(&body)
+        } else {
+            request_builder
+        };
+
+        let response = request_builder.send().await?;
+        let status = response.status().as_u16();
+
+        if !response.status().is_success() {
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api {
+                status,
+                message: text,
+            });
+        }
+
+        // Decrypt the response
+        let encrypted_response: EncryptedResponse<U> = response.json().await?;
+        let decrypted = crypto::decrypt_data(
+            &session.session_key,
+            &BASE64.decode(&encrypted_response.encrypted)?,
+        )?;
+        let result: U = serde_json::from_slice(&decrypted)?;
+
+        Ok(result)
+    }
+
+    // Auth Methods
+    pub async fn login(
+        &self,
+        email: String,
+        password: String,
+        client_id: Uuid,
+    ) -> Result<LoginResponse> {
+        let credentials = LoginCredentials {
+            email: Some(email),
+            id: None,
+            password,
+            client_id,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/login", "POST", Some(credentials))
+            .await?;
+
+        // Store the tokens
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn login_with_id(
+        &self,
+        id: Uuid,
+        password: String,
+        client_id: Uuid,
+    ) -> Result<LoginResponse> {
+        let credentials = LoginCredentials {
+            email: None,
+            id: Some(id),
+            password,
+            client_id,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/login", "POST", Some(credentials))
+            .await?;
+
+        // Store the tokens
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn register(
+        &self,
+        email: String,
+        password: String,
+        client_id: Uuid,
+        name: Option<String>,
+    ) -> Result<LoginResponse> {
+        let credentials = RegisterCredentials {
+            email: Some(email),
+            name,
+            password,
+            client_id,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/register", "POST", Some(credentials))
+            .await?;
+
+        // Store the tokens
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn register_guest(&self, password: String, client_id: Uuid) -> Result<LoginResponse> {
+        let credentials = RegisterCredentials {
+            email: None,
+            name: None,
+            password,
+            client_id,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/register", "POST", Some(credentials))
+            .await?;
+
+        // Store the tokens
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn refresh_token(&self) -> Result<()> {
+        let refresh_token = self
+            .session_manager
+            .get_refresh_token()?
+            .ok_or_else(|| Error::Authentication("No refresh token available".to_string()))?;
+
+        let request = RefreshRequest { refresh_token };
+
+        let response: RefreshResponse = self
+            .encrypted_api_call("/refresh", "POST", Some(request))
+            .await?;
+
+        // Update tokens
+        self.session_manager
+            .set_tokens(response.access_token, Some(response.refresh_token))?;
+
+        Ok(())
+    }
+
+    pub async fn logout(&self) -> Result<()> {
+        let refresh_token = self
+            .session_manager
+            .get_refresh_token()?
+            .ok_or_else(|| Error::Authentication("No refresh token available".to_string()))?;
+
+        let request = LogoutRequest { refresh_token };
+
+        let _: serde_json::Value = self
+            .encrypted_api_call("/logout", "POST", Some(request))
+            .await?;
+
+        // Clear all session data
+        self.session_manager.clear_all()?;
+
+        Ok(())
+    }
+
+    pub fn get_access_token(&self) -> Result<Option<String>> {
+        self.session_manager.get_access_token()
+    }
+
+    pub fn get_refresh_token(&self) -> Result<Option<String>> {
+        self.session_manager.get_refresh_token()
     }
 }
 

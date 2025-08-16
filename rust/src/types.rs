@@ -50,4 +50,46 @@ pub struct RefreshRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefreshResponse {
     pub access_token: String,
+    pub refresh_token: String,
+}
+
+// Auth Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoginCredentials {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
+    pub password: String,
+    pub client_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterCredentials {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub password: String,
+    pub client_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub id: Uuid,
+    pub email: Option<String>,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogoutRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptedResponse<T> {
+    pub encrypted: String,
+    #[serde(skip)]
+    _phantom: std::marker::PhantomData<T>,
 }
