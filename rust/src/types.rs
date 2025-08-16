@@ -26,7 +26,7 @@ pub struct KeyExchangeResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedRequest {
-    pub encrypted: String,  // Base64-encoded (nonce + ciphertext)
+    pub encrypted: String, // Base64-encoded (nonce + ciphertext)
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,47 @@
+#!/bin/sh
+# Pre-commit hook for OpenSecret SDK
+# Runs checks on the Rust SDK if changes are detected
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if there are changes in the rust directory
+if git diff --cached --name-only | grep -q "^rust/"; then
+    echo "📦 Rust changes detected, running Rust checks..."
+    
+    cd rust
+    
+    echo "📝 Checking formatting..."
+    cargo fmt --all -- --check
+    if [ $? -ne 0 ]; then
+        echo "❌ Format check failed. Run 'cd rust && cargo fmt' to fix."
+        exit 1
+    fi
+    
+    echo "🔧 Running clippy..."
+    cargo clippy --all-targets --all-features -- -D warnings
+    if [ $? -ne 0 ]; then
+        echo "❌ Clippy check failed. Fix the warnings above."
+        exit 1
+    fi
+    
+    echo "✅ Running cargo check..."
+    cargo check --all-features
+    if [ $? -ne 0 ]; then
+        echo "❌ Cargo check failed."
+        exit 1
+    fi
+    
+    echo "🧪 Running tests..."
+    cargo test --all-features
+    if [ $? -ne 0 ]; then
+        echo "❌ Tests failed."
+        exit 1
+    fi
+    
+    cd ..
+fi
+
+echo "✨ All pre-commit checks passed!"
+exit 0
