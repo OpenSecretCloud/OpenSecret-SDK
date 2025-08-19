@@ -4,8 +4,8 @@ use std::env;
 #[tokio::test]
 async fn test_attestation_handshake_localhost() -> Result<()> {
     // Skip if not running against localhost
-    let base_url =
-        env::var("OPENSECRET_TEST_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let base_url = env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     if !base_url.contains("localhost") && !base_url.contains("127.0.0.1") {
         eprintln!("Skipping localhost test - not running against localhost");
@@ -29,12 +29,13 @@ async fn test_attestation_handshake_localhost() -> Result<()> {
 
 #[tokio::test]
 async fn test_attestation_handshake_production() -> Result<()> {
-    // Load .env.local from OpenSecret-SDK directory
-    dotenv::from_path("../.env.local").ok();
+    // Try to load .env.local if it exists (for local testing)
+    if std::path::Path::new("../.env.local").exists() {
+        dotenv::from_path("../.env.local").ok();
+    }
 
     // This test requires VITE_OPEN_SECRET_API_URL to be set to a production endpoint
     let base_url = env::var("VITE_OPEN_SECRET_API_URL")
-        .or_else(|_| env::var("OPENSECRET_TEST_URL"))
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     if base_url.contains("localhost") || base_url.contains("127.0.0.1") {
@@ -61,8 +62,8 @@ async fn test_attestation_handshake_production() -> Result<()> {
 
 #[tokio::test]
 async fn test_attestation_nonce_verification() -> Result<()> {
-    let base_url =
-        env::var("OPENSECRET_TEST_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let base_url = env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let client = OpenSecretClient::new(base_url.clone())?;
 
@@ -86,8 +87,8 @@ async fn test_attestation_nonce_verification() -> Result<()> {
 
 #[tokio::test]
 async fn test_connection_health_check() -> Result<()> {
-    let base_url =
-        env::var("OPENSECRET_TEST_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let base_url = env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let client = OpenSecretClient::new(base_url)?;
 
