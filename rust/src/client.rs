@@ -660,6 +660,127 @@ impl OpenSecretClient {
         self.encrypted_api_call("/protected/decrypt", "POST", Some(request))
             .await
     }
+
+    // Account Management APIs
+
+    /// Changes the password for the currently authenticated user
+    pub async fn change_password(
+        &self,
+        current_password: String,
+        new_password: String,
+    ) -> Result<()> {
+        let request = ChangePasswordRequest {
+            current_password,
+            new_password,
+        };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/change_password", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Requests a password reset for the given email
+    /// Note: This does not require authentication but still uses encryption
+    pub async fn request_password_reset(
+        &self,
+        email: String,
+        hashed_secret: String,
+        client_id: Uuid,
+    ) -> Result<()> {
+        let request = PasswordResetRequest {
+            email,
+            hashed_secret,
+            client_id,
+        };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/password-reset/request", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Confirms a password reset with the code from email
+    /// Note: This does not require authentication but still uses encryption
+    pub async fn confirm_password_reset(
+        &self,
+        email: String,
+        alphanumeric_code: String,
+        plaintext_secret: String,
+        new_password: String,
+        client_id: Uuid,
+    ) -> Result<()> {
+        let request = PasswordResetConfirmRequest {
+            email,
+            alphanumeric_code,
+            plaintext_secret,
+            new_password,
+            client_id,
+        };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/password-reset/confirm", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Converts a guest account to an email account
+    pub async fn convert_guest_to_email(
+        &self,
+        email: String,
+        password: String,
+        name: Option<String>,
+    ) -> Result<()> {
+        let request = ConvertGuestToEmailRequest {
+            email,
+            password,
+            name,
+        };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/convert_guest", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Verifies an email address with the code from the verification email
+    /// Note: This does not require authentication but still uses encryption
+    pub async fn verify_email(&self, code: String) -> Result<()> {
+        let _: serde_json::Value = self
+            .encrypted_api_call(&format!("/verify-email/{}", code), "GET", None::<()>)
+            .await?;
+        Ok(())
+    }
+
+    /// Requests a new email verification code
+    pub async fn request_new_verification_code(&self) -> Result<()> {
+        let request = RequestVerificationCodeRequest {};
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/request_verification", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Initiates the account deletion process
+    pub async fn request_account_deletion(&self, hashed_secret: String) -> Result<()> {
+        let request = InitiateAccountDeletionRequest { hashed_secret };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/delete-account/request", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
+
+    /// Confirms account deletion with the code from email
+    pub async fn confirm_account_deletion(
+        &self,
+        confirmation_code: String,
+        plaintext_secret: String,
+    ) -> Result<()> {
+        let request = ConfirmAccountDeletionRequest {
+            confirmation_code,
+            plaintext_secret,
+        };
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/delete-account/confirm", "POST", Some(request))
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

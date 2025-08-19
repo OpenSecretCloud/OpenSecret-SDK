@@ -228,3 +228,47 @@ pub struct DecryptDataRequest {
 }
 
 // The decrypted response is just a string, handled directly
+
+// Account Management Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordResetRequest {
+    pub email: String,
+    pub hashed_secret: String,
+    pub client_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordResetConfirmRequest {
+    pub email: String,
+    pub alphanumeric_code: String,
+    pub plaintext_secret: String,
+    pub new_password: String,
+    pub client_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConvertGuestToEmailRequest {
+    pub email: String,
+    pub password: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestVerificationCodeRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InitiateAccountDeletionRequest {
+    pub hashed_secret: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmAccountDeletionRequest {
+    pub confirmation_code: String,
+    pub plaintext_secret: String,
+}
