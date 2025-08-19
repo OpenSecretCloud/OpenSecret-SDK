@@ -292,36 +292,21 @@ impl AttestationVerifier {
             return Ok(());
         }
 
-        // Parse the AWS root certificate
-        let (_, _aws_root_cert) = X509Certificate::from_der(AWS_NITRO_ROOT_CERT).map_err(|e| {
-            Error::AttestationVerificationFailed(format!(
-                "Failed to parse AWS root certificate: {:?}",
-                e
-            ))
-        })?;
+        // Step 1: Verify the first cert in cabundle matches AWS Nitro root
+        if doc.cabundle.is_empty() {
+            return Err(Error::AttestationVerificationFailed(
+                "Certificate bundle is empty".to_string(),
+            ));
+        }
 
-        // ⚠️ ⚠️ ⚠️ WARNING: INCOMPLETE CERTIFICATE CHAIN VERIFICATION ⚠️ ⚠️ ⚠️
-        //
-        // This implementation currently only:
-        // 1. Checks that certificates are not expired
-        // 2. Verifies the COSE_Sign1 signature (which IS properly implemented)
-        //
-        // It does NOT:
-        // 1. Verify that each certificate is signed by the next one in the chain
-        // 2. Verify that the chain ultimately leads back to the AWS Nitro root certificate
-        // 3. Validate certificate constraints, key usage, or other X.509 extensions
-        //
-        // This means that while we verify the attestation document signature is valid,
-        // we don't fully verify the certificate chain's authenticity. A malicious actor
-        // could potentially create their own certificate chain with valid signatures.
-        //
-        // For production use, implement full X.509 chain validation using a proper
-        // PKI library like webpki or similar.
-        // ⚠️ ⚠️ ⚠️ END WARNING ⚠️ ⚠️ ⚠️
+        if doc.cabundle[0] != AWS_NITRO_ROOT_CERT {
+            return Err(Error::AttestationVerificationFailed(
+                "First certificate does not match AWS Nitro root certificate".to_string(),
+            ));
+        }
 
-        // Verify each certificate in the chain
-        let mut prev_cert: Option<X509Certificate> = None;
-
+        // Step 2: Parse all certificates and check validity
+        let mut certs = Vec::new();
         for (i, cert_der) in doc.cabundle.iter().enumerate() {
             let (_, cert) = X509Certificate::from_der(cert_der).map_err(|e| {
                 Error::AttestationVerificationFailed(format!(
@@ -333,21 +318,15 @@ impl AttestationVerifier {
             // Check certificate validity
             if !cert.validity().is_valid() {
                 return Err(Error::AttestationVerificationFailed(format!(
-                    "Certificate {} is expired",
+                    "Certificate {} is expired or not yet valid",
                     i
                 )));
             }
 
-            prev_cert = Some(cert);
+            certs.push(cert);
         }
 
-        if prev_cert.is_none() {
-            return Err(Error::AttestationVerificationFailed(
-                "Certificate chain is empty".to_string(),
-            ));
-        }
-
-        // The leaf certificate should also be valid
+        // Parse the leaf certificate
         let (_, leaf_cert) = X509Certificate::from_der(&doc.certificate).map_err(|e| {
             Error::AttestationVerificationFailed(format!(
                 "Failed to parse leaf certificate: {:?}",
@@ -357,11 +336,120 @@ impl AttestationVerifier {
 
         if !leaf_cert.validity().is_valid() {
             return Err(Error::AttestationVerificationFailed(
-                "Leaf certificate is expired".to_string(),
+                "Leaf certificate is expired or not yet valid".to_string(),
             ));
         }
 
+        // Step 3: Verify the certificate chain signatures
+        // AWS Nitro chain: root -> regional -> zonal -> instance -> leaf
+        // Each cert must be signed by the PREVIOUS cert in the hierarchical chain
+
+        // Verify each cert (except root) is signed by the previous cert
+        for i in 1..certs.len() {
+            let cert = &certs[i];
+            let cert_der = &doc.cabundle[i];
+            let issuer = &certs[i - 1]; // The issuer should be the previous cert in the chain
+
+            // Verify the issuer/subject relationship
+            if cert.issuer() != issuer.subject() {
+                return Err(Error::AttestationVerificationFailed(format!(
+                    "Certificate {} issuer doesn't match certificate {} subject - chain is broken",
+                    i,
+                    i - 1
+                )));
+            }
+
+            // Verify the signature
+            if !self.verify_cert_signature(cert_der, issuer)? {
+                return Err(Error::AttestationVerificationFailed(format!(
+                    "Certificate {} signature verification failed (not signed by certificate {})",
+                    i,
+                    i - 1
+                )));
+            }
+        }
+
+        // Verify the leaf certificate is signed by the last cert in the chain
+        if !certs.is_empty() {
+            let last_cert = &certs[certs.len() - 1];
+
+            // Verify the issuer/subject relationship
+            if leaf_cert.issuer() != last_cert.subject() {
+                return Err(Error::AttestationVerificationFailed(
+                    "Leaf certificate issuer doesn't match last certificate in chain".to_string(),
+                ));
+            }
+
+            // Verify the signature
+            if !self.verify_cert_signature(&doc.certificate, last_cert)? {
+                return Err(Error::AttestationVerificationFailed(
+                    "Leaf certificate signature verification failed".to_string(),
+                ));
+            }
+        }
+
         Ok(())
+    }
+
+    fn verify_cert_signature(&self, cert_der: &[u8], issuer: &X509Certificate) -> Result<bool> {
+        // Parse the certificate to get its TBS (to-be-signed) portion and signature
+        let (_, cert) = X509Certificate::from_der(cert_der).map_err(|e| {
+            Error::AttestationVerificationFailed(format!(
+                "Failed to parse certificate for signature verification: {:?}",
+                e
+            ))
+        })?;
+
+        // The signature algorithm should match what AWS Nitro uses
+        let sig_algo = &cert.signature_algorithm;
+        let sig_oid = sig_algo.algorithm.to_id_string();
+
+        // AWS Nitro uses ECDSA with P-384 and SHA-384 (OID: 1.2.840.10045.4.3.3)
+        if sig_oid != "1.2.840.10045.4.3.3" {
+            // Also support P-256 with SHA-256 (OID: 1.2.840.10045.4.3.2) for compatibility
+            if sig_oid != "1.2.840.10045.4.3.2" {
+                return Ok(false); // Unsupported algorithm
+            }
+        }
+
+        // Extract the issuer's public key
+        let issuer_pubkey = issuer.public_key();
+
+        // The public key is in SubjectPublicKeyInfo format
+        // For EC keys, we need to extract the actual EC point
+        let pubkey_bytes = issuer_pubkey.raw;
+
+        // Find the EC point in the public key data
+        // EC points start with 0x04 (uncompressed) and are 97 bytes for P-384, 65 for P-256
+        let ec_point = if sig_oid == "1.2.840.10045.4.3.3" {
+            // P-384: 97 bytes (0x04 + 48 bytes X + 48 bytes Y)
+            extract_ec_point(pubkey_bytes, 97)
+        } else {
+            // P-256: 65 bytes (0x04 + 32 bytes X + 32 bytes Y)
+            extract_ec_point(pubkey_bytes, 65)
+        }?;
+
+        // Get the TBS certificate data and signature
+        let tbs_cert = cert.tbs_certificate.as_ref();
+        let signature = cert.signature_value.as_ref();
+
+        // Verify the signature using ring
+        let verification_alg = if sig_oid == "1.2.840.10045.4.3.3" {
+            &signature::ECDSA_P384_SHA384_ASN1
+        } else {
+            &signature::ECDSA_P256_SHA256_ASN1
+        };
+
+        let public_key = signature::UnparsedPublicKey::new(verification_alg, ec_point);
+
+        public_key
+            .verify(tbs_cert, signature)
+            .map(|_| true)
+            .map_err(|_| {
+                Error::AttestationVerificationFailed(
+                    "Certificate signature verification failed".to_string(),
+                )
+            })
     }
 
     fn verify_signature(
@@ -443,6 +531,33 @@ impl AttestationVerifier {
         }
         Ok(())
     }
+}
+
+fn extract_ec_point(pubkey_bytes: &[u8], expected_size: usize) -> Result<&[u8]> {
+    // The public key may be in SubjectPublicKeyInfo format
+    // We need to find the actual EC point which starts with 0x04 (uncompressed)
+
+    // First, try to find the 0x04 marker
+    for i in 0..pubkey_bytes.len() {
+        if pubkey_bytes[i] == 0x04 {
+            let remaining = &pubkey_bytes[i..];
+            if remaining.len() == expected_size {
+                return Ok(remaining);
+            }
+        }
+    }
+
+    // If we can't find it, try taking from the end if the size matches
+    if pubkey_bytes.len() >= expected_size {
+        let from_end = &pubkey_bytes[pubkey_bytes.len() - expected_size..];
+        if from_end[0] == 0x04 {
+            return Ok(from_end);
+        }
+    }
+
+    Err(Error::AttestationVerificationFailed(
+        "Failed to extract EC public key point".to_string(),
+    ))
 }
 
 fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Vec<u8> {
