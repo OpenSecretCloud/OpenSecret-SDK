@@ -534,30 +534,68 @@ impl AttestationVerifier {
 }
 
 fn extract_ec_point(pubkey_bytes: &[u8], expected_size: usize) -> Result<&[u8]> {
-    // The public key may be in SubjectPublicKeyInfo format
-    // We need to find the actual EC point which starts with 0x04 (uncompressed)
+    // The public key is in SubjectPublicKeyInfo format (ASN.1 DER encoded)
+    // We need to extract the actual EC point from the BIT STRING
 
-    // First, try to find the 0x04 marker
+    // The structure is:
+    // SEQUENCE {
+    //   algorithm AlgorithmIdentifier,
+    //   subjectPublicKey BIT STRING
+    // }
+
+    // For EC keys, x509-parser gives us the raw bytes which includes the full
+    // SubjectPublicKeyInfo structure. The EC point is at the end after the
+    // algorithm identifier and is preceded by a BIT STRING tag.
+
+    // Look for BIT STRING tag (0x03) followed by length and unused bits (0x00)
+    // The EC point follows immediately after
     for i in 0..pubkey_bytes.len() {
-        if pubkey_bytes[i] == 0x04 {
-            let remaining = &pubkey_bytes[i..];
-            if remaining.len() == expected_size {
-                return Ok(remaining);
+        if pubkey_bytes[i] == 0x03 {
+            // BIT STRING tag
+            if i + 2 < pubkey_bytes.len() {
+                // Next byte is length (for EC keys, usually 0x42 for P-256 or 0x62 for P-384)
+                // Then 0x00 for no unused bits
+                // Then 0x04 for uncompressed point
+                if i + 3 < pubkey_bytes.len()
+                    && pubkey_bytes[i + 2] == 0x00
+                    && pubkey_bytes[i + 3] == 0x04
+                {
+                    let ec_point_start = i + 3;
+                    let remaining = &pubkey_bytes[ec_point_start..];
+                    if remaining.len() == expected_size {
+                        return Ok(remaining);
+                    }
+                }
             }
         }
     }
 
-    // If we can't find it, try taking from the end if the size matches
+    // Fallback: The x509-parser might have already extracted just the key material
+    // In this case, look for the uncompressed point marker (0x04) at the expected position
     if pubkey_bytes.len() >= expected_size {
+        // Try from the end (most common case with x509-parser)
         let from_end = &pubkey_bytes[pubkey_bytes.len() - expected_size..];
         if from_end[0] == 0x04 {
             return Ok(from_end);
         }
+
+        // Try from a typical offset (after algorithm OID and parameters)
+        // For EC keys, this is often around offset 23-27
+        for offset in [23, 24, 25, 26, 27].iter() {
+            if *offset + expected_size <= pubkey_bytes.len() {
+                let candidate = &pubkey_bytes[*offset..*offset + expected_size];
+                if candidate[0] == 0x04 {
+                    return Ok(candidate);
+                }
+            }
+        }
     }
 
-    Err(Error::AttestationVerificationFailed(
-        "Failed to extract EC public key point".to_string(),
-    ))
+    Err(Error::AttestationVerificationFailed(format!(
+        "Failed to extract EC public key point (expected {} bytes, pubkey is {} bytes)",
+        expected_size,
+        pubkey_bytes.len()
+    )))
 }
 
 fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Vec<u8> {
