@@ -3,8 +3,8 @@ use std::env;
 use uuid::Uuid;
 
 async fn setup_client() -> Result<OpenSecretClient> {
-    let base_url =
-        env::var("OPENSECRET_API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let base_url = env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
     let client = OpenSecretClient::new(base_url)?;
     client.perform_attestation_handshake().await?;
     Ok(client)
