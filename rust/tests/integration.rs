@@ -5,7 +5,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn test_client_initialization() -> Result<()> {
-    let client = OpenSecretClient::new("http://localhost:3000".to_string())?;
+    let base_url = env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let client = OpenSecretClient::new(base_url)?;
     assert!(client.get_session_id()?.is_none());
     Ok(())
 }
@@ -39,7 +41,6 @@ async fn test_full_flow_with_real_server() -> Result<()> {
 
     // This test requires environment variables to be set
     let base_url = env::var("VITE_OPEN_SECRET_API_URL")
-        .or_else(|_| env::var("OPENSECRET_TEST_URL"))
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     println!("Testing against: {}", base_url);

@@ -138,7 +138,9 @@ async fn test_login_signup_flow() -> Result<()> {
 
 #[tokio::test]
 async fn test_session_management() -> Result<()> {
-    let client = OpenSecretClient::new("http://localhost:3000")?;
+    let base_url = std::env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let client = OpenSecretClient::new(base_url)?;
 
     // Should have no session initially
     assert!(client.get_session_id()?.is_none());
