@@ -272,3 +272,102 @@ pub struct ConfirmAccountDeletionRequest {
     pub confirmation_code: String,
     pub plaintext_secret: String,
 }
+
+// AI/OpenAI API Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Model {
+    pub id: String,
+    #[serde(default = "default_model_object")]
+    pub object: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owned_by: Option<String>,
+}
+
+fn default_model_object() -> String {
+    "model".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelsResponse {
+    pub object: String,
+    pub data: Vec<Model>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatCompletionRequest {
+    pub model: String,
+    pub messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_options: Option<StreamOptions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamOptions {
+    pub include_usage: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatCompletionResponse {
+    pub id: String,
+    pub object: String,
+    pub created: i64,
+    pub model: String,
+    pub choices: Vec<ChatChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChoice {
+    pub index: i32,
+    pub message: ChatMessage,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Usage {
+    pub prompt_tokens: i32,
+    pub completion_tokens: i32,
+    pub total_tokens: i32,
+}
+
+// Streaming types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatCompletionChunk {
+    pub id: String,
+    pub object: String,
+    pub created: i64,
+    pub model: String,
+    pub choices: Vec<ChatChoiceDelta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChoiceDelta {
+    pub index: i32,
+    pub delta: ChatMessageDelta,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}

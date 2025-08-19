@@ -781,6 +781,163 @@ impl OpenSecretClient {
             .await?;
         Ok(())
     }
+
+    // AI/OpenAI API Methods
+
+    /// Fetches available AI models
+    pub async fn get_models(&self) -> Result<ModelsResponse> {
+        self.encrypted_api_call("/v1/models", "GET", None::<()>)
+            .await
+    }
+
+    /// Creates a chat completion (non-streaming)
+    pub async fn create_chat_completion(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> Result<ChatCompletionResponse> {
+        let mut modified_request = request;
+        modified_request.stream = Some(false);
+        self.encrypted_api_call("/v1/chat/completions", "POST", Some(modified_request))
+            .await
+    }
+
+    /// Creates a streaming chat completion
+    pub async fn create_chat_completion_stream(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> Result<std::pin::Pin<Box<dyn futures::Stream<Item = Result<ChatCompletionChunk>> + Send>>>
+    {
+        use eventsource_stream::Eventsource;
+        use futures::StreamExt;
+
+        let mut modified_request = request;
+        modified_request.stream = Some(true);
+        modified_request.stream_options = Some(StreamOptions {
+            include_usage: true,
+        });
+
+        // Get session for encryption
+        let session = self.session_manager.get_session()?.ok_or_else(|| {
+            Error::Session(
+                "No active session. Call perform_attestation_handshake first".to_string(),
+            )
+        })?;
+
+        let url = format!("{}/v1/chat/completions", self.base_url);
+
+        // Encrypt the request
+        let json = serde_json::to_string(&modified_request)?;
+        let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
+        let encrypted_request = EncryptedRequest {
+            encrypted: BASE64.encode(&encrypted),
+        };
+
+        // Build headers
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("accept", HeaderValue::from_static("text/event-stream"));
+        headers.insert(
+            "x-session-id",
+            HeaderValue::from_str(&session.session_id.to_string())
+                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
+        );
+
+        // Add authorization header if we have a token
+        if let Some(token) = self.session_manager.get_access_token()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", token))
+                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
+            );
+        }
+
+        // Make the streaming request
+        let response = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .json(&encrypted_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api {
+                status,
+                message: text,
+            });
+        }
+
+        // Convert response to stream of bytes
+        let stream = response
+            .bytes_stream()
+            .map(|result| result.map_err(std::io::Error::other));
+
+        // Parse SSE events and decrypt
+        let session_key = session.session_key;
+        let event_stream = stream.eventsource().filter_map(move |event| {
+            let session_key = session_key;
+            async move {
+                match event {
+                    Ok(event) => {
+                        // Check if this is the [DONE] event
+                        if event.data == "[DONE]" {
+                            return None;
+                        }
+
+                        // Decrypt the event data - server sends base64 encrypted chunks
+                        match BASE64.decode(&event.data) {
+                            Ok(encrypted_bytes) => {
+                                match crypto::decrypt_data(&session_key, &encrypted_bytes) {
+                                    Ok(decrypted) => match String::from_utf8(decrypted) {
+                                        Ok(json_str) => {
+                                            match serde_json::from_str::<ChatCompletionChunk>(
+                                                &json_str,
+                                            ) {
+                                                Ok(chunk) => Some(Ok(chunk)),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse chunk: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        Err(e) => Some(Err(Error::Api {
+                                            status: 0,
+                                            message: format!(
+                                                "Invalid UTF-8 in decrypted data: {}",
+                                                e
+                                            ),
+                                        })),
+                                    },
+                                    Err(e) => Some(Err(Error::Decryption(format!(
+                                        "Failed to decrypt chunk: {}",
+                                        e
+                                    )))),
+                                }
+                            }
+                            Err(e) => Some(Err(Error::Api {
+                                status: 0,
+                                message: format!("Failed to decode base64: {}", e),
+                            })),
+                        }
+                    }
+                    Err(e) => Some(Err(Error::Api {
+                        status: 0,
+                        message: format!("SSE error: {}", e),
+                    })),
+                }
+            }
+        });
+
+        Ok(Box::pin(event_stream))
+    }
 }
 
 #[cfg(test)]
