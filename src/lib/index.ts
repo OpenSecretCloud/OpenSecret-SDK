@@ -8,7 +8,11 @@ export type {
   DocumentResponse,
   DocumentUploadInitResponse,
   DocumentStatusRequest,
-  DocumentStatusResponse
+  DocumentStatusResponse,
+  SearchWorkflow,
+  SearchRequest,
+  SearchResult,
+  SearchResponse
 } from "./api";
 
 // Re-export Model type from OpenAI for convenience
