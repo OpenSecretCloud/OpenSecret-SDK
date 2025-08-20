@@ -1,4 +1,4 @@
-use opensecret_sdk::{OpenSecretClient, Result};
+use opensecret::{OpenSecretClient, Result};
 use std::env;
 
 #[tokio::test]
@@ -33,7 +33,7 @@ async fn test_session_establishment() -> Result<()> {
 
 #[tokio::test]
 async fn test_session_key_derivation() -> Result<()> {
-    use opensecret_sdk::crypto::{derive_shared_secret, generate_key_pair};
+    use opensecret::crypto::{derive_shared_secret, generate_key_pair};
 
     // Test key derivation works correctly
     let client_keypair = generate_key_pair();

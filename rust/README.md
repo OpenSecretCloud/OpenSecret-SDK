@@ -16,13 +16,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-opensecret-sdk = "0.1.0"
+opensecret = "0.1.0"
 ```
 
 ## Quick Start
 
 ```rust
-use opensecret_sdk::{OpenSecretClient, Result};
+use opensecret::{OpenSecretClient, Result};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -128,7 +128,7 @@ if let Some(session_id) = client.get_session_id()? {
 The SDK uses a custom `Error` type with detailed error variants:
 
 ```rust
-use opensecret_sdk::Error;
+use opensecret::Error;
 
 match client.login(email, password, client_id).await {
     Ok(response) => println!("Success!"),

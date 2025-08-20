@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use opensecret_sdk::{ChatCompletionRequest, ChatMessage, OpenSecretClient, Result};
+use opensecret::{ChatCompletionRequest, ChatMessage, OpenSecretClient, Result};
 use std::env;
 use uuid::Uuid;
 

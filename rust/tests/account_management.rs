@@ -1,4 +1,4 @@
-use opensecret_sdk::{OpenSecretClient, Result};
+use opensecret::{OpenSecretClient, Result};
 use std::env;
 use uuid::Uuid;
 

@@ -1,4 +1,4 @@
-use opensecret_sdk::{KeyOptions, OpenSecretClient, Result, SigningAlgorithm};
+use opensecret::{KeyOptions, OpenSecretClient, Result, SigningAlgorithm};
 use uuid::Uuid;
 
 // BIP-85 test constants (matching TypeScript tests)

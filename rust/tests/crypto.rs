@@ -1,8 +1,8 @@
 use base64::Engine;
-use opensecret_sdk::crypto::{
+use opensecret::crypto::{
     decrypt_message, decrypt_session_key, derive_shared_secret, encrypt_message, generate_key_pair,
 };
-use opensecret_sdk::Result;
+use opensecret::Result;
 
 #[test]
 fn test_key_generation() {

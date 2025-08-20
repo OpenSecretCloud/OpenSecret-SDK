@@ -1,11 +1,13 @@
 [package]
-name = "opensecret-sdk"
+name = "opensecret"
 version = "0.1.0"
 edition = "2021"
 authors = ["OpenSecret"]
 description = "Rust SDK for OpenSecret - secure AI API interactions with nitro attestation"
 license = "MIT"
-repository = "https://github.com/opensecret/opensecret-sdk-rust"
+homepage = "https://opensecret.cloud"
+repository = "https://github.com/OpenSecretCloud/OpenSecret-SDK"
+documentation = "https://docs.rs/opensecret"
 keywords = ["opensecret", "ai", "encryption", "nitro", "attestation"]
 categories = ["cryptography", "api-bindings", "web-programming"]
 
