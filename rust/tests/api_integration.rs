@@ -32,7 +32,7 @@ async fn test_user_profile_api() -> Result<()> {
         Ok(response) => response,
         Err(_) => {
             client
-                .register(test_email.clone(), test_password.clone(), client_id, None)
+                .register(test_email.clone(), test_password, client_id, None)
                 .await?
         }
     };
@@ -361,7 +361,7 @@ async fn test_encryption_decryption() -> Result<()> {
     // Test with BIP-32 derivation path (matching TypeScript test)
     let derivation_path = "m/44'/0'/0'/0/0".to_string();
     let key_options = KeyOptions {
-        private_key_derivation_path: Some(derivation_path.clone()),
+        private_key_derivation_path: Some(derivation_path),
         seed_phrase_derivation_path: None,
     };
     let encrypted_with_path = client
@@ -447,7 +447,7 @@ async fn test_third_party_token() -> Result<()> {
         Ok(response) => response,
         Err(_) => {
             client
-                .register(test_email.clone(), test_password.clone(), client_id, None)
+                .register(test_email, test_password, client_id, None)
                 .await?
         }
     };

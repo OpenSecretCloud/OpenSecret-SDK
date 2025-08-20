@@ -99,7 +99,7 @@ async fn test_login_signup_flow() -> Result<()> {
                     test_email.clone(),
                     test_password.clone(),
                     client_id,
-                    test_name.clone(),
+                    test_name,
                 )
                 .await?;
             println!("✓ User registered with email: {}", test_email);
@@ -127,9 +127,9 @@ async fn test_login_signup_flow() -> Result<()> {
     println!("\nTesting email user re-login...");
     client.perform_attestation_handshake().await?;
     let relogin_response = client
-        .login(test_email.clone(), test_password.clone(), client_id)
+        .login(test_email.clone(), test_password, client_id)
         .await?;
-    assert_eq!(relogin_response.email, Some(test_email.clone()));
+    assert_eq!(relogin_response.email, Some(test_email));
     println!("✓ Email user re-logged in successfully");
 
     println!("\n✅ All auth tests passed!");

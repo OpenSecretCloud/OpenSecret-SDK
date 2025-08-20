@@ -213,11 +213,7 @@ async fn test_bip85_message_signing() -> Result<()> {
         private_key_derivation_path: None,
     };
     let bip85_sig = client
-        .sign_message(
-            test_message,
-            SigningAlgorithm::Schnorr,
-            Some(bip85_options.clone()),
-        )
+        .sign_message(test_message, SigningAlgorithm::Schnorr, Some(bip85_options))
         .await?;
     assert!(!bip85_sig.signature.is_empty());
 
