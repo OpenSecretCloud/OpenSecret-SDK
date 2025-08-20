@@ -484,16 +484,10 @@ impl AttestationVerifier {
 
         // Extract the public key bytes from the certificate
         let public_key_info = cert.public_key();
-        let full_public_key = public_key_info.raw;
 
-        // For EC keys, the actual point is at the end after the algorithm parameters
-        // For P-384, the uncompressed point is 97 bytes (0x04 + 48 bytes X + 48 bytes Y)
-        let public_key_bytes = if full_public_key.len() > 97 {
-            // Skip the ASN.1 structure and get just the EC point
-            &full_public_key[full_public_key.len() - 97..]
-        } else {
-            full_public_key
-        };
+        // AWS Nitro uses P-384, extract the EC point properly
+        // P-384: 97 bytes (0x04 + 48 bytes X + 48 bytes Y)
+        let public_key_bytes = extract_ec_point(public_key_info.raw, 97)?;
 
         // Create the COSE_Sign1 signature structure
         // This follows the COSE specification for the data to be signed
