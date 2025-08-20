@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
 
             // Try logging in instead
             println!("\n--- User Login ---");
-            match client.login(email.clone(), password, client_id).await {
+            match client.login(email, password, client_id).await {
                 Ok(response) => {
                     println!("✓ Login successful!");
                     println!("  User ID: {}", response.id);

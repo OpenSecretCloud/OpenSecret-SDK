@@ -105,7 +105,7 @@ impl AttestationVerifier {
 
         // Verify nonce
         if let Some(nonce_bytes) = &doc.nonce {
-            let nonce_str = String::from_utf8(nonce_bytes.clone()).map_err(|e| {
+            let nonce_str = String::from_utf8(nonce_bytes.to_vec()).map_err(|e| {
                 Error::AttestationVerificationFailed(format!("Invalid nonce encoding: {}", e))
             })?;
 
