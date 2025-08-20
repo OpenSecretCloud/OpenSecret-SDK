@@ -6,8 +6,12 @@ async fn main() -> Result<()> {
     // Initialize the client
     let client = OpenSecretClient::new("http://localhost:3000")?;
 
-    // Your client ID (get this from your OpenSecret dashboard)
-    let client_id = Uuid::parse_str("your-client-id-here").unwrap_or_else(|_| Uuid::new_v4());
+    // Your client ID - either set VITE_TEST_CLIENT_ID env var or replace the string below
+    let client_id = std::env::var("VITE_TEST_CLIENT_ID")
+        .ok()
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .or_else(|| Uuid::parse_str("your-client-id-here").ok())
+        .expect("Please set VITE_TEST_CLIENT_ID environment variable or replace 'your-client-id-here' with a valid UUID");
 
     // Step 1: Perform attestation handshake (required before any encrypted calls)
     println!("Performing attestation handshake...");
@@ -28,7 +32,10 @@ async fn main() -> Result<()> {
             println!("✓ User registered successfully!");
             println!("  User ID: {}", response.id);
             println!("  Email: {:?}", response.email);
-            println!("  Access Token: {}...", &response.access_token[..20]);
+            println!(
+                "  Access Token: {}...",
+                response.access_token.chars().take(20).collect::<String>()
+            );
         }
         Err(e) => {
             println!("Registration failed (user might already exist): {}", e);
@@ -39,7 +46,10 @@ async fn main() -> Result<()> {
                 Ok(response) => {
                     println!("✓ Login successful!");
                     println!("  User ID: {}", response.id);
-                    println!("  Access Token: {}...", &response.access_token[..20]);
+                    println!(
+                        "  Access Token: {}...",
+                        response.access_token.chars().take(20).collect::<String>()
+                    );
                 }
                 Err(e) => println!("Login failed: {}", e),
             }
@@ -89,12 +99,18 @@ async fn main() -> Result<()> {
     if client.get_access_token()?.is_some() {
         println!("\n--- Token Refresh ---");
         let old_token = client.get_access_token()?.unwrap();
-        println!("Old access token: {}...", &old_token[..20]);
+        println!(
+            "Old access token: {}...",
+            old_token.chars().take(20).collect::<String>()
+        );
 
         client.refresh_token().await?;
 
         let new_token = client.get_access_token()?.unwrap();
-        println!("New access token: {}...", &new_token[..20]);
+        println!(
+            "New access token: {}...",
+            new_token.chars().take(20).collect::<String>()
+        );
         println!("✓ Token refreshed successfully!");
     }
 

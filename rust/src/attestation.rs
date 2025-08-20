@@ -179,10 +179,15 @@ impl AttestationVerifier {
                 }
                 "timestamp" => {
                     doc.timestamp = match value {
-                        CborValue::Integer(i) => *i as u64,
+                        CborValue::Integer(i) if *i >= 0 => *i as u64,
+                        CborValue::Integer(_) => {
+                            return Err(Error::AttestationVerificationFailed(
+                                "Invalid timestamp: negative value".to_string(),
+                            ))
+                        }
                         _ => {
                             return Err(Error::AttestationVerificationFailed(
-                                "Invalid timestamp".to_string(),
+                                "Invalid timestamp: not an integer".to_string(),
                             ))
                         }
                     };
@@ -209,10 +214,15 @@ impl AttestationVerifier {
 
                     for (pcr_key, pcr_value) in pcrs_map {
                         let index = match pcr_key {
-                            CborValue::Integer(i) => *i as usize,
+                            CborValue::Integer(i) if *i >= 0 => *i as usize,
+                            CborValue::Integer(_) => {
+                                return Err(Error::AttestationVerificationFailed(
+                                    "Invalid PCR index: negative value".to_string(),
+                                ))
+                            }
                             _ => {
                                 return Err(Error::AttestationVerificationFailed(
-                                    "Invalid PCR index".to_string(),
+                                    "Invalid PCR index: not an integer".to_string(),
                                 ))
                             }
                         };
@@ -487,7 +497,7 @@ impl AttestationVerifier {
 
         // Create the COSE_Sign1 signature structure
         // This follows the COSE specification for the data to be signed
-        let sig_structure = create_sig_structure(protected, payload);
+        let sig_structure = create_sig_structure(protected, payload)?;
 
         // For ECDSA P-384 with SHA-384 (which is what AWS Nitro uses)
         // AWS Nitro uses raw signatures (r||s), not ASN.1 encoded
@@ -598,7 +608,7 @@ fn extract_ec_point(pubkey_bytes: &[u8], expected_size: usize) -> Result<&[u8]> 
     )))
 }
 
-fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Vec<u8> {
+fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Result<Vec<u8>> {
     // Create the COSE_Sign1 signature structure as a CBOR array
     // ["Signature1", protected, external_aad, payload]
     let sig_structure = CborValue::Array(vec![
@@ -609,7 +619,7 @@ fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Vec<u8> {
     ]);
 
     // Encode to CBOR bytes
-    serde_cbor::to_vec(&sig_structure).expect("Failed to encode signature structure")
+    serde_cbor::to_vec(&sig_structure).map_err(Error::Cbor)
 }
 
 #[cfg(feature = "mock-attestation")]

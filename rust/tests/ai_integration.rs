@@ -213,7 +213,7 @@ async fn test_guest_user_cannot_use_ai() {
         }],
         temperature: None,
         max_tokens: None,
-        stream: Some(false),
+        stream: Some(true), // Server only supports streaming
         stream_options: None,
     };
 

@@ -101,6 +101,71 @@ async fn test_kv_storage_apis() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_kv_storage_with_special_characters() -> Result<()> {
+    // Load environment variables
+    let env_path = std::path::Path::new("../.env.local");
+    if env_path.exists() {
+        dotenv::from_path(env_path).ok();
+    }
+
+    let base_url = std::env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let client_id = std::env::var("VITE_TEST_CLIENT_ID")
+        .ok()
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .expect("VITE_TEST_CLIENT_ID must be set");
+
+    // Create client and login
+    let client = OpenSecretClient::new(base_url)?;
+    client.perform_attestation_handshake().await?;
+    client
+        .register_guest("test_kv_special".to_string(), client_id)
+        .await?;
+
+    // Test with various special characters that need URL encoding
+    let test_cases = vec![
+        ("key/with/slashes", "value1"),
+        ("key?with=query&params", "value2"),
+        ("key#with#hash", "value3"),
+        ("key with spaces", "value4"),
+        ("key%with%percents", "value5"),
+        ("key@with!special$chars", "value6"),
+        ("key[with]brackets{and}braces", "value7"),
+        ("key:with:colons;semicolons", "value8"),
+    ];
+
+    for (key, value) in &test_cases {
+        println!("Testing key: {:?}", key);
+
+        // PUT with special characters
+        let put_result = client.kv_put(key, value.to_string()).await?;
+        assert_eq!(put_result, *value);
+
+        // GET with special characters
+        let get_result = client.kv_get(key).await?;
+        assert_eq!(get_result, *value);
+
+        // DELETE with special characters
+        client.kv_delete(key).await?;
+
+        println!("✓ KV operations successful for key: {:?}", key);
+    }
+
+    // Verify all were deleted
+    let final_list = client.kv_list().await?;
+    for (key, _) in &test_cases {
+        assert!(
+            !final_list.iter().any(|item| item.key == *key),
+            "Key {:?} should have been deleted",
+            key
+        );
+    }
+    println!("✓ All special character keys handled correctly");
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_private_key_generation() -> Result<()> {
     // Load environment variables
     let env_path = std::path::Path::new("../.env.local");

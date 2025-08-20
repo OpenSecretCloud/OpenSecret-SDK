@@ -20,7 +20,7 @@ async fn test_login_signup_flow() -> Result<()> {
         .ok()
         .and_then(|id| Uuid::parse_str(&id).ok())
         .unwrap_or_else(|| {
-            panic!("VITE_TEST_CLIENT_ID must be set in .env.local");
+            panic!("VITE_TEST_CLIENT_ID must be set in .env.local or .env");
         });
 
     // Create client

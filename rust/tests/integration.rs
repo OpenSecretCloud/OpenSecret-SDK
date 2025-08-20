@@ -56,8 +56,9 @@ async fn test_full_flow_with_real_server() -> Result<()> {
     println!("Attestation successful");
 
     // 3. Verify session
-    let session_id = client.get_session_id()?.expect("Should have session");
-    println!("Session established: {}", session_id);
+    let session_id = client.get_session_id()?;
+    assert!(session_id.is_some(), "Should have session after handshake");
+    println!("Session established: {}", session_id.unwrap());
 
     Ok(())
 }

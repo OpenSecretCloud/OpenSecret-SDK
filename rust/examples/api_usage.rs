@@ -6,8 +6,12 @@ async fn main() -> Result<()> {
     // Initialize the client
     let client = OpenSecretClient::new("http://localhost:3000")?;
 
-    // Your client ID (get this from your OpenSecret dashboard)
-    let client_id = Uuid::parse_str("your-client-id-here").unwrap_or_else(|_| Uuid::new_v4());
+    // Your client ID - either set VITE_TEST_CLIENT_ID env var or replace the string below
+    let client_id = std::env::var("VITE_TEST_CLIENT_ID")
+        .ok()
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .or_else(|| Uuid::parse_str("your-client-id-here").ok())
+        .expect("Please set VITE_TEST_CLIENT_ID environment variable or replace 'your-client-id-here' with a valid UUID");
 
     println!("🔐 OpenSecret SDK - API Usage Examples\n");
 

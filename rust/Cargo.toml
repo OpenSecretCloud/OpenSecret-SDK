@@ -56,5 +56,5 @@ tracing-subscriber = "0.3"
 dotenv = "0.15"
 
 [features]
-default = ["mock-attestation"]
+default = []
 mock-attestation = []  # Enable mock attestation for development

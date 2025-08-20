@@ -36,6 +36,7 @@
           zlib
           gcc
           clang
+          libclang
           
           # Useful tools
           jq

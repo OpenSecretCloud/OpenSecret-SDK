@@ -508,17 +508,20 @@ impl OpenSecretClient {
 
     // Key-Value Storage APIs
     pub async fn kv_get(&self, key: &str) -> Result<String> {
-        let url = format!("/protected/kv/{}", key);
+        let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
+        let url = format!("/protected/kv/{}", encoded_key);
         self.encrypted_api_call(&url, "GET", None::<()>).await
     }
 
     pub async fn kv_put(&self, key: &str, value: String) -> Result<String> {
-        let url = format!("/protected/kv/{}", key);
+        let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
+        let url = format!("/protected/kv/{}", encoded_key);
         self.encrypted_api_call(&url, "PUT", Some(value)).await
     }
 
     pub async fn kv_delete(&self, key: &str) -> Result<()> {
-        let url = format!("/protected/kv/{}", key);
+        let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
+        let url = format!("/protected/kv/{}", encoded_key);
         let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
         Ok(())
     }
