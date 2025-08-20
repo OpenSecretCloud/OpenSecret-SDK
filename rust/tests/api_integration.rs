@@ -384,31 +384,35 @@ async fn test_encryption_decryption() -> Result<()> {
         private_key_derivation_path: Some("m/44'/0'/0'/0/1".to_string()),
         seed_phrase_derivation_path: None,
     };
-    match client
+    let wrong_decrypt_result = client
         .decrypt_data(
             encrypted_with_path.encrypted_data.clone(),
             Some(wrong_options),
         )
-        .await
-    {
-        Ok(_) => panic!("Should not decrypt with wrong derivation path"),
-        Err(_) => println!("✓ Correctly failed to decrypt with wrong derivation path"),
-    }
+        .await;
+    assert!(
+        wrong_decrypt_result.is_err(),
+        "Should not decrypt with wrong derivation path"
+    );
+    println!("✓ Correctly failed to decrypt with wrong derivation path");
 
     // Test decrypting with no path when encrypted with path (should fail) - matching TypeScript
-    match client
+    let no_path_decrypt_result = client
         .decrypt_data(encrypted_with_path.encrypted_data.clone(), None)
-        .await
-    {
-        Ok(_) => panic!("Should not decrypt with missing derivation path"),
-        Err(_) => println!("✓ Correctly failed to decrypt with missing derivation path"),
-    }
+        .await;
+    assert!(
+        no_path_decrypt_result.is_err(),
+        "Should not decrypt with missing derivation path"
+    );
+    println!("✓ Correctly failed to decrypt with missing derivation path");
 
     // Test with invalid encrypted data (should fail) - matching TypeScript
-    match client.decrypt_data("invalid-data".to_string(), None).await {
-        Ok(_) => panic!("Should not decrypt invalid data"),
-        Err(_) => println!("✓ Correctly failed to decrypt invalid data"),
-    }
+    let invalid_decrypt_result = client.decrypt_data("invalid-data".to_string(), None).await;
+    assert!(
+        invalid_decrypt_result.is_err(),
+        "Should not decrypt invalid data"
+    );
+    println!("✓ Correctly failed to decrypt invalid data");
 
     Ok(())
 }
