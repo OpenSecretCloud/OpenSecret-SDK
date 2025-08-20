@@ -34,3 +34,11 @@ dist-ssr
 *.pbmd
 
 .claude
+
+# Rust
+rust/target/
+rust/Cargo.lock
+rust/.env
+rust/.env.local
+rust/**/*.rs.bk
+rust/*.pdb

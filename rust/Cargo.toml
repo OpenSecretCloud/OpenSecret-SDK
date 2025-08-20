@@ -1,0 +1,62 @@
+[package]
+name = "opensecret"
+version = "0.1.0"
+edition = "2021"
+authors = ["OpenSecret"]
+description = "Rust SDK for OpenSecret - secure AI API interactions with nitro attestation"
+license = "MIT"
+homepage = "https://opensecret.cloud"
+repository = "https://github.com/OpenSecretCloud/OpenSecret-SDK"
+documentation = "https://docs.rs/opensecret"
+keywords = ["opensecret", "ai", "encryption", "nitro", "attestation"]
+categories = ["cryptography", "api-bindings", "web-programming"]
+
+[dependencies]
+# HTTP and async runtime
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio = { version = "1.41", features = ["full"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_cbor = "0.11"
+percent-encoding = "2.3"
+
+# Cryptography
+chacha20poly1305 = "0.10"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+getrandom = "0.2"
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+ring = "0.17"  # For certificate validation
+hex = "0.4"  # For debug output
+
+# X.509 and certificate handling
+x509-parser = "0.16"
+yasna = "0.5"
+
+# Utilities
+uuid = { version = "1.11", features = ["v4", "serde"] }
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# SSE support for streaming
+eventsource-stream = "0.2"
+futures = "0.3"
+pin-project = "1.1"
+bytes = "1.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.6"
+pretty_assertions = "1.4"
+tracing-subscriber = "0.3"
+dotenv = "0.15"
+
+[features]
+default = []
+mock-attestation = []  # Enable mock attestation for development
