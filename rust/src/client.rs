@@ -38,6 +38,27 @@ impl OpenSecretClient {
         })
     }
 
+    pub fn new_with_api_key(base_url: impl Into<String>, api_key: String) -> Result<Self> {
+        let base_url = base_url.into();
+        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+
+        Ok(Self {
+            client: Client::new(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+            session_manager: SessionManager::new_with_api_key(api_key),
+            use_mock_attestation: use_mock,
+            server_public_key: RefCell::new(None),
+        })
+    }
+
+    pub fn set_api_key(&self, api_key: String) -> Result<()> {
+        self.session_manager.set_api_key(api_key)
+    }
+
+    pub fn clear_api_key(&self) -> Result<()> {
+        self.session_manager.clear_api_key()
+    }
+
     pub async fn perform_attestation_handshake(&self) -> Result<()> {
         // Generate a nonce
         let nonce = Uuid::new_v4().to_string();
@@ -105,8 +126,15 @@ impl OpenSecretClient {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        // Add authorization header if we have a token
-        if let Some(token) = self.session_manager.get_access_token()? {
+        // Add authorization header if we have a token or API key
+        // Prefer API key over JWT token if both are present
+        if let Some(api_key) = self.session_manager.get_api_key()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
+            );
+        } else if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", token))
@@ -299,8 +327,15 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add authorization header if we have a token
-        if let Some(token) = self.session_manager.get_access_token()? {
+        // Add authorization header if we have a token or API key
+        // Prefer API key over JWT token if both are present
+        if let Some(api_key) = self.session_manager.get_api_key()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
+            );
+        } else if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", token))
@@ -504,6 +539,26 @@ impl OpenSecretClient {
     pub async fn get_user(&self) -> Result<UserResponse> {
         self.encrypted_api_call("/protected/user", "GET", None::<()>)
             .await
+    }
+
+    // API Key Management
+    pub async fn create_api_key(&self, name: String) -> Result<ApiKeyCreateResponse> {
+        let request = ApiKeyCreateRequest { name };
+        self.encrypted_api_call("/protected/api-keys", "POST", Some(request))
+            .await
+    }
+
+    pub async fn list_api_keys(&self) -> Result<Vec<ApiKey>> {
+        let response: ApiKeyListResponse = self
+            .encrypted_api_call("/protected/api-keys", "GET", None::<()>)
+            .await?;
+        Ok(response.keys)
+    }
+
+    pub async fn delete_api_key(&self, id: i64) -> Result<()> {
+        let url = format!("/protected/api-keys/{}", id);
+        let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
+        Ok(())
     }
 
     // Key-Value Storage APIs
@@ -845,8 +900,15 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add authorization header if we have a token
-        if let Some(token) = self.session_manager.get_access_token()? {
+        // Add authorization header if we have a token or API key
+        // Prefer API key over JWT token if both are present
+        if let Some(api_key) = self.session_manager.get_api_key()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
+            );
+        } else if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", token))

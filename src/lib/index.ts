@@ -8,8 +8,17 @@ export type {
   DocumentResponse,
   DocumentUploadInitResponse,
   DocumentStatusRequest,
-  DocumentStatusResponse
+  DocumentStatusResponse,
+  ApiKey,
+  ApiKeyCreateResponse,
+  ApiKeyListResponse
 } from "./api";
+
+// Export API key management functions
+export { createApiKey, listApiKeys, deleteApiKey } from "./api";
+
+// Export AI customization options
+export { createCustomFetch, type CustomFetchOptions } from "./ai";
 
 // Re-export Model type from OpenAI for convenience
 export type { Model } from "openai/resources/models.js";

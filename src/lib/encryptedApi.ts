@@ -76,6 +76,39 @@ export async function authenticatedApiCall<T, U>(
   return tryAuthenticatedRequest();
 }
 
+// Special version for OpenAI endpoints that supports API keys
+export async function openAiAuthenticatedApiCall<T, U>(
+  url: string,
+  method: string,
+  data: T,
+  errorMessage?: string,
+  apiKey?: string
+): Promise<U> {
+  // If no API key provided, use regular authenticated call
+  if (!apiKey) {
+    return authenticatedApiCall<T, U>(url, method, data, errorMessage);
+  }
+  
+  // For API key auth, call internal encrypted API directly (no refresh logic)
+  const response = await internalEncryptedApiCall<T, U>(
+    url,
+    method,
+    data,
+    apiKey,
+    errorMessage
+  );
+  
+  if (response.error) {
+    throw new Error(response.error);
+  }
+  
+  if (!response.data) {
+    throw new Error(errorMessage || `Request to ${url} failed`);
+  }
+  
+  return response.data;
+}
+
 // This internal version can return a specific
 async function internalEncryptedApiCall<T, U>(
   url: string,

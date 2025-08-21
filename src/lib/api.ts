@@ -1,5 +1,5 @@
 import { encode } from "@stablelib/base64";
-import { authenticatedApiCall, encryptedApiCall } from "./encryptedApi";
+import { authenticatedApiCall, encryptedApiCall, openAiAuthenticatedApiCall } from "./encryptedApi";
 import type { Model } from "openai/resources/models.js";
 
 let apiUrl = "";
@@ -1112,19 +1112,21 @@ type ModelsListResponse = {
 
 /**
  * Fetches available AI models from the OpenAI-compatible API
+ * @param apiKey - Optional API key to use instead of JWT token
  * @returns A promise resolving to an array of Model objects
  * @throws {Error} If:
- * - The user is not authenticated
+ * - The user is not authenticated (no JWT token or API key)
  * - The request fails
  * - The response format is invalid
  */
-export async function fetchModels(): Promise<Model[]> {
+export async function fetchModels(apiKey?: string): Promise<Model[]> {
   try {
-    const response = await authenticatedApiCall<void, ModelsListResponse>(
+    const response = await openAiAuthenticatedApiCall<void, ModelsListResponse>(
       `${apiUrl}/v1/models`,
       "GET",
       undefined,
-      "Failed to fetch models"
+      "Failed to fetch models",
+      apiKey
     );
 
     // Validate response structure
@@ -1160,6 +1162,18 @@ export type DocumentUploadInitResponse = {
   size: number;
 };
 
+export type ApiKey = {
+  id: number;
+  name: string;
+  created_at: string;
+};
+
+export type ApiKeyCreateResponse = ApiKey & {
+  key: string; // Only returned on creation
+};
+
+export type ApiKeyListResponse = ApiKey[];
+
 export type DocumentStatusRequest = {
   task_id: string;
 };
@@ -1180,6 +1194,93 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  */
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Creates a new API key for the authenticated user
+ * @param name - A descriptive name for the API key
+ * @returns A promise resolving to the API key details with the key value (only shown once)
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The name is invalid
+ * - The request fails
+ * 
+ * @description
+ * IMPORTANT: The `key` field is only returned once during creation and cannot be retrieved again.
+ * The SDK consumer should prompt users to save the key immediately.
+ * 
+ * Example usage:
+ * ```typescript
+ * const apiKey = await createApiKey("Production Key");
+ * console.log(apiKey.key); // UUID format: 550e8400-e29b-41d4-a716-446655440000
+ * // Save this key securely - it won't be shown again!
+ * ```
+ */
+export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
+  return authenticatedApiCall<{ name: string }, ApiKeyCreateResponse>(
+    `${apiUrl}/protected/api-keys`,
+    "POST",
+    { name },
+    "Failed to create API key"
+  );
+}
+
+/**
+ * Lists all API keys for the authenticated user
+ * @returns A promise resolving to an array of API key metadata (without the actual keys)
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ * 
+ * @description
+ * Returns metadata about all API keys associated with the user's account.
+ * Note that the actual key values are never returned - they are only shown once during creation.
+ * 
+ * Example usage:
+ * ```typescript
+ * const keys = await listApiKeys();
+ * keys.forEach(key => {
+ *   console.log(`${key.name} (ID: ${key.id}) created at ${key.created_at}`);
+ * });
+ * ```
+ */
+export async function listApiKeys(): Promise<ApiKeyListResponse> {
+  const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
+    `${apiUrl}/protected/api-keys`,
+    "GET",
+    undefined,
+    "Failed to list API keys"
+  );
+  return response.keys;
+}
+
+/**
+ * Deletes an API key by its ID
+ * @param id - The ID of the API key to delete
+ * @returns A promise resolving to void
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The API key ID is not found
+ * - The user doesn't own the API key
+ * - The request fails
+ * 
+ * @description
+ * Permanently deletes an API key. This action cannot be undone.
+ * Any requests using the deleted key will immediately fail with 401 Unauthorized.
+ * 
+ * Example usage:
+ * ```typescript
+ * await deleteApiKey(123);
+ * console.log("API key deleted successfully");
+ * ```
+ */
+export async function deleteApiKey(id: number): Promise<void> {
+  return authenticatedApiCall<void, void>(
+    `${apiUrl}/protected/api-keys/${id}`,
+    "DELETE",
+    undefined,
+    "Failed to delete API key"
+  );
 }
 
 /**
