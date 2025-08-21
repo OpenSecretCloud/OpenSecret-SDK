@@ -48,12 +48,12 @@ describe("API Key Management", () => {
     expect(createdKey.key).toMatch(uuidRegex);
     
     // List API keys and verify the new key is present
-    const keys = await listApiKeys();
-    console.log("Listed keys:", keys);
+    const response = await listApiKeys();
+    console.log("Listed response:", response);
     
     // Check if keys is an array
-    expect(Array.isArray(keys)).toBe(true);
-    const foundKey = keys.find(k => k.id === createdKey.id);
+    expect(Array.isArray(response.keys)).toBe(true);
+    const foundKey = response.keys.find(k => k.id === createdKey.id);
     
     expect(foundKey).toBeDefined();
     expect(foundKey!.name).toBe(keyName);
@@ -65,8 +65,8 @@ describe("API Key Management", () => {
     await deleteApiKey(createdKey.id);
     
     // Verify the key is deleted
-    const keysAfterDelete = await listApiKeys();
-    const deletedKey = keysAfterDelete.find(k => k.id === createdKey.id);
+    const responseAfterDelete = await listApiKeys();
+    const deletedKey = responseAfterDelete.keys.find(k => k.id === createdKey.id);
     expect(deletedKey).toBeUndefined();
   });
 
@@ -81,9 +81,9 @@ describe("API Key Management", () => {
       }
       
       // List keys and verify all are present
-      const keys = await listApiKeys();
+      const response = await listApiKeys();
       for (const id of keyIds) {
-        expect(keys.some(k => k.id === id)).toBe(true);
+        expect(response.keys.some(k => k.id === id)).toBe(true);
       }
     } finally {
       // Clean up: delete all created keys

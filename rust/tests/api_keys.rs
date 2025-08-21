@@ -2,8 +2,8 @@ use opensecret::{OpenSecretClient, Result};
 use std::env;
 use uuid::Uuid;
 
-async fn setup_test_client() -> Result<OpenSecretClient> {
-    // Load .env.local from OpenSecret-SDK directory
+/// Helper function to load environment variables from .env.local
+fn load_env_vars() {
     let env_path = std::path::Path::new("../.env.local");
     if env_path.exists() {
         dotenv::from_path(env_path).ok();
@@ -11,6 +11,11 @@ async fn setup_test_client() -> Result<OpenSecretClient> {
         // Fallback to standard .env
         dotenv::dotenv().ok();
     }
+}
+
+/// Helper function to get test environment configuration
+fn get_test_config() -> (String, String, String, Uuid) {
+    load_env_vars();
 
     let api_url = env::var("VITE_OPEN_SECRET_API_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
@@ -20,6 +25,12 @@ async fn setup_test_client() -> Result<OpenSecretClient> {
         .expect("VITE_TEST_CLIENT_ID must be set")
         .parse::<Uuid>()
         .expect("VITE_TEST_CLIENT_ID must be a valid UUID");
+
+    (api_url, email, password, client_id)
+}
+
+async fn setup_test_client() -> Result<OpenSecretClient> {
+    let (api_url, email, password, client_id) = get_test_config();
 
     let client = OpenSecretClient::new(&api_url)?;
     client.perform_attestation_handshake().await?;
@@ -64,22 +75,7 @@ async fn test_create_list_delete_api_key() -> Result<()> {
 
 #[tokio::test]
 async fn test_api_key_authentication() -> Result<()> {
-    // Load .env.local from OpenSecret-SDK directory
-    let env_path = std::path::Path::new("../.env.local");
-    if env_path.exists() {
-        dotenv::from_path(env_path).ok();
-    } else {
-        dotenv::dotenv().ok();
-    }
-
-    let api_url = env::var("VITE_OPEN_SECRET_API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
-    let email = env::var("VITE_TEST_EMAIL").expect("VITE_TEST_EMAIL must be set");
-    let password = env::var("VITE_TEST_PASSWORD").expect("VITE_TEST_PASSWORD must be set");
-    let client_id = env::var("VITE_TEST_CLIENT_ID")
-        .expect("VITE_TEST_CLIENT_ID must be set")
-        .parse::<Uuid>()
-        .expect("VITE_TEST_CLIENT_ID must be a valid UUID");
+    let (api_url, email, password, client_id) = get_test_config();
 
     // First create an API key using regular auth
     let client = OpenSecretClient::new(&api_url)?;
@@ -120,22 +116,7 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
     use futures::StreamExt;
     use opensecret::{ChatCompletionRequest, ChatMessage};
 
-    // Load .env.local from OpenSecret-SDK directory
-    let env_path = std::path::Path::new("../.env.local");
-    if env_path.exists() {
-        dotenv::from_path(env_path).ok();
-    } else {
-        dotenv::dotenv().ok();
-    }
-
-    let api_url = env::var("VITE_OPEN_SECRET_API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
-    let email = env::var("VITE_TEST_EMAIL").expect("VITE_TEST_EMAIL must be set");
-    let password = env::var("VITE_TEST_PASSWORD").expect("VITE_TEST_PASSWORD must be set");
-    let client_id = env::var("VITE_TEST_CLIENT_ID")
-        .expect("VITE_TEST_CLIENT_ID must be set")
-        .parse::<Uuid>()
-        .expect("VITE_TEST_CLIENT_ID must be a valid UUID");
+    let (api_url, email, password, client_id) = get_test_config();
 
     // First create an API key using regular auth
     let client = OpenSecretClient::new(&api_url)?;
@@ -219,16 +200,7 @@ async fn test_multiple_api_keys() -> Result<()> {
 
 #[tokio::test]
 async fn test_invalid_api_key_fails() -> Result<()> {
-    // Load .env.local from OpenSecret-SDK directory
-    let env_path = std::path::Path::new("../.env.local");
-    if env_path.exists() {
-        dotenv::from_path(env_path).ok();
-    } else {
-        dotenv::dotenv().ok();
-    }
-
-    let api_url = env::var("VITE_OPEN_SECRET_API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let (api_url, _, _, _) = get_test_config();
 
     // Create a client with an invalid API key
     let invalid_key = "550e8400-e29b-41d4-a716-000000000000".to_string();

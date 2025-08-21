@@ -1227,7 +1227,7 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
 
 /**
  * Lists all API keys for the authenticated user
- * @returns A promise resolving to an array of API key metadata (without the actual keys)
+ * @returns A promise resolving to an object containing an array of API key metadata (without the actual keys)
  * @throws {Error} If:
  * - The user is not authenticated
  * - The request fails
@@ -1238,20 +1238,19 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  * 
  * Example usage:
  * ```typescript
- * const keys = await listApiKeys();
- * keys.forEach(key => {
+ * const response = await listApiKeys();
+ * response.keys.forEach(key => {
  *   console.log(`${key.name} (ID: ${key.id}) created at ${key.created_at}`);
  * });
  * ```
  */
-export async function listApiKeys(): Promise<ApiKeyListResponse> {
-  const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
+export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
+  return authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
     `${apiUrl}/protected/api-keys`,
     "GET",
     undefined,
     "Failed to list API keys"
   );
-  return response.keys;
 }
 
 /**
