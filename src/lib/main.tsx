@@ -594,6 +594,40 @@ export type OpenSecretContextType = {
       onProgress?: (status: string, progress?: number) => void;
     }
   ) => Promise<DocumentResponse>;
+
+  /**
+   * Creates a new API key for the authenticated user
+   * @param name - A descriptive name for the API key
+   * @returns A promise resolving to the API key details with the key value (only shown once)
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * IMPORTANT: The `key` field is only returned once during creation and cannot be retrieved again.
+   * The SDK consumer should prompt users to save the key immediately.
+   */
+  createApiKey: typeof api.createApiKey;
+
+  /**
+   * Lists all API keys for the authenticated user
+   * @returns A promise resolving to an object containing an array of API key metadata (without the actual keys)
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * Returns metadata about all API keys associated with the user's account.
+   * Note that the actual key values are never returned - they are only shown once during creation.
+   * The keys are sorted by created_at in descending order (newest first).
+   */
+  listApiKeys: typeof api.listApiKeys;
+
+  /**
+   * Deletes an API key by its name
+   * @param name - The name of the API key to delete
+   * @returns A promise that resolves when the key is deleted
+   * @throws {Error} If the user is not authenticated or the API key is not found
+   *
+   * Permanently deletes an API key. This action cannot be undone.
+   * Any requests using the deleted key will immediately fail with 401 Unauthorized.
+   * Names are unique per user, so this uniquely identifies the key to delete.
+   */
+  deleteApiKey: typeof api.deleteApiKey;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -655,7 +689,10 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   fetchModels: api.fetchModels,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
-  uploadDocumentWithPolling: api.uploadDocumentWithPolling
+  uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+  createApiKey: api.createApiKey,
+  listApiKeys: api.listApiKeys,
+  deleteApiKey: api.deleteApiKey
 });
 
 /**
@@ -1013,7 +1050,10 @@ export function OpenSecretProvider({
     fetchModels: api.fetchModels,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
-    uploadDocumentWithPolling: api.uploadDocumentWithPolling
+    uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+    createApiKey: api.createApiKey,
+    listApiKeys: api.listApiKeys,
+    deleteApiKey: api.deleteApiKey
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
