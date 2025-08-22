@@ -29,6 +29,18 @@ export type OpenSecretContextType = {
   clientId: string;
 
   /**
+   * Optional API key for OpenAI endpoints.
+   * When set, this will be used instead of JWT for /v1/* endpoints.
+   */
+  apiKey?: string;
+
+  /**
+   * Sets the API key to use for OpenAI endpoints.
+   * @param key - The API key (UUID format) or undefined to clear
+   */
+  setApiKey: (key: string | undefined) => void;
+
+  /**
    * Authenticates a user with email and password.
    *
    * - Calls the login API endpoint with the configured clientId
@@ -636,6 +648,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
     user: undefined
   },
   clientId: "",
+  apiKey: undefined,
+  setApiKey: () => {},
   signIn: async () => {},
   signUp: async () => {},
   signInGuest: async () => {},
@@ -736,6 +750,7 @@ export function OpenSecretProvider({
     loading: true,
     user: undefined
   });
+  const [apiKey, setApiKey] = useState<string | undefined>();
   const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType["aiCustomFetch"]>();
 
   useEffect(() => {
@@ -762,11 +777,12 @@ export function OpenSecretProvider({
   // Create aiCustomFetch when API is configured (supports JWT or API key internally)
   useEffect(() => {
     if (apiUrl) {
-      setAiCustomFetch(() => createCustomFetch());
+      // Pass API key if available, otherwise falls back to JWT
+      setAiCustomFetch(() => createCustomFetch(apiKey ? { apiKey } : undefined));
     } else {
       setAiCustomFetch(undefined);
     }
-  }, [apiUrl]);
+  }, [apiUrl, apiKey]);
 
   async function fetchUser() {
     const access_token = window.localStorage.getItem("access_token");
@@ -998,6 +1014,8 @@ export function OpenSecretProvider({
   const value: OpenSecretContextType = {
     auth,
     clientId,
+    apiKey,
+    setApiKey,
     signIn,
     signInGuest,
     signOut,
