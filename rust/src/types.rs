@@ -276,7 +276,6 @@ pub struct ConfirmAccountDeletionRequest {
 // API Key Management Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKey {
-    pub id: i64,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }
@@ -293,8 +292,7 @@ pub struct ApiKeyCreateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyCreateResponse {
-    pub id: i64,
-    pub key: String, // UUID format, only returned on creation
+    pub key: String, // UUID format with dashes, only returned on creation
     pub name: String,
     pub created_at: DateTime<Utc>,
 }

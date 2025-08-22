@@ -39,7 +39,6 @@ describe("API Key Management", () => {
     const createdKey = await createApiKey(keyName);
     
     expect(createdKey.name).toBe(keyName);
-    expect(createdKey.id).toBeGreaterThan(0);
     expect(createdKey.key).toBeDefined();
     expect(createdKey.created_at).toBeDefined();
     
@@ -53,7 +52,7 @@ describe("API Key Management", () => {
     
     // Check if keys is an array
     expect(Array.isArray(response.keys)).toBe(true);
-    const foundKey = response.keys.find(k => k.id === createdKey.id);
+    const foundKey = response.keys.find(k => k.name === createdKey.name);
     
     expect(foundKey).toBeDefined();
     expect(foundKey!.name).toBe(keyName);
@@ -62,36 +61,37 @@ describe("API Key Management", () => {
     expect((foundKey as any).key).toBeUndefined();
     
     // Delete the API key
-    await deleteApiKey(createdKey.id);
+    await deleteApiKey(createdKey.name);
     
     // Verify the key is deleted
     const responseAfterDelete = await listApiKeys();
-    const deletedKey = responseAfterDelete.keys.find(k => k.id === createdKey.id);
+    const deletedKey = responseAfterDelete.keys.find(k => k.name === createdKey.name);
     expect(deletedKey).toBeUndefined();
   });
 
   test("Create multiple API keys", async () => {
-    const keyIds: number[] = [];
+    const keyNames: string[] = [];
     
     try {
       // Create multiple keys
       for (let i = 0; i < 3; i++) {
-        const key = await createApiKey(`Test Key ${i} - ${Date.now()}`);
-        keyIds.push(key.id);
+        const keyName = `Test Key ${i} - ${Date.now()}`;
+        const key = await createApiKey(keyName);
+        keyNames.push(key.name);
       }
       
       // List keys and verify all are present
       const response = await listApiKeys();
-      for (const id of keyIds) {
-        expect(response.keys.some(k => k.id === id)).toBe(true);
+      for (const name of keyNames) {
+        expect(response.keys.some(k => k.name === name)).toBe(true);
       }
     } finally {
       // Clean up: delete all created keys
-      for (const id of keyIds) {
+      for (const name of keyNames) {
         try {
-          await deleteApiKey(id);
+          await deleteApiKey(name);
         } catch (error) {
-          console.warn(`Failed to delete key ${id}:`, error);
+          console.warn(`Failed to delete key ${name}:`, error);
         }
       }
     }
@@ -100,15 +100,15 @@ describe("API Key Management", () => {
 
 describe("API Key Authentication with OpenAI", () => {
   let testApiKey: string;
-  let testApiKeyId: number;
+  let testApiKeyName: string;
 
   beforeAll(async () => {
     await setupTestUser();
     
     // Create an API key for testing
-    const createdKey = await createApiKey(`OpenAI Test Key ${Date.now()}`);
+    testApiKeyName = `OpenAI Test Key ${Date.now()}`;
+    const createdKey = await createApiKey(testApiKeyName);
     testApiKey = createdKey.key;
-    testApiKeyId = createdKey.id;
   });
 
   test("OpenAI custom fetch with API key makes a simple request", async () => {
@@ -188,9 +188,9 @@ describe("API Key Authentication with OpenAI", () => {
 
   // Clean up after all tests
   afterAll(async () => {
-    if (testApiKeyId) {
+    if (testApiKeyName) {
       try {
-        await deleteApiKey(testApiKeyId);
+        await deleteApiKey(testApiKeyName);
       } catch (error) {
         console.warn("Failed to delete test API key:", error);
       }

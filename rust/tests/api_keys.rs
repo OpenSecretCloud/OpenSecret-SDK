@@ -48,7 +48,6 @@ async fn test_create_list_delete_api_key() -> Result<()> {
     let created_key = client.create_api_key(key_name.clone()).await?;
 
     assert_eq!(created_key.name, key_name);
-    assert!(created_key.id > 0);
     assert!(!created_key.key.is_empty());
 
     // Verify the key format is a UUID with dashes
@@ -57,17 +56,19 @@ async fn test_create_list_delete_api_key() -> Result<()> {
 
     // List API keys and verify the new key is present
     let keys = client.list_api_keys().await?;
-    let found_key = keys.iter().find(|k| k.id == created_key.id);
+    let found_key = keys.iter().find(|k| k.name == created_key.name);
 
     assert!(found_key.is_some());
     assert_eq!(found_key.unwrap().name, key_name);
 
     // Delete the API key
-    client.delete_api_key(created_key.id).await?;
+    client.delete_api_key(&created_key.name).await?;
 
     // Verify the key is deleted
     let keys_after_delete = client.list_api_keys().await?;
-    let deleted_key = keys_after_delete.iter().find(|k| k.id == created_key.id);
+    let deleted_key = keys_after_delete
+        .iter()
+        .find(|k| k.name == created_key.name);
     assert!(deleted_key.is_none());
 
     Ok(())
@@ -83,9 +84,9 @@ async fn test_api_key_authentication() -> Result<()> {
     client.login(email, password, client_id).await?;
 
     let key_name = format!("Test API Key {}", chrono::Utc::now().timestamp());
-    let created_key = client.create_api_key(key_name).await?;
+    let created_key = client.create_api_key(key_name.clone()).await?;
     let api_key = created_key.key.clone();
-    let api_key_id = created_key.id;
+    let api_key_name = created_key.name.clone();
 
     // Now create a new client with just the API key
     let api_client = OpenSecretClient::new_with_api_key(&api_url, api_key.clone())?;
@@ -103,7 +104,7 @@ async fn test_api_key_authentication() -> Result<()> {
     assert!(model_exists, "Should have at least one model available");
 
     // Clean up: delete the API key
-    client.delete_api_key(api_key_id).await?;
+    client.delete_api_key(&api_key_name).await?;
 
     Ok(())
 }
@@ -124,9 +125,9 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
     client.login(email, password, client_id).await?;
 
     let key_name = format!("Test Stream Key {}", chrono::Utc::now().timestamp());
-    let created_key = client.create_api_key(key_name).await?;
+    let created_key = client.create_api_key(key_name.clone()).await?;
     let api_key = created_key.key.clone();
-    let api_key_id = created_key.id;
+    let api_key_name = created_key.name.clone();
 
     // Create a new client with the API key
     let api_client = OpenSecretClient::new_with_api_key(&api_url, api_key)?;
@@ -167,7 +168,7 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
     assert_eq!(full_response.trim().to_lowercase(), "echo");
 
     // Clean up
-    client.delete_api_key(api_key_id).await?;
+    client.delete_api_key(&api_key_name).await?;
 
     Ok(())
 }
@@ -175,24 +176,24 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
 #[tokio::test]
 async fn test_multiple_api_keys() -> Result<()> {
     let client = setup_test_client().await?;
-    let mut key_ids = Vec::new();
+    let mut key_names = Vec::new();
 
     // Create multiple keys
     for i in 0..3 {
         let key_name = format!("Test Key {} - {}", i, chrono::Utc::now().timestamp());
-        let created_key = client.create_api_key(key_name).await?;
-        key_ids.push(created_key.id);
+        let created_key = client.create_api_key(key_name.clone()).await?;
+        key_names.push(created_key.name);
     }
 
     // List keys and verify all are present
     let keys = client.list_api_keys().await?;
-    for id in &key_ids {
-        assert!(keys.iter().any(|k| k.id == *id));
+    for name in &key_names {
+        assert!(keys.iter().any(|k| k.name == *name));
     }
 
     // Clean up: delete all created keys
-    for id in key_ids {
-        client.delete_api_key(id).await?;
+    for name in key_names {
+        client.delete_api_key(&name).await?;
     }
 
     Ok(())

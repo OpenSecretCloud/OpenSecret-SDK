@@ -552,11 +552,18 @@ impl OpenSecretClient {
         let response: ApiKeyListResponse = self
             .encrypted_api_call("/protected/api-keys", "GET", None::<()>)
             .await?;
-        Ok(response.keys)
+
+        // Sort by created_at descending (newest first)
+        let mut keys = response.keys;
+        keys.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        Ok(keys)
     }
 
-    pub async fn delete_api_key(&self, id: i64) -> Result<()> {
-        let url = format!("/protected/api-keys/{}", id);
+    pub async fn delete_api_key(&self, name: &str) -> Result<()> {
+        // URL-encode the name to handle special characters
+        let encoded_name = utf8_percent_encode(name, NON_ALPHANUMERIC).to_string();
+        let url = format!("/protected/api-keys/{}", encoded_name);
         let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
         Ok(())
     }

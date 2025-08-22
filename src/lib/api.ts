@@ -1163,13 +1163,12 @@ export type DocumentUploadInitResponse = {
 };
 
 export type ApiKey = {
-  id: number;
   name: string;
   created_at: string;
 };
 
 export type ApiKeyCreateResponse = ApiKey & {
-  key: string; // Only returned on creation
+  key: string; // Only returned on creation - UUID with dashes
 };
 
 export type ApiKeyListResponse = ApiKey[];
@@ -1235,47 +1234,58 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  * @description
  * Returns metadata about all API keys associated with the user's account.
  * Note that the actual key values are never returned - they are only shown once during creation.
+ * The keys are sorted by created_at in descending order (newest first).
  * 
  * Example usage:
  * ```typescript
  * const response = await listApiKeys();
  * response.keys.forEach(key => {
- *   console.log(`${key.name} (ID: ${key.id}) created at ${key.created_at}`);
+ *   console.log(`${key.name} created at ${key.created_at}`);
  * });
  * ```
  */
 export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
-  return authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
+  const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
     `${apiUrl}/protected/api-keys`,
     "GET",
     undefined,
     "Failed to list API keys"
   );
+  
+  // Sort by created_at descending (newest first)
+  response.keys.sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  
+  return response;
 }
 
 /**
- * Deletes an API key by its ID
- * @param id - The ID of the API key to delete
+ * Deletes an API key by its name
+ * @param name - The name of the API key to delete
  * @returns A promise resolving to void
  * @throws {Error} If:
  * - The user is not authenticated
- * - The API key ID is not found
+ * - The API key with this name is not found
  * - The user doesn't own the API key
  * - The request fails
  * 
  * @description
  * Permanently deletes an API key. This action cannot be undone.
  * Any requests using the deleted key will immediately fail with 401 Unauthorized.
+ * Names are unique per user, so this uniquely identifies the key to delete.
  * 
  * Example usage:
  * ```typescript
- * await deleteApiKey(123);
+ * await deleteApiKey("Production Key");
  * console.log("API key deleted successfully");
  * ```
  */
-export async function deleteApiKey(id: number): Promise<void> {
+export async function deleteApiKey(name: string): Promise<void> {
+  // URL-encode the name to handle special characters
+  const encodedName = encodeURIComponent(name);
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/api-keys/${id}`,
+    `${apiUrl}/protected/api-keys/${encodedName}`,
     "DELETE",
     undefined,
     "Failed to delete API key"
