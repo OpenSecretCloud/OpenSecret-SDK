@@ -759,14 +759,14 @@ export function OpenSecretProvider({
     });
   }, [apiUrl, clientId]);
 
-  // Create aiCustomFetch when user is authenticated
+  // Create aiCustomFetch when API is configured (supports JWT or API key internally)
   useEffect(() => {
-    if (auth.user) {
+    if (apiUrl) {
       setAiCustomFetch(() => createCustomFetch());
     } else {
       setAiCustomFetch(undefined);
     }
-  }, [auth.user]);
+  }, [apiUrl]);
 
   async function fetchUser() {
     const access_token = window.localStorage.getItem("access_token");
