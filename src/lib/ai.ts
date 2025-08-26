@@ -3,10 +3,10 @@ import { getAttestation } from "./getAttestation";
 import * as api from "./api";
 
 export function createCustomFetch(): (
-  input: string | URL | Request,
+  input: RequestInfo,
   init?: RequestInit
 ) => Promise<Response> {
-  return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       const currentAccessToken = window.localStorage.getItem("access_token");
       if (!currentAccessToken) {
@@ -74,37 +74,44 @@ export function createCustomFetch(): (
               while ((event = extractEvent(buffer))) {
                 buffer = buffer.slice(event.length);
 
-                // Split the event into individual lines
+                // Split the event into individual lines (but keep the structure)
                 const lines = event.split("\n");
+                let decryptedEvent = "";
 
-                for (const line of lines) {
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  
                   // Handle event: lines - pass them through as-is
                   if (line.trim().startsWith("event: ")) {
-                    controller.enqueue(line + "\n");
+                    decryptedEvent += line + "\n";
                   }
                   // Handle data: lines - decrypt them
                   else if (line.trim().startsWith("data: ")) {
                     const data = line.slice(6).trim();
                     if (data === "[DONE]") {
-                      controller.enqueue(`data: [DONE]\n\n`);
+                      decryptedEvent += `data: [DONE]\n`;
                     } else {
                       try {
                         const decrypted = decryptMessage(sessionKey, data);
-
-                        // Always enqueue the decrypted data
-                        // Note: We don't add \n\n here because the empty line will be added separately
-                        controller.enqueue(`data: ${decrypted}\n`);
+                        decryptedEvent += `data: ${decrypted}\n`;
                       } catch (error) {
                         console.error("Decryption error:", error, "Data:", data);
-                        // Instead of sending the encrypted data, we'll skip this chunk
-                        console.log("Skipping corrupted chunk");
+                        // Instead of sending the encrypted data, we'll skip this event
+                        decryptedEvent = "";
+                        break;
                       }
                     }
                   }
-                  // Pass through empty lines
-                  else if (line === "") {
-                    controller.enqueue("\n");
+                  // Handle empty lines (but not the final one which is part of the event separator)
+                  else if (line === "" && i < lines.length - 1) {
+                    decryptedEvent += "\n";
                   }
+                }
+                
+                // Only enqueue if we have a valid decrypted event
+                // Add the double newline separator that marks the end of an SSE event
+                if (decryptedEvent) {
+                  controller.enqueue(decryptedEvent + "\n");
                 }
               }
             }
