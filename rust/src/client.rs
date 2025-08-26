@@ -13,7 +13,7 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::Value as CborValue;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 pub struct OpenSecretClient {
@@ -21,7 +21,7 @@ pub struct OpenSecretClient {
     base_url: String,
     session_manager: SessionManager,
     use_mock_attestation: bool,
-    server_public_key: RefCell<Option<Vec<u8>>>, // Store server's public key from attestation
+    server_public_key: Arc<RwLock<Option<Vec<u8>>>>, // Store server's public key from attestation
 }
 
 impl OpenSecretClient {
@@ -34,7 +34,7 @@ impl OpenSecretClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             session_manager: SessionManager::new(),
             use_mock_attestation: use_mock,
-            server_public_key: RefCell::new(None),
+            server_public_key: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -47,7 +47,7 @@ impl OpenSecretClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             session_manager: SessionManager::new_with_api_key(api_key),
             use_mock_attestation: use_mock,
-            server_public_key: RefCell::new(None),
+            server_public_key: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -77,7 +77,9 @@ impl OpenSecretClient {
 
         // Store server's public key from attestation document
         if let Some(pub_key) = doc.public_key {
-            *self.server_public_key.borrow_mut() = Some(pub_key);
+            *self.server_public_key.write().map_err(|e| {
+                Error::KeyExchange(format!("Failed to write server public key: {}", e))
+            })? = Some(pub_key);
         } else {
             return Err(Error::AttestationVerificationFailed(
                 "No public key in attestation document".to_string(),
@@ -158,7 +160,10 @@ impl OpenSecretClient {
         let key_exchange_response: KeyExchangeResponse = response.json().await?;
 
         // Get server's public key from attestation
-        let server_public_key_bytes = self.server_public_key.borrow();
+        let server_public_key_bytes = self
+            .server_public_key
+            .read()
+            .map_err(|e| Error::KeyExchange(format!("Failed to read server public key: {}", e)))?;
         let server_public_key_bytes = server_public_key_bytes
             .as_ref()
             .ok_or_else(|| Error::KeyExchange("Server public key not available".to_string()))?;
