@@ -1358,6 +1358,7 @@ export type ResponsesRetrieveResponse = {
   created_at: number;
   status: "queued" | "in_progress" | "completed" | "failed" | "cancelled";
   model: string;
+  title?: string; // Title is included in list responses
   usage?: {
     input_tokens: number;
     input_tokens_details: {

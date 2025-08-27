@@ -47,3 +47,6 @@ export type { PcrConfig, Pcr0ValidationResult } from "./pcr";
 // Export crypto utilities
 // TODO: these can actually just be used internally by the password reset function
 export { generateSecureSecret, hashSecret } from "./crypto";
+
+// Export API functions for Responses
+export { fetchResponsesList, fetchResponse } from "./api";
