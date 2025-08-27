@@ -750,8 +750,25 @@ export function OpenSecretProvider({
     loading: true,
     user: undefined
   });
-  const [apiKey, setApiKey] = useState<string | undefined>();
+  const [apiKey, setApiKeyState] = useState<string | undefined>();
   const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType["aiCustomFetch"]>();
+
+  // Validates UUID-with-dashes (v1–v5) and trims input; set undefined to clear
+  const setApiKey = (key: string | undefined) => {
+    if (key === undefined) {
+      setApiKeyState(undefined);
+      return;
+    }
+    const trimmed = key.trim();
+    const uuidWithDashes =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidWithDashes.test(trimmed)) {
+      console.warn("setApiKey: provided key does not look like a UUID; clearing apiKey");
+      setApiKeyState(undefined);
+      return;
+    }
+    setApiKeyState(trimmed);
+  };
 
   useEffect(() => {
     if (!apiUrl || apiUrl.trim() === "") {
@@ -820,6 +837,8 @@ export function OpenSecretProvider({
       const { access_token, refresh_token } = await api.fetchLogin(email, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on new sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -838,6 +857,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on new sign-up to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -851,6 +872,8 @@ export function OpenSecretProvider({
       const { access_token, refresh_token } = await api.fetchGuestLogin(id, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on guest sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -867,6 +890,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on guest sign-up to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
       return { access_token, refresh_token, id };
     } catch (error) {
@@ -898,6 +923,8 @@ export function OpenSecretProvider({
     localStorage.removeItem("refresh_token");
     sessionStorage.removeItem("sessionKey");
     sessionStorage.removeItem("sessionId");
+    // Clear any in-memory API key so no post-logout calls can use it
+    setApiKey(undefined);
     setAuth({
       loading: false,
       user: undefined
@@ -922,6 +949,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("GitHub callback error:", error);
@@ -947,6 +976,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Google callback error:", error);
@@ -972,6 +1003,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Apple callback error:", error);
@@ -988,6 +1021,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Apple native sign-in error:", error);
