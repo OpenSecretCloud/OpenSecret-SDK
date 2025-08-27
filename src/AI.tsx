@@ -48,7 +48,7 @@ export function AI() {
       const messages = [{ role: "user", content: query } as ChatMessage];
 
       console.log("Starting stream request");
-      const stream = await openai.beta.chat.completions.stream({
+      const stream = await openai.chat.completions.create({
         model,
         messages,
         stream: true
@@ -63,8 +63,6 @@ export function AI() {
         fullResponse += content;
         setResponse(fullResponse);
       }
-
-      await stream.finalChatCompletion();
     } catch (error) {
       console.error("Chat error:", error);
       if (error instanceof Error) {

@@ -345,7 +345,7 @@ export type OpenSecretContextType = {
    * });
    * ```
    */
-  aiCustomFetch: (url: RequestInfo, init?: RequestInit) => Promise<Response>;
+  aiCustomFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
   /**
    * Returns the current OpenSecret enclave API URL being used
@@ -594,6 +594,66 @@ export type OpenSecretContextType = {
       onProgress?: (status: string, progress?: number) => void;
     }
   ) => Promise<DocumentResponse>;
+
+  /**
+   * Lists user's responses with pagination
+   * @param params - Optional parameters for pagination and filtering
+   * @returns A promise resolving to a paginated list of responses
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The request fails
+   * - Invalid pagination parameters
+   *
+   * @description
+   * This function fetches a paginated list of the user's responses.
+   * In list view, the usage and output fields are always null for performance reasons.
+   *
+   * Query Parameters:
+   * - limit: Number of results per page (1-100, default: 20)
+   * - after: UUID cursor for forward pagination
+   * - before: UUID cursor for backward pagination
+   * - order: Sort order (currently not implemented, reserved for future use)
+   *
+   * Pagination Examples:
+   * ```typescript
+   * // First page
+   * const responses = await context.fetchResponsesList({ limit: 20 });
+   *
+   * // Next page
+   * const nextPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   after: responses.last_id
+   * });
+   *
+   * // Previous page
+   * const prevPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   before: responses.first_id
+   * });
+   * ```
+   */
+  fetchResponsesList: (params?: api.ResponsesListParams) => Promise<api.ResponsesListResponse>;
+
+  /**
+   * Retrieves a single response by ID
+   * @param responseId - The UUID of the response to retrieve
+   * @returns A promise resolving to the response details
+   */
+  fetchResponse: (responseId: string) => Promise<api.ResponsesRetrieveResponse>;
+
+  /**
+   * Cancels an in-progress response
+   * @param responseId - The UUID of the response to cancel
+   * @returns A promise resolving to the cancelled response
+   */
+  cancelResponse: (responseId: string) => Promise<api.ResponsesCancelResponse>;
+
+  /**
+   * Deletes a response permanently
+   * @param responseId - The UUID of the response to delete
+   * @returns A promise resolving to deletion confirmation
+   */
+  deleteResponse: (responseId: string) => Promise<api.ResponsesDeleteResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -655,7 +715,11 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   fetchModels: api.fetchModels,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
-  uploadDocumentWithPolling: api.uploadDocumentWithPolling
+  uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+  fetchResponsesList: api.fetchResponsesList,
+  fetchResponse: api.fetchResponse,
+  cancelResponse: api.cancelResponse,
+  deleteResponse: api.deleteResponse
 });
 
 /**
@@ -1013,7 +1077,11 @@ export function OpenSecretProvider({
     fetchModels: api.fetchModels,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
-    uploadDocumentWithPolling: api.uploadDocumentWithPolling
+    uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+    fetchResponsesList: api.fetchResponsesList,
+    fetchResponse: api.fetchResponse,
+    cancelResponse: api.cancelResponse,
+    deleteResponse: api.deleteResponse
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

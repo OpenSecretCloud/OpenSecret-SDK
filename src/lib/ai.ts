@@ -2,8 +2,11 @@ import { decryptMessage, encryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import * as api from "./api";
 
-export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
-  return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
+export function createCustomFetch(): (
+  input: string | URL | Request,
+  init?: RequestInit
+) => Promise<Response> {
+  return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       const currentAccessToken = window.localStorage.getItem("access_token");
       if (!currentAccessToken) {
@@ -70,35 +73,37 @@ export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => P
               let event;
               while ((event = extractEvent(buffer))) {
                 buffer = buffer.slice(event.length);
-                if (event.trim().startsWith("data: ")) {
-                  const data = event.slice(6).trim();
-                  if (data === "[DONE]") {
-                    controller.enqueue(`data: [DONE]\n\n`);
-                  } else {
-                    try {
-                      console.groupCollapsed("Decrypting chunk");
-                      console.log("Attempting to decrypt, data length:", data.length);
-                      const decrypted = decryptMessage(sessionKey, data);
-                      console.log("Decrypted data length:", decrypted.length);
-                      console.log("Decrypted data:", decrypted);
 
+                // Split the event into individual lines
+                const lines = event.split("\n");
+
+                for (const line of lines) {
+                  // Handle event: lines - pass them through as-is
+                  if (line.trim().startsWith("event: ")) {
+                    controller.enqueue(line + "\n");
+                  }
+                  // Handle data: lines - decrypt them
+                  else if (line.trim().startsWith("data: ")) {
+                    const data = line.slice(6).trim();
+                    if (data === "[DONE]") {
+                      controller.enqueue(`data: [DONE]\n\n`);
+                    } else {
                       try {
-                        const parsedJson = JSON.parse(decrypted);
-                        console.log("Parsed JSON:", parsedJson);
-                        controller.enqueue(`data: ${JSON.stringify(parsedJson)}\n\n`);
-                      } catch (jsonError) {
-                        if (jsonError instanceof SyntaxError) {
-                          console.log("Failed to parse JSON:", decrypted);
-                          controller.enqueue(`data: ${decrypted}\n\n`);
-                        }
+                        const decrypted = decryptMessage(sessionKey, data);
+
+                        // Always enqueue the decrypted data
+                        // Note: We don't add \n\n here because the empty line will be added separately
+                        controller.enqueue(`data: ${decrypted}\n`);
+                      } catch (error) {
+                        console.error("Decryption error:", error, "Data:", data);
+                        // Instead of sending the encrypted data, we'll skip this chunk
+                        console.log("Skipping corrupted chunk");
                       }
-                    } catch (error) {
-                      console.error("Decryption error:", error, "Data:", data);
-                      // Instead of sending the encrypted data, we'll skip this chunk
-                      console.log("Skipping corrupted chunk");
-                    } finally {
-                      console.groupEnd();
                     }
+                  }
+                  // Pass through empty lines
+                  else if (line === "") {
+                    controller.enqueue("\n");
                   }
                 }
               }
@@ -114,7 +119,33 @@ export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => P
         });
       }
 
-      return response;
+      // Decrypt regular JSON responses
+      const responseText = await response.text();
+      try {
+        const responseData = JSON.parse(responseText);
+
+        // Check if the response has an encrypted field
+        if (responseData.encrypted) {
+          const decrypted = decryptMessage(sessionKey, responseData.encrypted);
+
+          // Return a new Response with the decrypted data
+          return new Response(decrypted, {
+            headers: response.headers,
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+      } catch (e) {
+        // If it's not JSON or doesn't have encrypted field, return original response
+        console.log("Response is not encrypted JSON, returning as-is");
+      }
+
+      // Return the original response text as a new Response
+      return new Response(responseText, {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText
+      });
     } catch (error) {
       console.error("Error during fetch process:", error);
       throw error;
