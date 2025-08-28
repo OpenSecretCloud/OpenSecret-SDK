@@ -13,7 +13,7 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::Value as CborValue;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 pub struct OpenSecretClient {
@@ -21,7 +21,7 @@ pub struct OpenSecretClient {
     base_url: String,
     session_manager: SessionManager,
     use_mock_attestation: bool,
-    server_public_key: RefCell<Option<Vec<u8>>>, // Store server's public key from attestation
+    server_public_key: Arc<RwLock<Option<Vec<u8>>>>, // Store server's public key from attestation
 }
 
 impl OpenSecretClient {
@@ -34,8 +34,29 @@ impl OpenSecretClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             session_manager: SessionManager::new(),
             use_mock_attestation: use_mock,
-            server_public_key: RefCell::new(None),
+            server_public_key: Arc::new(RwLock::new(None)),
         })
+    }
+
+    pub fn new_with_api_key(base_url: impl Into<String>, api_key: String) -> Result<Self> {
+        let base_url = base_url.into();
+        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+
+        Ok(Self {
+            client: Client::new(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+            session_manager: SessionManager::new_with_api_key(api_key),
+            use_mock_attestation: use_mock,
+            server_public_key: Arc::new(RwLock::new(None)),
+        })
+    }
+
+    pub fn set_api_key(&self, api_key: String) -> Result<()> {
+        self.session_manager.set_api_key(api_key)
+    }
+
+    pub fn clear_api_key(&self) -> Result<()> {
+        self.session_manager.clear_api_key()
     }
 
     pub async fn perform_attestation_handshake(&self) -> Result<()> {
@@ -56,7 +77,9 @@ impl OpenSecretClient {
 
         // Store server's public key from attestation document
         if let Some(pub_key) = doc.public_key {
-            *self.server_public_key.borrow_mut() = Some(pub_key);
+            *self.server_public_key.write().map_err(|e| {
+                Error::KeyExchange(format!("Failed to write server public key: {}", e))
+            })? = Some(pub_key);
         } else {
             return Err(Error::AttestationVerificationFailed(
                 "No public key in attestation document".to_string(),
@@ -105,7 +128,7 @@ impl OpenSecretClient {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        // Add authorization header if we have a token
+        // Key exchange only uses JWT tokens, never API keys
         if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
@@ -137,7 +160,10 @@ impl OpenSecretClient {
         let key_exchange_response: KeyExchangeResponse = response.json().await?;
 
         // Get server's public key from attestation
-        let server_public_key_bytes = self.server_public_key.borrow();
+        let server_public_key_bytes = self
+            .server_public_key
+            .read()
+            .map_err(|e| Error::KeyExchange(format!("Failed to read server public key: {}", e)))?;
         let server_public_key_bytes = server_public_key_bytes
             .as_ref()
             .ok_or_else(|| Error::KeyExchange("Server public key not available".to_string()))?;
@@ -299,7 +325,7 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add authorization header if we have a token
+        // Add JWT authorization header (API keys are not valid for most endpoints)
         if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
@@ -349,6 +375,103 @@ impl OpenSecretClient {
             &session.session_key,
             &BASE64.decode(&encrypted_response.encrypted)?,
         )?;
+        let result: U = serde_json::from_slice(&decrypted)?;
+
+        Ok(result)
+    }
+
+    /// Encrypted API call specifically for OpenAI endpoints (/v1/*)
+    /// This supports both API key and JWT authentication, with API key taking priority
+    async fn encrypted_openai_call<T: Serialize, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+    ) -> Result<U> {
+        // Ensure we have a session
+        let session = self.session_manager.get_session()?.ok_or_else(|| {
+            Error::Session(
+                "No active session. Call perform_attestation_handshake first".to_string(),
+            )
+        })?;
+
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        // Encrypt the request data if provided
+        let encrypted_body = if let Some(data) = data {
+            let json = serde_json::to_string(&data)?;
+            let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
+            Some(EncryptedRequest {
+                encrypted: BASE64.encode(&encrypted),
+            })
+        } else {
+            None
+        };
+
+        // Build headers
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert(
+            "x-session-id",
+            HeaderValue::from_str(&session.session_id.to_string())
+                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
+        );
+
+        // For OpenAI endpoints: Prefer API key over JWT token if both are present
+        if let Some(api_key) = self.session_manager.get_api_key()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
+            );
+        } else if let Some(token) = self.session_manager.get_access_token()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", token))
+                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
+            );
+        }
+
+        // Make the request
+        let request_builder = match method {
+            "GET" => self.client.get(&url),
+            "POST" => self.client.post(&url),
+            "PUT" => self.client.put(&url),
+            "DELETE" => self.client.delete(&url),
+            _ => {
+                return Err(Error::Api {
+                    status: 0,
+                    message: format!("Unsupported HTTP method: {}", method),
+                })
+            }
+        };
+
+        let request = request_builder.headers(headers);
+
+        let response = if let Some(body) = encrypted_body {
+            request.json(&body).send().await?
+        } else {
+            request.send().await?
+        };
+
+        let status = response.status();
+        let body = response.bytes().await?;
+
+        if !status.is_success() {
+            let error_msg = String::from_utf8_lossy(&body).to_string();
+            return Err(Error::Api {
+                status: status.as_u16(),
+                message: error_msg,
+            });
+        }
+
+        // Decrypt the response
+        let encrypted_response: EncryptedResponse<U> = serde_json::from_slice(&body)?;
+        let encrypted_data = BASE64
+            .decode(encrypted_response.encrypted.as_bytes())
+            .map_err(|e| Error::Encryption(format!("Failed to decode response: {}", e)))?;
+
+        let decrypted = crypto::decrypt_data(&session.session_key, &encrypted_data)?;
         let result: U = serde_json::from_slice(&decrypted)?;
 
         Ok(result)
@@ -504,6 +627,33 @@ impl OpenSecretClient {
     pub async fn get_user(&self) -> Result<UserResponse> {
         self.encrypted_api_call("/protected/user", "GET", None::<()>)
             .await
+    }
+
+    // API Key Management
+    pub async fn create_api_key(&self, name: String) -> Result<ApiKeyCreateResponse> {
+        let request = ApiKeyCreateRequest { name };
+        self.encrypted_api_call("/protected/api-keys", "POST", Some(request))
+            .await
+    }
+
+    pub async fn list_api_keys(&self) -> Result<Vec<ApiKey>> {
+        let response: ApiKeyListResponse = self
+            .encrypted_api_call("/protected/api-keys", "GET", None::<()>)
+            .await?;
+
+        // Sort by created_at descending (newest first)
+        let mut keys = response.keys;
+        keys.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        Ok(keys)
+    }
+
+    pub async fn delete_api_key(&self, name: &str) -> Result<()> {
+        // URL-encode the name to handle special characters
+        let encoded_name = utf8_percent_encode(name, NON_ALPHANUMERIC).to_string();
+        let url = format!("/protected/api-keys/{}", encoded_name);
+        let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
+        Ok(())
     }
 
     // Key-Value Storage APIs
@@ -789,7 +939,7 @@ impl OpenSecretClient {
 
     /// Fetches available AI models
     pub async fn get_models(&self) -> Result<ModelsResponse> {
-        self.encrypted_api_call("/v1/models", "GET", None::<()>)
+        self.encrypted_openai_call("/v1/models", "GET", None::<()>)
             .await
     }
 
@@ -800,7 +950,7 @@ impl OpenSecretClient {
     ) -> Result<ChatCompletionResponse> {
         let mut modified_request = request;
         modified_request.stream = Some(false);
-        self.encrypted_api_call("/v1/chat/completions", "POST", Some(modified_request))
+        self.encrypted_openai_call("/v1/chat/completions", "POST", Some(modified_request))
             .await
     }
 
@@ -845,8 +995,15 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add authorization header if we have a token
-        if let Some(token) = self.session_manager.get_access_token()? {
+        // Add authorization header if we have a token or API key
+        // Prefer API key over JWT token if both are present
+        if let Some(api_key) = self.session_manager.get_api_key()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
+            );
+        } else if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", token))

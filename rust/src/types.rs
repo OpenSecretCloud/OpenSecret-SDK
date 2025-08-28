@@ -273,6 +273,30 @@ pub struct ConfirmAccountDeletionRequest {
     pub plaintext_secret: String,
 }
 
+// API Key Management Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKey {
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKeyListResponse {
+    pub keys: Vec<ApiKey>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKeyCreateRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKeyCreateResponse {
+    pub key: String, // UUID format with dashes, only returned on creation
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
 // AI/OpenAI API Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {

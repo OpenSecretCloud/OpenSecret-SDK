@@ -29,6 +29,18 @@ export type OpenSecretContextType = {
   clientId: string;
 
   /**
+   * Optional API key for OpenAI endpoints.
+   * When set, this will be used instead of JWT for /v1/* endpoints.
+   */
+  apiKey?: string;
+
+  /**
+   * Sets the API key to use for OpenAI endpoints.
+   * @param key - The API key (UUID format) or undefined to clear
+   */
+  setApiKey: (key: string | undefined) => void;
+
+  /**
    * Authenticates a user with email and password.
    *
    * - Calls the login API endpoint with the configured clientId
@@ -594,6 +606,40 @@ export type OpenSecretContextType = {
       onProgress?: (status: string, progress?: number) => void;
     }
   ) => Promise<DocumentResponse>;
+
+  /**
+   * Creates a new API key for the authenticated user
+   * @param name - A descriptive name for the API key
+   * @returns A promise resolving to the API key details with the key value (only shown once)
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * IMPORTANT: The `key` field is only returned once during creation and cannot be retrieved again.
+   * The SDK consumer should prompt users to save the key immediately.
+   */
+  createApiKey: typeof api.createApiKey;
+
+  /**
+   * Lists all API keys for the authenticated user
+   * @returns A promise resolving to an object containing an array of API key metadata (without the actual keys)
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * Returns metadata about all API keys associated with the user's account.
+   * Note that the actual key values are never returned - they are only shown once during creation.
+   * The keys are sorted by created_at in descending order (newest first).
+   */
+  listApiKeys: typeof api.listApiKeys;
+
+  /**
+   * Deletes an API key by its name
+   * @param name - The name of the API key to delete
+   * @returns A promise that resolves when the key is deleted
+   * @throws {Error} If the user is not authenticated or the API key is not found
+   *
+   * Permanently deletes an API key. This action cannot be undone.
+   * Any requests using the deleted key will immediately fail with 401 Unauthorized.
+   * Names are unique per user, so this uniquely identifies the key to delete.
+   */
+  deleteApiKey: typeof api.deleteApiKey;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -602,6 +648,8 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
     user: undefined
   },
   clientId: "",
+  apiKey: undefined,
+  setApiKey: () => {},
   signIn: async () => {},
   signUp: async () => {},
   signInGuest: async () => {},
@@ -655,7 +703,10 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   fetchModels: api.fetchModels,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
-  uploadDocumentWithPolling: api.uploadDocumentWithPolling
+  uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+  createApiKey: api.createApiKey,
+  listApiKeys: api.listApiKeys,
+  deleteApiKey: api.deleteApiKey
 });
 
 /**
@@ -699,7 +750,25 @@ export function OpenSecretProvider({
     loading: true,
     user: undefined
   });
+  const [apiKey, setApiKeyState] = useState<string | undefined>();
   const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType["aiCustomFetch"]>();
+
+  // Validates UUID-with-dashes (v1–v5) and trims input; set undefined to clear
+  const setApiKey = (key: string | undefined) => {
+    if (key === undefined) {
+      setApiKeyState(undefined);
+      return;
+    }
+    const trimmed = key.trim();
+    const uuidWithDashes =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidWithDashes.test(trimmed)) {
+      console.warn("setApiKey: provided key does not look like a UUID; clearing apiKey");
+      setApiKeyState(undefined);
+      return;
+    }
+    setApiKeyState(trimmed);
+  };
 
   useEffect(() => {
     if (!apiUrl || apiUrl.trim() === "") {
@@ -722,14 +791,15 @@ export function OpenSecretProvider({
     });
   }, [apiUrl, clientId]);
 
-  // Create aiCustomFetch when user is authenticated
+  // Create aiCustomFetch when API is configured (supports JWT or API key internally)
   useEffect(() => {
-    if (auth.user) {
-      setAiCustomFetch(() => createCustomFetch());
+    if (apiUrl) {
+      // Pass API key if available, otherwise falls back to JWT
+      setAiCustomFetch(() => createCustomFetch(apiKey ? { apiKey } : undefined));
     } else {
       setAiCustomFetch(undefined);
     }
-  }, [auth.user]);
+  }, [apiUrl, apiKey]);
 
   async function fetchUser() {
     const access_token = window.localStorage.getItem("access_token");
@@ -767,6 +837,8 @@ export function OpenSecretProvider({
       const { access_token, refresh_token } = await api.fetchLogin(email, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on new sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -785,6 +857,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on new sign-up to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -798,6 +872,8 @@ export function OpenSecretProvider({
       const { access_token, refresh_token } = await api.fetchGuestLogin(id, password, clientId);
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on guest sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error(error);
@@ -814,6 +890,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on guest sign-up to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
       return { access_token, refresh_token, id };
     } catch (error) {
@@ -845,6 +923,8 @@ export function OpenSecretProvider({
     localStorage.removeItem("refresh_token");
     sessionStorage.removeItem("sessionKey");
     sessionStorage.removeItem("sessionId");
+    // Clear any in-memory API key so no post-logout calls can use it
+    setApiKey(undefined);
     setAuth({
       loading: false,
       user: undefined
@@ -869,6 +949,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("GitHub callback error:", error);
@@ -894,6 +976,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Google callback error:", error);
@@ -919,6 +1003,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Apple callback error:", error);
@@ -935,6 +1021,8 @@ export function OpenSecretProvider({
       );
       window.localStorage.setItem("access_token", access_token);
       window.localStorage.setItem("refresh_token", refresh_token);
+      // Clear API key on OAuth sign-in to ensure user-scoped keys
+      setApiKey(undefined);
       await fetchUser();
     } catch (error) {
       console.error("Apple native sign-in error:", error);
@@ -961,6 +1049,8 @@ export function OpenSecretProvider({
   const value: OpenSecretContextType = {
     auth,
     clientId,
+    apiKey,
+    setApiKey,
     signIn,
     signInGuest,
     signOut,
@@ -1013,7 +1103,10 @@ export function OpenSecretProvider({
     fetchModels: api.fetchModels,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
-    uploadDocumentWithPolling: api.uploadDocumentWithPolling
+    uploadDocumentWithPolling: api.uploadDocumentWithPolling,
+    createApiKey: api.createApiKey,
+    listApiKeys: api.listApiKeys,
+    deleteApiKey: api.deleteApiKey
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

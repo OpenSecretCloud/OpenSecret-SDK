@@ -2,12 +2,22 @@ import { decryptMessage, encryptMessage } from "./encryption";
 import { getAttestation } from "./getAttestation";
 import * as api from "./api";
 
-export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
+export interface CustomFetchOptions {
+  apiKey?: string; // Optional API key to use instead of JWT token
+}
+
+export function createCustomFetch(options?: CustomFetchOptions): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
   return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
+      // If an API key is provided, use it instead of JWT token
+      if (options?.apiKey) {
+        return `Bearer ${options.apiKey}`;
+      }
+      
+      // Otherwise, use the standard JWT token
       const currentAccessToken = window.localStorage.getItem("access_token");
       if (!currentAccessToken) {
-        throw new Error("No access token available");
+        throw new Error("No access token or API key available");
       }
       return `Bearer ${currentAccessToken}`;
     };
@@ -22,23 +32,24 @@ export function createCustomFetch(): (url: RequestInfo, init?: RequestInit) => P
       }
       headers.set("x-session-id", sessionId);
 
-      const options: RequestInit = { ...init, headers };
+      const requestOptions: RequestInit = { ...init, headers };
 
       // Encrypt the request body if it exists
       if (init?.body) {
         const encryptedBody = encryptMessage(sessionKey, init.body as string);
-        options.body = JSON.stringify({ encrypted: encryptedBody });
+        requestOptions.body = JSON.stringify({ encrypted: encryptedBody });
         headers.set("Content-Type", "application/json");
       }
 
-      let response = await fetch(requestUrl, options);
+      let response = await fetch(requestUrl, requestOptions);
 
-      if (response.status === 401) {
+      if (response.status === 401 && !options?.apiKey) {
+        // Only attempt token refresh if we're using JWT auth (not API key)
         console.warn("Unauthorized, refreshing access token");
         await api.refreshToken();
         headers.set("Authorization", getAuthHeader());
-        options.headers = headers;
-        response = await fetch(requestUrl, options);
+        requestOptions.headers = headers;
+        response = await fetch(requestUrl, requestOptions);
       }
 
       if (!response.ok) {

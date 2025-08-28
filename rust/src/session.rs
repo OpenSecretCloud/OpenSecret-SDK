@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct SessionManager {
     session: Arc<RwLock<Option<SessionState>>>,
     tokens: Arc<RwLock<Option<TokenPair>>>,
+    api_key: Arc<RwLock<Option<String>>>,
 }
 
 impl SessionManager {
@@ -13,7 +14,42 @@ impl SessionManager {
         Self {
             session: Arc::new(RwLock::new(None)),
             tokens: Arc::new(RwLock::new(None)),
+            api_key: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn new_with_api_key(api_key: String) -> Self {
+        Self {
+            session: Arc::new(RwLock::new(None)),
+            tokens: Arc::new(RwLock::new(None)),
+            api_key: Arc::new(RwLock::new(Some(api_key))),
+        }
+    }
+
+    pub fn set_api_key(&self, api_key: String) -> Result<()> {
+        let mut api_key_guard = self.api_key.write().map_err(|e| {
+            Error::Authentication(format!("Failed to acquire API key write lock: {}", e))
+        })?;
+
+        *api_key_guard = Some(api_key);
+        Ok(())
+    }
+
+    pub fn get_api_key(&self) -> Result<Option<String>> {
+        let api_key_guard = self.api_key.read().map_err(|e| {
+            Error::Authentication(format!("Failed to acquire API key read lock: {}", e))
+        })?;
+
+        Ok(api_key_guard.clone())
+    }
+
+    pub fn clear_api_key(&self) -> Result<()> {
+        let mut api_key_guard = self.api_key.write().map_err(|e| {
+            Error::Authentication(format!("Failed to acquire API key write lock: {}", e))
+        })?;
+
+        *api_key_guard = None;
+        Ok(())
     }
 
     pub fn set_session(&self, session_id: Uuid, session_key: [u8; 32]) -> Result<()> {
@@ -111,6 +147,7 @@ impl SessionManager {
     pub fn clear_all(&self) -> Result<()> {
         self.clear_session()?;
         self.clear_tokens()?;
+        self.clear_api_key()?;
         Ok(())
     }
 }
