@@ -1567,9 +1567,17 @@ export type ResponsesRetrieveResponse = {
   output?: string;
 };
 
+export type ThreadListItem = {
+  id: string;
+  object: "thread";
+  created_at: number;
+  updated_at: number;
+  title: string;
+};
+
 export type ResponsesListResponse = {
   object: "list";
-  data: ResponsesRetrieveResponse[];
+  data: ThreadListItem[];
   has_more: boolean;
   first_id?: string;
   last_id?: string;
@@ -1583,17 +1591,18 @@ export type ResponsesListParams = {
 };
 
 /**
- * Lists user's responses with pagination
+ * Lists user's conversation threads with pagination
  * @param params - Optional parameters for pagination and filtering
- * @returns A promise resolving to a paginated list of responses
+ * @returns A promise resolving to a paginated list of conversation threads
  * @throws {Error} If:
  * - The user is not authenticated
  * - The request fails
  * - Invalid pagination parameters
  *
  * @description
- * This function fetches a paginated list of the user's responses.
- * In list view, the usage and output fields are always null for performance reasons.
+ * This function fetches a paginated list of the user's conversation threads.
+ * Each thread represents a conversation, not individual messages.
+ * Threads are sorted by updated_at (most recently active threads first).
  *
  * Query Parameters:
  * - limit: Number of results per page (1-100, default: 20)
@@ -1604,18 +1613,18 @@ export type ResponsesListParams = {
  * Pagination Examples:
  * ```typescript
  * // First page
- * const responses = await fetchResponsesList({ limit: 20 });
+ * const threads = await fetchResponsesList({ limit: 20 });
  *
  * // Next page
  * const nextPage = await fetchResponsesList({
  *   limit: 20,
- *   after: responses.last_id
+ *   after: threads.last_id
  * });
  *
  * // Previous page
  * const prevPage = await fetchResponsesList({
  *   limit: 20,
- *   before: responses.first_id
+ *   before: threads.first_id
  * });
  * ```
  */

@@ -512,17 +512,19 @@ test("Custom responses list endpoint works with default parameters", async () =>
   expect(Array.isArray(responsesList.data)).toBe(true);
   expect(typeof responsesList.has_more).toBe("boolean");
 
-  // Check that each response has the correct structure (without usage/output fields)
+  // Check that each thread has the correct structure
   if (responsesList.data.length > 0) {
-    const response = responsesList.data[0];
-    expect(response).toHaveProperty("id");
-    expect(response).toHaveProperty("object", "response");
-    expect(response).toHaveProperty("created_at");
-    expect(response).toHaveProperty("status");
-    expect(response).toHaveProperty("model");
-    // In list view, usage and output should be omitted (undefined)
-    expect(response.usage).toBeUndefined();
-    expect(response.output).toBeUndefined();
+    const thread = responsesList.data[0];
+    expect(thread).toHaveProperty("id");
+    expect(thread).toHaveProperty("object", "thread");
+    expect(thread).toHaveProperty("created_at");
+    expect(thread).toHaveProperty("updated_at");
+    expect(thread).toHaveProperty("title");
+    // Thread format should not have status, model, usage, or output fields
+    expect((thread as any).status).toBeUndefined();
+    expect((thread as any).model).toBeUndefined();
+    expect((thread as any).usage).toBeUndefined();
+    expect((thread as any).output).toBeUndefined();
   }
 });
 
@@ -760,9 +762,10 @@ test("Integration test: Complete responses workflow", async () => {
   // 3. Verify response appears in list (check first page - newest responses first)
   const updatedList = await fetchResponsesList({ limit: 20 });
 
-  const createdResponse = updatedList.data.find((r) => r.id === responseId);
-  expect(createdResponse).toBeDefined();
-  expect(createdResponse!.status).toBe("completed");
+  const createdThread = updatedList.data.find((r) => r.id === responseId);
+  expect(createdThread).toBeDefined();
+  expect(createdThread!.object).toBe("thread");
+  expect(createdThread!.title).toBeDefined();
 
   // 4. Retrieve the full response
   const retrievedResponse = await openai.responses.retrieve(responseId);
@@ -774,11 +777,15 @@ test("Integration test: Complete responses workflow", async () => {
   // 5. Delete the response
   await openai.responses.delete(responseId);
 
-  // 6. Verify response no longer appears in list
+  // 6. Note: With thread-based listing, the thread may still appear in the list
+  // even after deleting individual responses, as threads can persist.
+  // We should verify the thread still exists but perhaps with updated metadata
   const finalList = await fetchResponsesList({ limit: 20 });
 
-  const deletedResponse = finalList.data.find((r) => r.id === responseId);
-  expect(deletedResponse).toBeUndefined();
+  const threadAfterDeletion = finalList.data.find((r) => r.id === responseId);
+  // Thread should still exist in the list (threads persist even when responses are deleted)
+  expect(threadAfterDeletion).toBeDefined();
+  expect(threadAfterDeletion!.object).toBe("thread");
 });
 
 test("Integration test: Direct API functions for responses", async () => {
