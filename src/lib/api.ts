@@ -1590,6 +1590,57 @@ export type ResponsesListParams = {
   order?: string; // Currently not implemented, reserved for future use
 };
 
+export type ConversationItem = {
+  id: string;
+  type: "message";
+  status: "completed" | "in_progress" | "incomplete";
+  role: "user" | "assistant" | "system";
+  content: Array<{
+    type: "text" | "input_text" | "input_audio" | "item";
+    text?: string;
+    audio?: string;
+    transcript?: string;
+    id?: string;
+  }>;
+};
+
+export type Conversation = {
+  id: string;
+  object: "conversation";
+  created_at: number;
+  metadata?: Record<string, any>;
+};
+
+export type ConversationCreateRequest = {
+  metadata?: Record<string, any>;
+};
+
+export type ConversationUpdateRequest = {
+  metadata?: Record<string, any>;
+};
+
+export type ConversationItemsResponse = {
+  object: "list";
+  data: ConversationItem[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
+};
+
+export type ConversationsListResponse = {
+  object: "list";
+  data: Conversation[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
+};
+
+export type ConversationDeleteResponse = {
+  id: string;
+  object: "conversation.deleted";
+  deleted: boolean;
+};
+
 /**
  * Lists user's conversation threads with pagination
  * @param params - Optional parameters for pagination and filtering
@@ -1734,6 +1785,323 @@ export type ResponsesDeleteResponse = {
   object: "response.deleted";
   deleted: boolean;
 };
+
+export type ResponsesCreateRequest = {
+  model: string;
+  input: string;
+  conversation?: string | { id: string };
+  previous_response_id?: string; // Deprecated but still supported
+  stream?: boolean;
+  metadata?: Record<string, any>;
+};
+
+/**
+ * Creates a new conversation
+ * @param metadata - Optional metadata to attach to the conversation
+ * @returns A promise resolving to the created conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function creates a new conversation that can be used to group
+ * related responses together. The conversation can have metadata
+ * attached for organization and filtering purposes.
+ * 
+ * NOTE: Prefer using the OpenAI client directly for conversation operations:
+ * ```typescript
+ * const openai = new OpenAI({ fetch: customFetch });
+ * const conversation = await openai.conversations.create({
+ *   metadata: { title: "Product Support", category: "technical" }
+ * });
+ * ```
+ *
+ * @deprecated Use openai.conversations.create() instead
+ */
+export async function createConversation(
+  metadata?: Record<string, any>
+): Promise<Conversation> {
+  const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
+  
+  return authenticatedApiCall<ConversationCreateRequest, Conversation>(
+    `${apiUrl}/v1/conversations`,
+    "POST",
+    requestData,
+    "Failed to create conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.retrieve() instead
+ * Retrieves a conversation by ID
+ * @param conversationId - The UUID of the conversation to retrieve
+ * @returns A promise resolving to the conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const conversation = await getConversation("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(conversation.metadata);
+ * ```
+ */
+export async function getConversation(conversationId: string): Promise<Conversation> {
+  return authenticatedApiCall<void, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.update() instead
+ * Updates a conversation's metadata
+ * @param conversationId - The UUID of the conversation to update
+ * @param metadata - The metadata to update
+ * @returns A promise resolving to the updated conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const updated = await updateConversation("550e8400-e29b-41d4-a716-446655440000", {
+ *   metadata: { title: "Updated Title", status: "resolved" }
+ * });
+ * ```
+ */
+export async function updateConversation(
+  conversationId: string,
+  metadata: Record<string, any>
+): Promise<Conversation> {
+  const requestData: ConversationUpdateRequest = { metadata };
+  
+  return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "POST",
+    requestData,
+    "Failed to update conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.delete() instead
+ * Deletes a conversation permanently
+ * @param conversationId - The UUID of the conversation to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @description
+ * This function permanently deletes a conversation and all associated items.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteConversation("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Conversation deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteConversation(
+  conversationId: string
+): Promise<ConversationDeleteResponse> {
+  return authenticatedApiCall<void, ConversationDeleteResponse>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.create() with items parameter instead
+ * Adds items to a conversation
+ * @param conversationId - The UUID of the conversation
+ * @param items - Array of items to add to the conversation
+ * @returns A promise resolving to the updated conversation with items
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * await addConversationItems("550e8400-e29b-41d4-a716-446655440000", [
+ *   {
+ *     type: "message",
+ *     role: "user",
+ *     content: [{ type: "text", text: "Hello" }]
+ *   }
+ * ]);
+ * ```
+ */
+export async function addConversationItems(
+  conversationId: string,
+  items: Partial<ConversationItem>[]
+): Promise<Conversation> {
+  return authenticatedApiCall<{ items: Partial<ConversationItem>[] }, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
+    "POST",
+    { items },
+    "Failed to add conversation items"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.items.list() instead
+ * Lists items in a conversation
+ * @param conversationId - The UUID of the conversation
+ * @param params - Optional pagination parameters
+ * @returns A promise resolving to a paginated list of conversation items
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const items = await listConversationItems("550e8400-e29b-41d4-a716-446655440000", {
+ *   limit: 20
+ * });
+ * for (const item of items.data) {
+ *   console.log(item.role, item.content);
+ * }
+ * ```
+ */
+export async function listConversationItems(
+  conversationId: string,
+  params?: {
+    limit?: number;
+    after?: string;
+    before?: string;
+  }
+): Promise<ConversationItemsResponse> {
+  let url = `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationItemsResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list conversation items"
+  );
+}
+
+/**
+ * Lists all conversations with pagination (non-standard endpoint)
+ * @param params - Optional pagination parameters
+ * @returns A promise resolving to a paginated list of conversations
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This is a custom extension not part of the standard OpenAI Conversations API.
+ * This function fetches a paginated list of the user's conversations.
+ * Conversations are sorted by created_at (most recent first).
+ *
+ * @example
+ * ```typescript
+ * const conversations = await listConversations({ limit: 20 });
+ * for (const conv of conversations.data) {
+ *   console.log(conv.id, conv.metadata);
+ * }
+ * ```
+ */
+export async function listConversations(
+  params?: {
+    limit?: number;
+    after?: string;
+    before?: string;
+  }
+): Promise<ConversationsListResponse> {
+  let url = `${apiUrl}/v1/conversations`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationsListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list conversations"
+  );
+}
+
+/**
+ * Creates a new response with conversation support
+ * @param request - The request parameters for creating a response
+ * @returns A promise resolving to the created response or a stream
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function creates a new response in the OpenAI-compatible API.
+ * It supports both the new conversation parameter and the deprecated
+ * previous_response_id parameter for backward compatibility.
+ *
+ * @example
+ * ```typescript
+ * // Create a response in a conversation
+ * const response = await createResponse({
+ *   model: "gpt-4",
+ *   input: "Hello, how are you?",
+ *   conversation: "550e8400-e29b-41d4-a716-446655440000"
+ * });
+ *
+ * // Or with the deprecated previous_response_id
+ * const response = await createResponse({
+ *   model: "gpt-4",
+ *   input: "Tell me more",
+ *   previous_response_id: "response-uuid"
+ * });
+ * ```
+ */
+export async function createResponse(
+  request: ResponsesCreateRequest
+): Promise<any> {
+  return authenticatedApiCall<ResponsesCreateRequest, any>(
+    `${apiUrl}/v1/responses`,
+    "POST",
+    request,
+    "Failed to create response"
+  );
+}
 
 /**
  * Deletes a response permanently

@@ -730,6 +730,29 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to deletion confirmation
    */
   deleteResponse: (responseId: string) => Promise<api.ResponsesDeleteResponse>;
+
+  /**
+   * Creates a new response with conversation support
+   * @param request - The request parameters for creating a response
+   * @returns A promise resolving to the created response or a stream
+   */
+  createResponse: (request: api.ResponsesCreateRequest) => Promise<any>;
+
+  /**
+   * Lists all conversations with pagination (non-standard endpoint)
+   * @param params - Optional pagination parameters
+   * @returns A promise resolving to a paginated list of conversations
+   * @description
+   * This is a custom extension not part of the standard OpenAI API.
+   * For standard conversation operations, use the OpenAI client directly:
+   * - openai.conversations.create()
+   * - openai.conversations.retrieve()
+   * - openai.conversations.update()
+   * - openai.conversations.delete()
+   * - openai.conversations.items.list()
+   * - openai.conversations.items.retrieve()
+   */
+  listConversations: (params?: { limit?: number; after?: string; before?: string }) => Promise<api.ConversationsListResponse>;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -801,7 +824,9 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   fetchResponsesList: api.fetchResponsesList,
   fetchResponse: api.fetchResponse,
   cancelResponse: api.cancelResponse,
-  deleteResponse: api.deleteResponse
+  deleteResponse: api.deleteResponse,
+  createResponse: api.createResponse,
+  listConversations: api.listConversations
 });
 
 /**
@@ -1206,7 +1231,9 @@ export function OpenSecretProvider({
     fetchResponsesList: api.fetchResponsesList,
     fetchResponse: api.fetchResponse,
     cancelResponse: api.cancelResponse,
-    deleteResponse: api.deleteResponse
+    deleteResponse: api.deleteResponse,
+    createResponse: api.createResponse,
+    listConversations: api.listConversations
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

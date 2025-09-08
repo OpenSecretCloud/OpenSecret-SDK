@@ -16,7 +16,15 @@ export type {
   ResponsesListResponse,
   ResponsesListParams,
   ResponsesCancelResponse,
-  ResponsesDeleteResponse
+  ResponsesDeleteResponse,
+  ResponsesCreateRequest,
+  Conversation,
+  ConversationItem,
+  ConversationCreateRequest,
+  ConversationUpdateRequest,
+  ConversationItemsResponse,
+  ConversationsListResponse,
+  ConversationDeleteResponse
 } from "./api";
 
 // Export API key management functions
