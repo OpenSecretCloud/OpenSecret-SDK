@@ -138,7 +138,7 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
         model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
-            content: "Please reply with exactly and only the word 'echo'".to_string(),
+            content: serde_json::json!("Please reply with exactly and only the word 'echo'"),
         }],
         temperature: Some(0.1),
         max_tokens: Some(10),
@@ -153,8 +153,8 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
         match chunk_result {
             Ok(chunk) => {
                 if !chunk.choices.is_empty() {
-                    if let Some(content) = &chunk.choices[0].delta.content {
-                        full_response.push_str(content);
+                    if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
+                        full_response.push_str(s);
                     }
                 }
             }

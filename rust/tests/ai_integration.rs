@@ -77,7 +77,7 @@ async fn test_chat_completion_streaming() {
         model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
-            content: r#"please reply with exactly and only the word "echo""#.to_string(),
+            content: serde_json::json!(r#"please reply with exactly and only the word "echo""#),
         }],
         temperature: Some(0.0),
         max_tokens: Some(10),
@@ -103,8 +103,8 @@ async fn test_chat_completion_streaming() {
         assert_eq!(chunk.object, "chat.completion.chunk");
 
         if !chunk.choices.is_empty() {
-            if let Some(content) = &chunk.choices[0].delta.content {
-                full_response.push_str(content);
+            if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
+                full_response.push_str(s);
             }
         }
 
@@ -133,12 +133,13 @@ async fn test_chat_completion_with_system_message() {
         messages: vec![
             ChatMessage {
                 role: "system".to_string(),
-                content: "You are a helpful assistant that always responds with exactly one word."
-                    .to_string(),
+                content: serde_json::json!(
+                    "You are a helpful assistant that always responds with exactly one word."
+                ),
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: "What is 2+2? Answer in one word.".to_string(),
+                content: serde_json::json!("What is 2+2? Answer in one word."),
             },
         ],
         temperature: Some(0.0),
@@ -156,8 +157,8 @@ async fn test_chat_completion_with_system_message() {
     while let Some(result) = stream.next().await {
         let chunk = result.expect("Failed to get chunk");
         if !chunk.choices.is_empty() {
-            if let Some(content) = &chunk.choices[0].delta.content {
-                full_response.push_str(content);
+            if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
+                full_response.push_str(s);
             }
         }
     }
@@ -209,7 +210,7 @@ async fn test_guest_user_cannot_use_ai() {
         model: "some-model".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
-            content: "test".to_string(),
+            content: serde_json::json!("test"),
         }],
         temperature: None,
         max_tokens: None,

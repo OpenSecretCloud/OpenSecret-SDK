@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 // Attestation & Key Exchange Types
@@ -322,7 +323,8 @@ pub struct ModelsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
-    pub content: String,
+    #[serde(default)]
+    pub content: Value, // Now accepts both string and array formats
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,5 +395,5 @@ pub struct ChatMessageDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
+    pub content: Option<Value>, // Also update delta to accept flexible content
 }
