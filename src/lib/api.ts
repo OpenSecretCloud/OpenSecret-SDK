@@ -1461,3 +1461,98 @@ export async function uploadDocumentWithPolling(
 
   throw new Error("Document processing timed out");
 }
+
+export type WhisperTranscriptionRequest = {
+  file: string; // Base64-encoded audio file data
+  filename: string;
+  content_type: string;
+  model: string;
+  language?: string;
+  prompt?: string;
+  response_format?: string;
+  temperature?: number;
+};
+
+export type WhisperTranscriptionResponse = {
+  text: string;
+};
+
+/**
+ * Transcribes audio using the Whisper API
+ * @param file - The audio file to transcribe (File or Blob object)
+ * @param options - Optional transcription parameters
+ * @returns A promise resolving to the transcription response
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The file cannot be read
+ * - The transcription fails
+ * 
+ * @description
+ * This function transcribes audio using OpenAI's Whisper model via the encrypted API.
+ * 
+ * Options:
+ * - model: Model to use (default: "whisper-large-v3", routes to Tinfoil's whisper-large-v3-turbo)
+ * - language: Optional ISO-639-1 language code (e.g., "en", "es", "fr")
+ * - prompt: Optional context or previous segment transcript
+ * - response_format: Format of the response (default: "json")
+ * - temperature: Sampling temperature between 0 and 1 (default: 0.0)
+ * 
+ * Supported audio formats:
+ * - MP3 (audio/mpeg)
+ * - WAV (audio/wav)
+ * - MP4 (audio/mp4)
+ * - M4A (audio/m4a)
+ * - FLAC (audio/flac)
+ * - OGG (audio/ogg)
+ * - WEBM (audio/webm)
+ * 
+ * Example usage:
+ * ```typescript
+ * const audioFile = new File([audioData], "recording.mp3", { type: "audio/mpeg" });
+ * const result = await transcribeAudio(audioFile, {
+ *   language: "en",
+ *   prompt: "This is a technical discussion about AI"
+ * });
+ * console.log(result.text);
+ * ```
+ */
+export async function transcribeAudio(
+  file: File | Blob,
+  options?: {
+    model?: string;
+    language?: string;
+    prompt?: string;
+    response_format?: string;
+    temperature?: number;
+    apiKey?: string; // Optional API key to use instead of JWT token
+  }
+): Promise<WhisperTranscriptionResponse> {
+  // Convert file to base64
+  const arrayBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  const base64Data = encode(bytes);
+
+  // Get filename and content type
+  const filename = file instanceof File ? file.name : "audio";
+  const contentType = file.type || "audio/mpeg";
+
+  const requestData: WhisperTranscriptionRequest = {
+    file: base64Data,
+    filename,
+    content_type: contentType,
+    model: options?.model || "whisper-large-v3",
+    ...(options?.language && { language: options.language }),
+    ...(options?.prompt && { prompt: options.prompt }),
+    ...(options?.response_format && { response_format: options.response_format }),
+    ...(options?.temperature !== undefined && { temperature: options.temperature })
+  };
+
+  // Use openAiAuthenticatedApiCall to support both JWT and API key auth
+  return openAiAuthenticatedApiCall<WhisperTranscriptionRequest, WhisperTranscriptionResponse>(
+    `${apiUrl}/v1/audio/transcriptions`,
+    "POST",
+    requestData,
+    "Failed to transcribe audio",
+    options?.apiKey
+  );
+}

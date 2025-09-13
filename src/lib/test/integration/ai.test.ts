@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fetchLogin } from "../../api";
+import { fetchLogin, transcribeAudio } from "../../api";
 import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
 
@@ -163,4 +163,53 @@ test("text-to-speech with kokoro model", async () => {
   if (!isID3 && !isMPEGSync) {
     console.warn("Response doesn't appear to be MP3 format, but got data back");
   }
+});
+
+test("TTS → Whisper transcription chain", async () => {
+  await setupTestUser();
+
+  const client = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  // Step 1: Generate speech from simple text
+  const originalText = "Hello";
+  
+  console.log("Generating speech from text:", originalText);
+  
+  const ttsResponse = await client.audio.speech.create({
+    model: "kokoro",
+    // @ts-expect-error - Using custom Kokoro model voices not in OpenAI's type definitions
+    voice: "af_sky",
+    input: originalText,
+    response_format: "mp3"
+  });
+
+  const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+  console.log(`Generated audio size: ${audioBuffer.length} bytes`);
+  
+  // Step 2: Create a Blob from the audio buffer
+  const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
+  const audioFile = new File([audioBlob], "tts_output.mp3", { type: "audio/mpeg" });
+  
+  // Step 3: Transcribe the audio back to text using Whisper
+  console.log("Transcribing audio back to text...");
+  
+  const transcriptionResult = await transcribeAudio(audioFile, {
+    model: "whisper-large-v3",
+    language: "en",
+    temperature: 0.0
+  });
+  
+  console.log("Transcribed text:", transcriptionResult.text);
+  console.log("Original text:", originalText);
+  
+  // Just check that we got "hello" back (case-insensitive)
+  expect(transcriptionResult.text.toLowerCase()).toContain("hello");
 });
