@@ -731,14 +731,14 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
-  fetchModels: api.fetchModels,
+  fetchModels: () => api.fetchModels(undefined),
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
   uploadDocumentWithPolling: api.uploadDocumentWithPolling,
   createApiKey: api.createApiKey,
   listApiKeys: api.listApiKeys,
   deleteApiKey: api.deleteApiKey,
-  transcribeAudio: api.transcribeAudio
+  transcribeAudio: (file, options) => api.transcribeAudio(file, options)
 });
 
 /**
@@ -1132,14 +1132,14 @@ export function OpenSecretProvider({
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
     decryptData: api.decryptData,
-    fetchModels: api.fetchModels,
+    fetchModels: () => api.fetchModels(apiKey),
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
     uploadDocumentWithPolling: api.uploadDocumentWithPolling,
     createApiKey: api.createApiKey,
     listApiKeys: api.listApiKeys,
     deleteApiKey: api.deleteApiKey,
-    transcribeAudio: api.transcribeAudio
+    transcribeAudio: (file, options) => api.transcribeAudio(file, { ...options, apiKey })
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
