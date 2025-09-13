@@ -152,11 +152,15 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
               console.log("Decoded audio bytes length:", bytes.length);
               
               // Return as a binary response with the proper content type
+              const headersOut = new Headers(response.headers);
+              headersOut.set('content-type', decryptedData.content_type);
+              // Remove headers that are no longer valid for the decoded response
+              headersOut.delete('content-encoding');
+              headersOut.delete('content-length');
+              headersOut.delete('transfer-encoding');
+              
               return new Response(bytes, {
-                headers: {
-                  ...response.headers,
-                  'content-type': decryptedData.content_type
-                },
+                headers: headersOut,
                 status: response.status,
                 statusText: response.statusText
               });
