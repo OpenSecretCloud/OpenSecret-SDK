@@ -201,11 +201,13 @@ test("TTS → Whisper transcription chain", async () => {
   // Step 3: Transcribe the audio back to text using Whisper
   console.log("Transcribing audio back to text...");
   
-  const transcriptionResult = await transcribeAudio(audioFile, {
-    model: "whisper-large-v3",
-    language: "en",
-    temperature: 0.0
-  });
+  const transcriptionResult = await transcribeAudio(
+    audioFile,
+    "whisper-large-v3",  // model
+    "en",                // language
+    undefined,           // prompt
+    0.0                  // temperature
+  );
   
   console.log("Transcribed text:", transcriptionResult.text);
   console.log("Original text:", originalText);

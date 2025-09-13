@@ -655,7 +655,6 @@ export type OpenSecretContextType = {
    * - model: Model to use (default: "whisper-large-v3", routes to Tinfoil's whisper-large-v3-turbo)
    * - language: Optional ISO-639-1 language code (e.g., "en", "es", "fr")
    * - prompt: Optional context or previous segment transcript
-   * - response_format: Format of the response (default: "json")
    * - temperature: Sampling temperature between 0 and 1 (default: 0.0)
    * 
    * Supported audio formats: MP3, WAV, MP4, M4A, FLAC, OGG, WEBM
@@ -731,14 +730,14 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
-  fetchModels: () => api.fetchModels(undefined),
+  fetchModels: api.fetchModels,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
   uploadDocumentWithPolling: api.uploadDocumentWithPolling,
   createApiKey: api.createApiKey,
   listApiKeys: api.listApiKeys,
   deleteApiKey: api.deleteApiKey,
-  transcribeAudio: (file, options) => api.transcribeAudio(file, options)
+  transcribeAudio: api.transcribeAudio
 });
 
 /**
@@ -1132,14 +1131,14 @@ export function OpenSecretProvider({
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
     decryptData: api.decryptData,
-    fetchModels: () => api.fetchModels(apiKey),
+    fetchModels: api.fetchModels,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
     uploadDocumentWithPolling: api.uploadDocumentWithPolling,
     createApiKey: api.createApiKey,
     listApiKeys: api.listApiKeys,
     deleteApiKey: api.deleteApiKey,
-    transcribeAudio: (file, options) => api.transcribeAudio(file, { ...options, apiKey })
+    transcribeAudio: api.transcribeAudio
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
