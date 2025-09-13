@@ -165,6 +165,32 @@ test("text-to-speech with kokoro model", async () => {
   }
 });
 
+// To run this test manually:
+// bun test --test-name-pattern="Whisper transcription with real MP3 file" src/lib/test/integration/ai.test.ts --env-file .env.local
+test.skip("Whisper transcription with real MP3 file", async () => {
+  await setupTestUser();
+
+  // Read the test MP3 file
+  const mp3Path = new URL('./test-transcript.mp3', import.meta.url).pathname;
+  const mp3Buffer = await Bun.file(mp3Path).arrayBuffer();
+  const audioFile = new File([mp3Buffer], "test-transcript.mp3", { type: "audio/mpeg" });
+  
+  console.log(`Test MP3 file size: ${mp3Buffer.byteLength} bytes`);
+  
+  // Transcribe the MP3 file
+  const transcriptionResult = await transcribeAudio(
+    audioFile,
+    "whisper-large-v3",  // model
+    "en"                  // language
+  );
+  
+  console.log("Transcribed text from test MP3:", transcriptionResult.text);
+  
+  // Just verify we got some text back
+  expect(transcriptionResult.text).toBeTruthy();
+  expect(transcriptionResult.text.length).toBeGreaterThan(10);
+}, 20000);  // 20 second timeout for this test
+
 test("TTS → Whisper transcription chain", async () => {
   await setupTestUser();
 
