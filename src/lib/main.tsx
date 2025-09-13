@@ -640,6 +640,37 @@ export type OpenSecretContextType = {
    * Names are unique per user, so this uniquely identifies the key to delete.
    */
   deleteApiKey: typeof api.deleteApiKey;
+
+  /**
+   * Transcribes audio using the Whisper API
+   * @param file - The audio file to transcribe (File or Blob object)
+   * @param options - Optional transcription parameters
+   * @returns A promise resolving to the transcription response
+   * @throws {Error} If the user is not authenticated or transcription fails
+   * 
+   * @description
+   * This function transcribes audio using OpenAI's Whisper model via the encrypted API.
+   * 
+   * Options:
+   * - model: Model to use (default: "whisper-large-v3", routes to Tinfoil's whisper-large-v3-turbo)
+   * - language: Optional ISO-639-1 language code (e.g., "en", "es", "fr")
+   * - prompt: Optional context or previous segment transcript
+   * - response_format: Format of the response (default: "json")
+   * - temperature: Sampling temperature between 0 and 1 (default: 0.0)
+   * 
+   * Supported audio formats: MP3, WAV, MP4, M4A, FLAC, OGG, WEBM
+   * 
+   * Example usage:
+   * ```typescript
+   * const audioFile = new File([audioData], "recording.mp3", { type: "audio/mpeg" });
+   * const result = await context.transcribeAudio(audioFile, {
+   *   language: "en",
+   *   prompt: "This is a technical discussion about AI"
+   * });
+   * console.log(result.text);
+   * ```
+   */
+  transcribeAudio: typeof api.transcribeAudio;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -700,13 +731,14 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   generateThirdPartyToken: async () => ({ token: "" }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
-  fetchModels: api.fetchModels,
+  fetchModels: () => api.fetchModels(undefined),
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
   uploadDocumentWithPolling: api.uploadDocumentWithPolling,
   createApiKey: api.createApiKey,
   listApiKeys: api.listApiKeys,
-  deleteApiKey: api.deleteApiKey
+  deleteApiKey: api.deleteApiKey,
+  transcribeAudio: (file, options) => api.transcribeAudio(file, options)
 });
 
 /**
@@ -1100,13 +1132,14 @@ export function OpenSecretProvider({
     generateThirdPartyToken: api.generateThirdPartyToken,
     encryptData: api.encryptData,
     decryptData: api.decryptData,
-    fetchModels: api.fetchModels,
+    fetchModels: () => api.fetchModels(apiKey),
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
     uploadDocumentWithPolling: api.uploadDocumentWithPolling,
     createApiKey: api.createApiKey,
     listApiKeys: api.listApiKeys,
-    deleteApiKey: api.deleteApiKey
+    deleteApiKey: api.deleteApiKey,
+    transcribeAudio: (file, options) => api.transcribeAudio(file, { ...options, apiKey })
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
