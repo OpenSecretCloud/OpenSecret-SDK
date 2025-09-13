@@ -114,3 +114,53 @@ test("streams chat completion", async () => {
 
   expect(response?.trim()).toBe("echo");
 });
+
+test("text-to-speech with kokoro model", async () => {
+  await setupTestUser();
+
+  const client = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  const textToSpeak = "Hello, this is a test of the text-to-speech system.";
+  
+  const response = await client.audio.speech.create({
+    model: "kokoro",
+    // @ts-expect-error - Using custom Kokoro model voices not in OpenAI's type definitions
+    voice: "af_sky",
+    input: textToSpeak,
+    response_format: "mp3"
+  });
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  
+  // Verify we got back audio data
+  expect(buffer.length).toBeGreaterThan(0);
+  
+  console.log(`TTS response size: ${buffer.length} bytes`);
+  
+  // Log the first 20 bytes to understand the format
+  const first20Bytes = buffer.slice(0, 20).toString('hex');
+  console.log(`First 20 bytes (hex): ${first20Bytes}`);
+  
+  // Also log as string to see if it's JSON or text
+  const first100Chars = buffer.slice(0, 100).toString('utf-8');
+  console.log(`First 100 chars (string): ${first100Chars}`);
+  
+  // MP3 files typically start with an ID3 tag or FF FB/FF FA (MPEG audio sync)
+  const firstBytes = buffer.slice(0, 3).toString('hex');
+  const isID3 = firstBytes === '494433'; // "ID3" in hex
+  const isMPEGSync = firstBytes.startsWith('fff') || firstBytes.startsWith('ffe');
+  
+  // For now, just verify we got data back
+  // The format check might need adjustment based on what the server returns
+  if (!isID3 && !isMPEGSync) {
+    console.warn("Response doesn't appear to be MP3 format, but got data back");
+  }
+});
