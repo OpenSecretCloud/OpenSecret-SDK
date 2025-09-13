@@ -125,7 +125,74 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
         });
       }
 
-      return response;
+      // Decrypt regular JSON responses
+      const responseText = await response.text();
+      try {
+        const responseData = JSON.parse(responseText);
+
+        // Check if the response has an encrypted field
+        if (responseData.encrypted) {
+          const decrypted = decryptMessage(sessionKey, responseData.encrypted);
+
+          // Try to parse as JSON to check for TTS response format
+          try {
+            const decryptedData = JSON.parse(decrypted);
+            
+            // Check if this is a TTS response with content_base64 and content_type
+            if (decryptedData.content_base64 && decryptedData.content_type) {
+              console.log("TTS response detected with content_type:", decryptedData.content_type);
+              
+              // Decode base64 audio data to binary
+              let bytes: Uint8Array;
+              try {
+                const binaryString = atob(decryptedData.content_base64);
+                bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+              } catch (e) {
+                console.error("Failed to decode base64 audio data:", e);
+                throw new Error("Invalid base64 audio data in TTS response");
+              }
+              
+              console.log("Decoded audio bytes length:", bytes.length);
+              
+              // Return as a binary response with the proper content type
+              const headersOut = new Headers(response.headers);
+              headersOut.set('content-type', decryptedData.content_type);
+              // Remove headers that are no longer valid for the decoded response
+              headersOut.delete('content-encoding');
+              headersOut.delete('content-length');
+              headersOut.delete('transfer-encoding');
+              
+              return new Response(bytes, {
+                headers: headersOut,
+                status: response.status,
+                statusText: response.statusText
+              });
+            }
+          } catch (jsonError) {
+            // Not JSON, continue with regular text response
+          }
+
+          // Return a new Response with the decrypted data
+          return new Response(decrypted, {
+            headers: response.headers,
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+      } catch (e) {
+        // If it's not JSON or doesn't have encrypted field, return original response
+        console.log("Response is not encrypted JSON, returning as-is");
+      }
+
+      // Return the original response text as a new Response
+      return new Response(responseText, {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText
+      });
     } catch (error) {
       console.error("Error during fetch process:", error);
       throw error;
