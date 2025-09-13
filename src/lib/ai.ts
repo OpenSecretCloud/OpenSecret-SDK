@@ -143,10 +143,16 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
               console.log("TTS response detected with content_type:", decryptedData.content_type);
               
               // Decode base64 audio data to binary
-              const binaryString = atob(decryptedData.content_base64);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+              let bytes: Uint8Array;
+              try {
+                const binaryString = atob(decryptedData.content_base64);
+                bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+              } catch (e) {
+                console.error("Failed to decode base64 audio data:", e);
+                throw new Error("Invalid base64 audio data in TTS response");
               }
               
               console.log("Decoded audio bytes length:", bytes.length);
