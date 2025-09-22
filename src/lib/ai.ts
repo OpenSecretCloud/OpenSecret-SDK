@@ -6,8 +6,11 @@ export interface CustomFetchOptions {
   apiKey?: string; // Optional API key to use instead of JWT token
 }
 
-export function createCustomFetch(options?: CustomFetchOptions): (url: RequestInfo, init?: RequestInit) => Promise<Response> {
-  return async (requestUrl: RequestInfo, init?: RequestInit): Promise<Response> => {
+export function createCustomFetch(options?: CustomFetchOptions): (
+  input: string | URL | Request,
+  init?: RequestInit
+) => Promise<Response> {
+  return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       // If an API key is provided, use it instead of JWT token
       if (options?.apiKey) {
@@ -81,35 +84,37 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
               let event;
               while ((event = extractEvent(buffer))) {
                 buffer = buffer.slice(event.length);
-                if (event.trim().startsWith("data: ")) {
-                  const data = event.slice(6).trim();
-                  if (data === "[DONE]") {
-                    controller.enqueue(`data: [DONE]\n\n`);
-                  } else {
-                    try {
-                      console.groupCollapsed("Decrypting chunk");
-                      console.log("Attempting to decrypt, data length:", data.length);
-                      const decrypted = decryptMessage(sessionKey, data);
-                      console.log("Decrypted data length:", decrypted.length);
-                      console.log("Decrypted data:", decrypted);
 
+                // Split the event into individual lines
+                const lines = event.split("\n");
+
+                for (const line of lines) {
+                  // Handle event: lines - pass them through as-is
+                  if (line.trim().startsWith("event: ")) {
+                    controller.enqueue(line + "\n");
+                  }
+                  // Handle data: lines - decrypt them
+                  else if (line.trim().startsWith("data: ")) {
+                    const data = line.slice(6).trim();
+                    if (data === "[DONE]") {
+                      controller.enqueue(`data: [DONE]\n\n`);
+                    } else {
                       try {
-                        const parsedJson = JSON.parse(decrypted);
-                        console.log("Parsed JSON:", parsedJson);
-                        controller.enqueue(`data: ${JSON.stringify(parsedJson)}\n\n`);
-                      } catch (jsonError) {
-                        if (jsonError instanceof SyntaxError) {
-                          console.log("Failed to parse JSON:", decrypted);
-                          controller.enqueue(`data: ${decrypted}\n\n`);
-                        }
+                        const decrypted = decryptMessage(sessionKey, data);
+
+                        // Always enqueue the decrypted data
+                        // Note: We don't add \n\n here because the empty line will be added separately
+                        controller.enqueue(`data: ${decrypted}\n`);
+                      } catch (error) {
+                        console.error("Decryption error:", error, "Data:", data);
+                        // Instead of sending the encrypted data, we'll skip this chunk
+                        console.log("Skipping corrupted chunk");
                       }
-                    } catch (error) {
-                      console.error("Decryption error:", error, "Data:", data);
-                      // Instead of sending the encrypted data, we'll skip this chunk
-                      console.log("Skipping corrupted chunk");
-                    } finally {
-                      console.groupEnd();
                     }
+                  }
+                  // Pass through empty lines
+                  else if (line === "") {
+                    controller.enqueue("\n");
                   }
                 }
               }
@@ -137,11 +142,11 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
           // Try to parse as JSON to check for TTS response format
           try {
             const decryptedData = JSON.parse(decrypted);
-            
+
             // Check if this is a TTS response with content_base64 and content_type
             if (decryptedData.content_base64 && decryptedData.content_type) {
               console.log("TTS response detected with content_type:", decryptedData.content_type);
-              
+
               // Decode base64 audio data to binary
               let bytes: Uint8Array;
               try {
@@ -154,9 +159,9 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
                 console.error("Failed to decode base64 audio data:", e);
                 throw new Error("Invalid base64 audio data in TTS response");
               }
-              
+
               console.log("Decoded audio bytes length:", bytes.length);
-              
+
               // Return as a binary response with the proper content type
               const headersOut = new Headers(response.headers);
               headersOut.set('content-type', decryptedData.content_type);
@@ -164,7 +169,7 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
               headersOut.delete('content-encoding');
               headersOut.delete('content-length');
               headersOut.delete('transfer-encoding');
-              
+
               return new Response(bytes, {
                 headers: headersOut,
                 status: response.status,
@@ -174,7 +179,6 @@ export function createCustomFetch(options?: CustomFetchOptions): (url: RequestIn
           } catch (jsonError) {
             // Not JSON, continue with regular text response
           }
-
           // Return a new Response with the decrypted data
           return new Response(decrypted, {
             headers: response.headers,
