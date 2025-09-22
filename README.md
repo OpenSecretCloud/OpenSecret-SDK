@@ -363,7 +363,7 @@ bun test --env-file .env.local
 To test a specific file or test case:
 
 ```bash
-bun test --test-name-pattern="Developer login and token storage" src/lib/developer.test.ts --env-file .env.local
+bun test --test-name-pattern="Developer login and token storage" src/lib/test/integration/developer.test.ts --env-file .env.local
 ```
 
 Currently this build step requires `npx` because of [a Bun incompatibility with `vite-plugin-dts`](https://github.com/OpenSecretCloud/OpenSecret-SDK/issues/16).
