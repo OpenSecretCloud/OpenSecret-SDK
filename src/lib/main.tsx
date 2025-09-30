@@ -753,6 +753,77 @@ export type OpenSecretContextType = {
    * - openai.conversations.items.retrieve()
    */
   listConversations: (params?: { limit?: number; after?: string; before?: string }) => Promise<api.ConversationsListResponse>;
+
+  /**
+   * Creates a new instruction
+   * @param request - The instruction creation parameters
+   * @returns A promise resolving to the created instruction
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * @description
+   * Creates a new user instruction (system prompt).
+   * If is_default is set to true, all other instructions are automatically set to is_default: false.
+   * The prompt_tokens field is automatically calculated.
+   */
+  createInstruction: typeof api.createInstruction;
+
+  /**
+   * Lists user's instructions with pagination
+   * @param params - Optional parameters for pagination and ordering
+   * @returns A promise resolving to a paginated list of instructions
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * @description
+   * Fetches a paginated list of the user's instructions.
+   * Results are ordered by updated_at by default (most recently updated first).
+   */
+  listInstructions: typeof api.listInstructions;
+
+  /**
+   * Retrieves a single instruction by ID
+   * @param instructionId - The UUID of the instruction to retrieve
+   * @returns A promise resolving to the instruction details
+   * @throws {Error} If the instruction is not found or user doesn't have access
+   */
+  getInstruction: typeof api.getInstruction;
+
+  /**
+   * Updates an existing instruction
+   * @param instructionId - The UUID of the instruction to update
+   * @param request - The fields to update
+   * @returns A promise resolving to the updated instruction
+   * @throws {Error} If the instruction is not found or validation fails
+   *
+   * @description
+   * At least one field must be provided.
+   * If is_default: true is set, all other instructions are automatically set to is_default: false.
+   * The prompt_tokens field is recalculated automatically if prompt changes.
+   */
+  updateInstruction: typeof api.updateInstruction;
+
+  /**
+   * Deletes an instruction permanently
+   * @param instructionId - The UUID of the instruction to delete
+   * @returns A promise resolving to deletion confirmation
+   * @throws {Error} If the instruction is not found or user doesn't have access
+   *
+   * @description
+   * Permanently deletes an instruction. This action cannot be undone.
+   */
+  deleteInstruction: typeof api.deleteInstruction;
+
+  /**
+   * Sets an instruction as the default
+   * @param instructionId - The UUID of the instruction to set as default
+   * @returns A promise resolving to the updated instruction
+   * @throws {Error} If the instruction is not found
+   *
+   * @description
+   * Sets the specified instruction as the default.
+   * All other instructions for this user are automatically set to is_default: false.
+   * This operation is idempotent.
+   */
+  setDefaultInstruction: typeof api.setDefaultInstruction;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -826,7 +897,13 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   cancelResponse: api.cancelResponse,
   deleteResponse: api.deleteResponse,
   createResponse: api.createResponse,
-  listConversations: api.listConversations
+  listConversations: api.listConversations,
+  createInstruction: api.createInstruction,
+  listInstructions: api.listInstructions,
+  getInstruction: api.getInstruction,
+  updateInstruction: api.updateInstruction,
+  deleteInstruction: api.deleteInstruction,
+  setDefaultInstruction: api.setDefaultInstruction
 });
 
 /**
@@ -1233,7 +1310,13 @@ export function OpenSecretProvider({
     cancelResponse: api.cancelResponse,
     deleteResponse: api.deleteResponse,
     createResponse: api.createResponse,
-    listConversations: api.listConversations
+    listConversations: api.listConversations,
+    createInstruction: api.createInstruction,
+    listInstructions: api.listInstructions,
+    getInstruction: api.getInstruction,
+    updateInstruction: api.updateInstruction,
+    deleteInstruction: api.deleteInstruction,
+    setDefaultInstruction: api.setDefaultInstruction
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;

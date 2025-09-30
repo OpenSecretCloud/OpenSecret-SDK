@@ -2132,3 +2132,255 @@ export async function deleteResponse(responseId: string): Promise<ResponsesDelet
     "Failed to delete response"
   );
 }
+
+export type Instruction = {
+  id: string;
+  object: "instruction";
+  name: string;
+  prompt: string;
+  prompt_tokens: number;
+  is_default: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export type InstructionCreateRequest = {
+  name: string;
+  prompt: string;
+  is_default?: boolean;
+};
+
+export type InstructionUpdateRequest = {
+  name?: string;
+  prompt?: string;
+  is_default?: boolean;
+};
+
+export type InstructionListParams = {
+  limit?: number;
+  after?: string;
+  before?: string;
+  order?: string;
+};
+
+export type InstructionListResponse = {
+  object: "list";
+  data: Instruction[];
+  has_more: boolean;
+  first_id: string | null;
+  last_id: string | null;
+};
+
+export type InstructionDeleteResponse = {
+  id: string;
+  object: "instruction.deleted";
+  deleted: true;
+};
+
+/**
+ * Creates a new instruction
+ * @param request - The instruction creation parameters
+ * @returns A promise resolving to the created instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The request fails
+ * - Name or prompt are empty strings
+ *
+ * @description
+ * This function creates a new user instruction (system prompt).
+ * If is_default is set to true, all other instructions are automatically set to is_default: false.
+ * The prompt_tokens field is automatically calculated.
+ *
+ * @example
+ * ```typescript
+ * const instruction = await createInstruction({
+ *   name: "Helpful Assistant",
+ *   prompt: "You are a helpful assistant that...",
+ *   is_default: true
+ * });
+ * ```
+ */
+export async function createInstruction(
+  request: InstructionCreateRequest
+): Promise<Instruction> {
+  return authenticatedApiCall<InstructionCreateRequest, Instruction>(
+    `${apiUrl}/v1/instructions`,
+    "POST",
+    request,
+    "Failed to create instruction"
+  );
+}
+
+/**
+ * Lists user's instructions with pagination
+ * @param params - Optional parameters for pagination and ordering
+ * @returns A promise resolving to a paginated list of instructions
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function fetches a paginated list of the user's instructions.
+ * Results are ordered by updated_at by default (most recently updated first).
+ *
+ * Query Parameters:
+ * - limit: Number of results per page (1-100, default: 20)
+ * - after: UUID cursor for forward pagination
+ * - before: UUID cursor for backward pagination
+ * - order: Sort order ("asc" or "desc", default: "desc")
+ *
+ * @example
+ * ```typescript
+ * const instructions = await listInstructions({ limit: 20 });
+ *
+ * // Next page
+ * const nextPage = await listInstructions({
+ *   limit: 20,
+ *   after: instructions.last_id
+ * });
+ * ```
+ */
+export async function listInstructions(
+  params?: InstructionListParams
+): Promise<InstructionListResponse> {
+  let url = `${apiUrl}/v1/instructions`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, InstructionListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list instructions"
+  );
+}
+
+/**
+ * Retrieves a single instruction by ID
+ * @param instructionId - The UUID of the instruction to retrieve
+ * @returns A promise resolving to the instruction details
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - The user doesn't have access to the instruction
+ *
+ * @example
+ * ```typescript
+ * const instruction = await getInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(instruction.name, instruction.prompt);
+ * ```
+ */
+export async function getInstruction(instructionId: string): Promise<Instruction> {
+  return authenticatedApiCall<void, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve instruction"
+  );
+}
+
+/**
+ * Updates an existing instruction
+ * @param instructionId - The UUID of the instruction to update
+ * @param request - The fields to update
+ * @returns A promise resolving to the updated instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - No fields are provided (400)
+ * - Name or prompt are empty strings (400)
+ *
+ * @description
+ * At least one field must be provided.
+ * If is_default: true is set, all other instructions are automatically set to is_default: false.
+ * The prompt_tokens field is recalculated automatically if prompt changes.
+ *
+ * @example
+ * ```typescript
+ * const updated = await updateInstruction("550e8400-e29b-41d4-a716-446655440000", {
+ *   name: "Updated Name",
+ *   prompt: "Updated prompt text"
+ * });
+ * ```
+ */
+export async function updateInstruction(
+  instructionId: string,
+  request: InstructionUpdateRequest
+): Promise<Instruction> {
+  return authenticatedApiCall<InstructionUpdateRequest, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "POST",
+    request,
+    "Failed to update instruction"
+  );
+}
+
+/**
+ * Deletes an instruction permanently
+ * @param instructionId - The UUID of the instruction to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - The user doesn't have access to the instruction
+ *
+ * @description
+ * This function permanently deletes an instruction.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Instruction deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteInstruction(
+  instructionId: string
+): Promise<InstructionDeleteResponse> {
+  return authenticatedApiCall<void, InstructionDeleteResponse>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete instruction"
+  );
+}
+
+/**
+ * Sets an instruction as the default
+ * @param instructionId - The UUID of the instruction to set as default
+ * @returns A promise resolving to the updated instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ *
+ * @description
+ * This function sets the specified instruction as the default.
+ * All other instructions for this user are automatically set to is_default: false.
+ * This operation is idempotent - calling it on an already-default instruction succeeds.
+ *
+ * @example
+ * ```typescript
+ * const instruction = await setDefaultInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(instruction.is_default); // Always true
+ * ```
+ */
+export async function setDefaultInstruction(instructionId: string): Promise<Instruction> {
+  return authenticatedApiCall<void, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
+    "POST",
+    undefined,
+    "Failed to set default instruction"
+  );
+}

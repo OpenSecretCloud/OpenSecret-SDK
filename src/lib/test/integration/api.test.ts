@@ -11,7 +11,13 @@ import {
   generateThirdPartyToken,
   encryptData,
   decryptData,
-  requestAccountDeletion
+  requestAccountDeletion,
+  createInstruction,
+  listInstructions,
+  getInstruction,
+  updateInstruction,
+  deleteInstruction,
+  setDefaultInstruction
 } from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -268,4 +274,172 @@ test("Account deletion request endpoint", async () => {
   // If we can still fetch user data, it means the account wasn't deleted yet
   const userResponse = await fetchUser();
   expect(userResponse.user.email).toBe(TEST_EMAIL);
+});
+
+test("Instructions API - Create, List, Get, Update, Delete", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Create a new instruction
+  const instruction1 = await createInstruction({
+    name: "Test Instruction 1",
+    prompt: "You are a helpful assistant.",
+    is_default: false
+  });
+  expect(instruction1.id).toBeDefined();
+  expect(instruction1.object).toBe("instruction");
+  expect(instruction1.name).toBe("Test Instruction 1");
+  expect(instruction1.prompt).toBe("You are a helpful assistant.");
+  expect(instruction1.prompt_tokens).toBeGreaterThan(0);
+  expect(instruction1.is_default).toBe(false);
+  expect(instruction1.created_at).toBeGreaterThan(0);
+  expect(instruction1.updated_at).toBeGreaterThan(0);
+
+  // Create a second instruction as default
+  const instruction2 = await createInstruction({
+    name: "Test Instruction 2",
+    prompt: "You are a coding assistant that helps with TypeScript.",
+    is_default: true
+  });
+  expect(instruction2.id).toBeDefined();
+  expect(instruction2.is_default).toBe(true);
+
+  // List instructions
+  const listResponse = await listInstructions({ limit: 10 });
+  expect(listResponse.object).toBe("list");
+  expect(Array.isArray(listResponse.data)).toBe(true);
+  expect(listResponse.data.length).toBeGreaterThanOrEqual(2);
+  expect(typeof listResponse.has_more).toBe("boolean");
+
+  // Find our created instructions in the list
+  const foundInstruction1 = listResponse.data.find((i) => i.id === instruction1.id);
+  const foundInstruction2 = listResponse.data.find((i) => i.id === instruction2.id);
+  expect(foundInstruction1).toBeDefined();
+  expect(foundInstruction2).toBeDefined();
+
+  // Get single instruction
+  const retrievedInstruction = await getInstruction(instruction1.id);
+  expect(retrievedInstruction.id).toBe(instruction1.id);
+  expect(retrievedInstruction.name).toBe(instruction1.name);
+  expect(retrievedInstruction.prompt).toBe(instruction1.prompt);
+
+  // Update instruction
+  const updatedInstruction = await updateInstruction(instruction1.id, {
+    name: "Updated Test Instruction 1",
+    prompt: "You are a very helpful assistant that provides detailed explanations."
+  });
+  expect(updatedInstruction.id).toBe(instruction1.id);
+  expect(updatedInstruction.name).toBe("Updated Test Instruction 1");
+  expect(updatedInstruction.prompt).toBe("You are a very helpful assistant that provides detailed explanations.");
+  expect(updatedInstruction.prompt_tokens).toBeGreaterThan(0);
+
+  // Set as default
+  const defaultInstruction = await setDefaultInstruction(instruction1.id);
+  expect(defaultInstruction.id).toBe(instruction1.id);
+  expect(defaultInstruction.is_default).toBe(true);
+
+  // Verify the other instruction is no longer default
+  const instruction2Updated = await getInstruction(instruction2.id);
+  expect(instruction2Updated.is_default).toBe(false);
+
+  // Delete instructions
+  const deleteResult1 = await deleteInstruction(instruction1.id);
+  expect(deleteResult1.id).toBe(instruction1.id);
+  expect(deleteResult1.object).toBe("instruction.deleted");
+  expect(deleteResult1.deleted).toBe(true);
+
+  const deleteResult2 = await deleteInstruction(instruction2.id);
+  expect(deleteResult2.deleted).toBe(true);
+
+  // Verify deletion - trying to get should fail
+  try {
+    await getInstruction(instruction1.id);
+    throw new Error("Should not be able to retrieve deleted instruction");
+  } catch (error: any) {
+    // Expected to fail with 404 or Bad Request
+    expect(error.message).toBeDefined();
+  }
+});
+
+test("Instructions API - Pagination", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Create multiple instructions for pagination testing
+  const instructionIds = [];
+  for (let i = 0; i < 5; i++) {
+    const instruction = await createInstruction({
+      name: `Pagination Test Instruction ${i}`,
+      prompt: `This is test instruction number ${i}.`,
+      is_default: false
+    });
+    instructionIds.push(instruction.id);
+  }
+
+  // Test pagination with limit
+  const page1 = await listInstructions({ limit: 2 });
+  expect(page1.data.length).toBeLessThanOrEqual(2);
+
+  // Test forward pagination with after cursor
+  if (page1.last_id) {
+    const page2 = await listInstructions({
+      limit: 2,
+      after: page1.last_id
+    });
+    expect(Array.isArray(page2.data)).toBe(true);
+  }
+
+  // Test ordering
+  const descOrder = await listInstructions({ order: "desc", limit: 5 });
+  expect(descOrder.data.length).toBeGreaterThan(0);
+
+  // Clean up
+  for (const id of instructionIds) {
+    await deleteInstruction(id);
+  }
+});
+
+test("Instructions API - Error cases", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Test getting non-existent instruction
+  try {
+    await getInstruction("00000000-0000-0000-0000-000000000000");
+    throw new Error("Should not be able to get non-existent instruction");
+  } catch (error: any) {
+    expect(error.message).toBeDefined();
+  }
+
+  // Test updating non-existent instruction
+  try {
+    await updateInstruction("00000000-0000-0000-0000-000000000000", {
+      name: "Should fail"
+    });
+    throw new Error("Should not be able to update non-existent instruction");
+  } catch (error: any) {
+    expect(error.message).toBeDefined();
+  }
+
+  // Test deleting non-existent instruction
+  try {
+    await deleteInstruction("00000000-0000-0000-0000-000000000000");
+    throw new Error("Should not be able to delete non-existent instruction");
+  } catch (error: any) {
+    expect(error.message).toBeDefined();
+  }
+
+  // Test setting non-existent instruction as default
+  try {
+    await setDefaultInstruction("00000000-0000-0000-0000-000000000000");
+    throw new Error("Should not be able to set non-existent instruction as default");
+  } catch (error: any) {
+    expect(error.message).toBeDefined();
+  }
 });
