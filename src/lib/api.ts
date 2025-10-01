@@ -1192,7 +1192,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * @returns Promise that resolves after the delay
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -1544,5 +1544,843 @@ export async function transcribeAudio(
     requestData,
     "Failed to transcribe audio",
     apiKey
+  );
+}
+
+export type ResponsesRetrieveResponse = {
+  id: string;
+  object: "response";
+  created_at: number;
+  status: "queued" | "in_progress" | "completed" | "failed" | "cancelled";
+  model: string;
+  usage?: {
+    input_tokens: number;
+    input_tokens_details: {
+      cached_tokens: number;
+    };
+    output_tokens: number;
+    output_tokens_details: {
+      reasoning_tokens: number;
+    };
+    total_tokens: number;
+  };
+  output?: string;
+};
+
+export type ThreadListItem = {
+  id: string;
+  object: "thread";
+  created_at: number;
+  updated_at: number;
+  title: string;
+};
+
+export type ResponsesListResponse = {
+  object: "list";
+  data: ThreadListItem[];
+  has_more: boolean;
+  first_id?: string;
+  last_id?: string;
+};
+
+export type ResponsesListParams = {
+  limit?: number; // 1-100, default: 20
+  after?: string; // UUID cursor for forward pagination
+  before?: string; // UUID cursor for backward pagination
+  order?: string; // Currently not implemented, reserved for future use
+};
+
+export type ConversationItem = {
+  id: string;
+  type: "message";
+  status: "completed" | "in_progress" | "incomplete";
+  role: "user" | "assistant" | "system";
+  content: Array<{
+    type: "text" | "input_text" | "input_audio" | "item";
+    text?: string;
+    audio?: string;
+    transcript?: string;
+    id?: string;
+  }>;
+};
+
+export type Conversation = {
+  id: string;
+  object: "conversation";
+  created_at: number;
+  metadata?: Record<string, any>;
+};
+
+export type ConversationCreateRequest = {
+  metadata?: Record<string, any>;
+};
+
+export type ConversationUpdateRequest = {
+  metadata?: Record<string, any>;
+};
+
+export type ConversationItemsResponse = {
+  object: "list";
+  data: ConversationItem[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
+};
+
+export type ConversationsListResponse = {
+  object: "list";
+  data: Conversation[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
+};
+
+export type ConversationDeleteResponse = {
+  id: string;
+  object: "conversation.deleted";
+  deleted: boolean;
+};
+
+/**
+ * Lists user's conversation threads with pagination
+ * @param params - Optional parameters for pagination and filtering
+ * @returns A promise resolving to a paginated list of conversation threads
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ * - Invalid pagination parameters
+ *
+ * @description
+ * This function fetches a paginated list of the user's conversation threads.
+ * Each thread represents a conversation, not individual messages.
+ * Threads are sorted by updated_at (most recently active threads first).
+ *
+ * Query Parameters:
+ * - limit: Number of results per page (1-100, default: 20)
+ * - after: UUID cursor for forward pagination
+ * - before: UUID cursor for backward pagination
+ * - order: Sort order (currently not implemented, reserved for future use)
+ *
+ * Pagination Examples:
+ * ```typescript
+ * // First page
+ * const threads = await fetchResponsesList({ limit: 20 });
+ *
+ * // Next page
+ * const nextPage = await fetchResponsesList({
+ *   limit: 20,
+ *   after: threads.last_id
+ * });
+ *
+ * // Previous page
+ * const prevPage = await fetchResponsesList({
+ *   limit: 20,
+ *   before: threads.first_id
+ * });
+ * ```
+ */
+export async function fetchResponsesList(
+  params?: ResponsesListParams
+): Promise<ResponsesListResponse> {
+  let url = `${apiUrl}/v1/responses`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ResponsesListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list responses"
+  );
+}
+
+/**
+ * Retrieves a single response by ID
+ * @param responseId - The UUID of the response to retrieve
+ * @returns A promise resolving to the response details
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function fetches detailed information about a specific response,
+ * including full output and usage statistics.
+ *
+ * @example
+ * ```typescript
+ * const response = await fetchResponse("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(response.output); // The full response text
+ * console.log(response.usage);  // Token usage statistics
+ * ```
+ */
+export async function fetchResponse(responseId: string): Promise<ResponsesRetrieveResponse> {
+  return authenticatedApiCall<void, ResponsesRetrieveResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve response"
+  );
+}
+
+export type ResponsesCancelResponse = {
+  id: string;
+  object: "response";
+  created_at: number;
+  status: "cancelled";
+  model: string;
+};
+
+/**
+ * Cancels an in-progress response
+ * @param responseId - The UUID of the response to cancel
+ * @returns A promise resolving to the cancelled response
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The response is not in 'in_progress' status
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function cancels a response that is currently being processed.
+ * Only responses with status 'in_progress' can be cancelled.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const cancelled = await cancelResponse("550e8400-e29b-41d4-a716-446655440000");
+ *   console.log("Response cancelled:", cancelled.status);
+ * } catch (error) {
+ *   console.error("Cannot cancel:", error.message);
+ * }
+ * ```
+ */
+export async function cancelResponse(responseId: string): Promise<ResponsesCancelResponse> {
+  return authenticatedApiCall<void, ResponsesCancelResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
+    "POST",
+    undefined,
+    "Failed to cancel response"
+  );
+}
+
+export type ResponsesDeleteResponse = {
+  id: string;
+  object: "response.deleted";
+  deleted: boolean;
+};
+
+export type ResponsesCreateRequest = {
+  model: string;
+  input: string;
+  conversation?: string | { id: string };
+  previous_response_id?: string; // Deprecated but still supported
+  stream?: boolean;
+  metadata?: Record<string, any>;
+};
+
+/**
+ * Creates a new conversation
+ * @param metadata - Optional metadata to attach to the conversation
+ * @returns A promise resolving to the created conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function creates a new conversation that can be used to group
+ * related responses together. The conversation can have metadata
+ * attached for organization and filtering purposes.
+ * 
+ * NOTE: Prefer using the OpenAI client directly for conversation operations:
+ * ```typescript
+ * const openai = new OpenAI({ fetch: customFetch });
+ * const conversation = await openai.conversations.create({
+ *   metadata: { title: "Product Support", category: "technical" }
+ * });
+ * ```
+ *
+ * @deprecated Use openai.conversations.create() instead
+ */
+export async function createConversation(
+  metadata?: Record<string, any>
+): Promise<Conversation> {
+  const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
+  
+  return authenticatedApiCall<ConversationCreateRequest, Conversation>(
+    `${apiUrl}/v1/conversations`,
+    "POST",
+    requestData,
+    "Failed to create conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.retrieve() instead
+ * Retrieves a conversation by ID
+ * @param conversationId - The UUID of the conversation to retrieve
+ * @returns A promise resolving to the conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const conversation = await getConversation("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(conversation.metadata);
+ * ```
+ */
+export async function getConversation(conversationId: string): Promise<Conversation> {
+  return authenticatedApiCall<void, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.update() instead
+ * Updates a conversation's metadata
+ * @param conversationId - The UUID of the conversation to update
+ * @param metadata - The metadata to update
+ * @returns A promise resolving to the updated conversation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const updated = await updateConversation("550e8400-e29b-41d4-a716-446655440000", {
+ *   metadata: { title: "Updated Title", status: "resolved" }
+ * });
+ * ```
+ */
+export async function updateConversation(
+  conversationId: string,
+  metadata: Record<string, any>
+): Promise<Conversation> {
+  const requestData: ConversationUpdateRequest = { metadata };
+  
+  return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "POST",
+    requestData,
+    "Failed to update conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.delete() instead
+ * Deletes a conversation permanently
+ * @param conversationId - The UUID of the conversation to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @description
+ * This function permanently deletes a conversation and all associated items.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteConversation("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Conversation deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteConversation(
+  conversationId: string
+): Promise<ConversationDeleteResponse> {
+  return authenticatedApiCall<void, ConversationDeleteResponse>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete conversation"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.create() with items parameter instead
+ * Adds items to a conversation
+ * @param conversationId - The UUID of the conversation
+ * @param items - Array of items to add to the conversation
+ * @returns A promise resolving to the updated conversation with items
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * await addConversationItems("550e8400-e29b-41d4-a716-446655440000", [
+ *   {
+ *     type: "message",
+ *     role: "user",
+ *     content: [{ type: "text", text: "Hello" }]
+ *   }
+ * ]);
+ * ```
+ */
+export async function addConversationItems(
+  conversationId: string,
+  items: Partial<ConversationItem>[]
+): Promise<Conversation> {
+  return authenticatedApiCall<{ items: Partial<ConversationItem>[] }, Conversation>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
+    "POST",
+    { items },
+    "Failed to add conversation items"
+  );
+}
+
+/**
+ * @deprecated Use openai.conversations.items.list() instead
+ * Lists items in a conversation
+ * @param conversationId - The UUID of the conversation
+ * @param params - Optional pagination parameters
+ * @returns A promise resolving to a paginated list of conversation items
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The conversation is not found
+ * - The user doesn't have access to the conversation
+ *
+ * @example
+ * ```typescript
+ * const items = await listConversationItems("550e8400-e29b-41d4-a716-446655440000", {
+ *   limit: 20
+ * });
+ * for (const item of items.data) {
+ *   console.log(item.role, item.content);
+ * }
+ * ```
+ */
+export async function listConversationItems(
+  conversationId: string,
+  params?: {
+    limit?: number;
+    after?: string;
+    before?: string;
+  }
+): Promise<ConversationItemsResponse> {
+  let url = `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationItemsResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list conversation items"
+  );
+}
+
+/**
+ * Lists all conversations with pagination (non-standard endpoint)
+ * @param params - Optional pagination parameters
+ * @returns A promise resolving to a paginated list of conversations
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This is a custom extension not part of the standard OpenAI Conversations API.
+ * This function fetches a paginated list of the user's conversations.
+ * Conversations are sorted by created_at (most recent first).
+ *
+ * @example
+ * ```typescript
+ * const conversations = await listConversations({ limit: 20 });
+ * for (const conv of conversations.data) {
+ *   console.log(conv.id, conv.metadata);
+ * }
+ * ```
+ */
+export async function listConversations(
+  params?: {
+    limit?: number;
+    after?: string;
+    before?: string;
+  }
+): Promise<ConversationsListResponse> {
+  let url = `${apiUrl}/v1/conversations`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationsListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list conversations"
+  );
+}
+
+/**
+ * Creates a new response with conversation support
+ * @param request - The request parameters for creating a response
+ * @returns A promise resolving to the created response or a stream
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function creates a new response in the OpenAI-compatible API.
+ * It supports both the new conversation parameter and the deprecated
+ * previous_response_id parameter for backward compatibility.
+ *
+ * @example
+ * ```typescript
+ * // Create a response in a conversation
+ * const response = await createResponse({
+ *   model: "gpt-4",
+ *   input: "Hello, how are you?",
+ *   conversation: "550e8400-e29b-41d4-a716-446655440000"
+ * });
+ *
+ * // Or with the deprecated previous_response_id
+ * const response = await createResponse({
+ *   model: "gpt-4",
+ *   input: "Tell me more",
+ *   previous_response_id: "response-uuid"
+ * });
+ * ```
+ */
+export async function createResponse(
+  request: ResponsesCreateRequest
+): Promise<any> {
+  return authenticatedApiCall<ResponsesCreateRequest, any>(
+    `${apiUrl}/v1/responses`,
+    "POST",
+    request,
+    "Failed to create response"
+  );
+}
+
+/**
+ * Deletes a response permanently
+ * @param responseId - The UUID of the response to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The response is not found
+ * - The user doesn't have access to the response
+ *
+ * @description
+ * This function permanently deletes a response and all associated data.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteResponse("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Response deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteResponse(responseId: string): Promise<ResponsesDeleteResponse> {
+  return authenticatedApiCall<void, ResponsesDeleteResponse>(
+    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete response"
+  );
+}
+
+export type Instruction = {
+  id: string;
+  object: "instruction";
+  name: string;
+  prompt: string;
+  prompt_tokens: number;
+  is_default: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export type InstructionCreateRequest = {
+  name: string;
+  prompt: string;
+  is_default?: boolean;
+};
+
+export type InstructionUpdateRequest = {
+  name?: string;
+  prompt?: string;
+  is_default?: boolean;
+};
+
+export type InstructionListParams = {
+  limit?: number;
+  after?: string;
+  before?: string;
+  order?: string;
+};
+
+export type InstructionListResponse = {
+  object: "list";
+  data: Instruction[];
+  has_more: boolean;
+  first_id: string | null;
+  last_id: string | null;
+};
+
+export type InstructionDeleteResponse = {
+  id: string;
+  object: "instruction.deleted";
+  deleted: true;
+};
+
+/**
+ * Creates a new instruction
+ * @param request - The instruction creation parameters
+ * @returns A promise resolving to the created instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The request fails
+ * - Name or prompt are empty strings
+ *
+ * @description
+ * This function creates a new user instruction (system prompt).
+ * If is_default is set to true, all other instructions are automatically set to is_default: false.
+ * The prompt_tokens field is automatically calculated.
+ *
+ * @example
+ * ```typescript
+ * const instruction = await createInstruction({
+ *   name: "Helpful Assistant",
+ *   prompt: "You are a helpful assistant that...",
+ *   is_default: true
+ * });
+ * ```
+ */
+export async function createInstruction(
+  request: InstructionCreateRequest
+): Promise<Instruction> {
+  return authenticatedApiCall<InstructionCreateRequest, Instruction>(
+    `${apiUrl}/v1/instructions`,
+    "POST",
+    request,
+    "Failed to create instruction"
+  );
+}
+
+/**
+ * Lists user's instructions with pagination
+ * @param params - Optional parameters for pagination and ordering
+ * @returns A promise resolving to a paginated list of instructions
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function fetches a paginated list of the user's instructions.
+ * Results are ordered by updated_at by default (most recently updated first).
+ *
+ * Query Parameters:
+ * - limit: Number of results per page (1-100, default: 20)
+ * - after: UUID cursor for forward pagination
+ * - before: UUID cursor for backward pagination
+ * - order: Sort order ("asc" or "desc", default: "desc")
+ *
+ * @example
+ * ```typescript
+ * const instructions = await listInstructions({ limit: 20 });
+ *
+ * // Next page
+ * const nextPage = await listInstructions({
+ *   limit: 20,
+ *   after: instructions.last_id
+ * });
+ * ```
+ */
+export async function listInstructions(
+  params?: InstructionListParams
+): Promise<InstructionListResponse> {
+  let url = `${apiUrl}/v1/instructions`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.before) {
+    queryParams.push(`before=${encodeURIComponent(params.before)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, InstructionListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list instructions"
+  );
+}
+
+/**
+ * Retrieves a single instruction by ID
+ * @param instructionId - The UUID of the instruction to retrieve
+ * @returns A promise resolving to the instruction details
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - The user doesn't have access to the instruction
+ *
+ * @example
+ * ```typescript
+ * const instruction = await getInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(instruction.name, instruction.prompt);
+ * ```
+ */
+export async function getInstruction(instructionId: string): Promise<Instruction> {
+  return authenticatedApiCall<void, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve instruction"
+  );
+}
+
+/**
+ * Updates an existing instruction
+ * @param instructionId - The UUID of the instruction to update
+ * @param request - The fields to update
+ * @returns A promise resolving to the updated instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - No fields are provided (400)
+ * - Name or prompt are empty strings (400)
+ *
+ * @description
+ * At least one field must be provided.
+ * If is_default: true is set, all other instructions are automatically set to is_default: false.
+ * The prompt_tokens field is recalculated automatically if prompt changes.
+ *
+ * @example
+ * ```typescript
+ * const updated = await updateInstruction("550e8400-e29b-41d4-a716-446655440000", {
+ *   name: "Updated Name",
+ *   prompt: "Updated prompt text"
+ * });
+ * ```
+ */
+export async function updateInstruction(
+  instructionId: string,
+  request: InstructionUpdateRequest
+): Promise<Instruction> {
+  return authenticatedApiCall<InstructionUpdateRequest, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "POST",
+    request,
+    "Failed to update instruction"
+  );
+}
+
+/**
+ * Deletes an instruction permanently
+ * @param instructionId - The UUID of the instruction to delete
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ * - The user doesn't have access to the instruction
+ *
+ * @description
+ * This function permanently deletes an instruction.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * if (result.deleted) {
+ *   console.log("Instruction deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteInstruction(
+  instructionId: string
+): Promise<InstructionDeleteResponse> {
+  return authenticatedApiCall<void, InstructionDeleteResponse>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete instruction"
+  );
+}
+
+/**
+ * Sets an instruction as the default
+ * @param instructionId - The UUID of the instruction to set as default
+ * @returns A promise resolving to the updated instruction
+ * @throws {Error} If:\n * - The user is not authenticated
+ * - The instruction is not found (404)
+ *
+ * @description
+ * This function sets the specified instruction as the default.
+ * All other instructions for this user are automatically set to is_default: false.
+ * This operation is idempotent - calling it on an already-default instruction succeeds.
+ *
+ * @example
+ * ```typescript
+ * const instruction = await setDefaultInstruction("550e8400-e29b-41d4-a716-446655440000");
+ * console.log(instruction.is_default); // Always true
+ * ```
+ */
+export async function setDefaultInstruction(instructionId: string): Promise<Instruction> {
+  return authenticatedApiCall<void, Instruction>(
+    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
+    "POST",
+    undefined,
+    "Failed to set default instruction"
   );
 }

@@ -11,7 +11,20 @@ export type {
   DocumentStatusResponse,
   ApiKey,
   ApiKeyCreateResponse,
-  ApiKeyListResponse
+  ApiKeyListResponse,
+  ResponsesRetrieveResponse,
+  ResponsesListResponse,
+  ResponsesListParams,
+  ResponsesCancelResponse,
+  ResponsesDeleteResponse,
+  ResponsesCreateRequest,
+  Conversation,
+  ConversationItem,
+  ConversationCreateRequest,
+  ConversationUpdateRequest,
+  ConversationItemsResponse,
+  ConversationsListResponse,
+  ConversationDeleteResponse
 } from "./api";
 
 // Export API key management functions

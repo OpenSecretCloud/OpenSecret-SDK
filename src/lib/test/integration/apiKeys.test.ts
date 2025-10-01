@@ -127,7 +127,7 @@ describe("API Key Authentication with OpenAI", () => {
       { role: "user" as const, content: 'please reply with exactly and only the word "echo"' }
     ];
 
-    const stream = openai.beta.chat.completions.stream({
+    const stream = await openai.chat.completions.create({
       model,
       messages,
       stream: true
@@ -140,7 +140,8 @@ describe("API Key Authentication with OpenAI", () => {
       fullResponse += content;
     }
 
-    await stream.finalChatCompletion();
+    // In OpenAI v5, we just iterate through the stream instead of finalChatCompletion()
+    // The stream already completed above
 
     expect(fullResponse.trim()).toBe("echo");
   });

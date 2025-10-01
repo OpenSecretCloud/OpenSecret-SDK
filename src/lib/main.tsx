@@ -357,7 +357,7 @@ export type OpenSecretContextType = {
    * });
    * ```
    */
-  aiCustomFetch: (url: RequestInfo, init?: RequestInit) => Promise<Response>;
+  aiCustomFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
   /**
    * Returns the current OpenSecret enclave API URL being used
@@ -670,6 +670,160 @@ export type OpenSecretContextType = {
    * ```
    */
   transcribeAudio: typeof api.transcribeAudio;
+
+  /**
+   * Lists user's responses with pagination
+   * @param params - Optional parameters for pagination and filtering
+   * @returns A promise resolving to a paginated list of responses
+   * @throws {Error} If:
+   * - The user is not authenticated
+   * - The request fails
+   * - Invalid pagination parameters
+   *
+   * @description
+   * This function fetches a paginated list of the user's responses.
+   * In list view, the usage and output fields are always null for performance reasons.
+   *
+   * Query Parameters:
+   * - limit: Number of results per page (1-100, default: 20)
+   * - after: UUID cursor for forward pagination
+   * - before: UUID cursor for backward pagination
+   * - order: Sort order (currently not implemented, reserved for future use)
+   *
+   * Pagination Examples:
+   * ```typescript
+   * // First page
+   * const responses = await context.fetchResponsesList({ limit: 20 });
+   *
+   * // Next page
+   * const nextPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   after: responses.last_id
+   * });
+   *
+   * // Previous page
+   * const prevPage = await context.fetchResponsesList({
+   *   limit: 20,
+   *   before: responses.first_id
+   * });
+   * ```
+   */
+  fetchResponsesList: (params?: api.ResponsesListParams) => Promise<api.ResponsesListResponse>;
+
+  /**
+   * Retrieves a single response by ID
+   * @param responseId - The UUID of the response to retrieve
+   * @returns A promise resolving to the response details
+   */
+  fetchResponse: (responseId: string) => Promise<api.ResponsesRetrieveResponse>;
+
+  /**
+   * Cancels an in-progress response
+   * @param responseId - The UUID of the response to cancel
+   * @returns A promise resolving to the cancelled response
+   */
+  cancelResponse: (responseId: string) => Promise<api.ResponsesCancelResponse>;
+
+  /**
+   * Deletes a response permanently
+   * @param responseId - The UUID of the response to delete
+   * @returns A promise resolving to deletion confirmation
+   */
+  deleteResponse: (responseId: string) => Promise<api.ResponsesDeleteResponse>;
+
+  /**
+   * Creates a new response with conversation support
+   * @param request - The request parameters for creating a response
+   * @returns A promise resolving to the created response or a stream
+   */
+  createResponse: (request: api.ResponsesCreateRequest) => Promise<any>;
+
+  /**
+   * Lists all conversations with pagination (non-standard endpoint)
+   * @param params - Optional pagination parameters
+   * @returns A promise resolving to a paginated list of conversations
+   * @description
+   * This is a custom extension not part of the standard OpenAI API.
+   * For standard conversation operations, use the OpenAI client directly:
+   * - openai.conversations.create()
+   * - openai.conversations.retrieve()
+   * - openai.conversations.update()
+   * - openai.conversations.delete()
+   * - openai.conversations.items.list()
+   * - openai.conversations.items.retrieve()
+   */
+  listConversations: (params?: { limit?: number; after?: string; before?: string }) => Promise<api.ConversationsListResponse>;
+
+  /**
+   * Creates a new instruction
+   * @param request - The instruction creation parameters
+   * @returns A promise resolving to the created instruction
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * @description
+   * Creates a new user instruction (system prompt).
+   * If is_default is set to true, all other instructions are automatically set to is_default: false.
+   * The prompt_tokens field is automatically calculated.
+   */
+  createInstruction: typeof api.createInstruction;
+
+  /**
+   * Lists user's instructions with pagination
+   * @param params - Optional parameters for pagination and ordering
+   * @returns A promise resolving to a paginated list of instructions
+   * @throws {Error} If the user is not authenticated or the request fails
+   *
+   * @description
+   * Fetches a paginated list of the user's instructions.
+   * Results are ordered by updated_at by default (most recently updated first).
+   */
+  listInstructions: typeof api.listInstructions;
+
+  /**
+   * Retrieves a single instruction by ID
+   * @param instructionId - The UUID of the instruction to retrieve
+   * @returns A promise resolving to the instruction details
+   * @throws {Error} If the instruction is not found or user doesn't have access
+   */
+  getInstruction: typeof api.getInstruction;
+
+  /**
+   * Updates an existing instruction
+   * @param instructionId - The UUID of the instruction to update
+   * @param request - The fields to update
+   * @returns A promise resolving to the updated instruction
+   * @throws {Error} If the instruction is not found or validation fails
+   *
+   * @description
+   * At least one field must be provided.
+   * If is_default: true is set, all other instructions are automatically set to is_default: false.
+   * The prompt_tokens field is recalculated automatically if prompt changes.
+   */
+  updateInstruction: typeof api.updateInstruction;
+
+  /**
+   * Deletes an instruction permanently
+   * @param instructionId - The UUID of the instruction to delete
+   * @returns A promise resolving to deletion confirmation
+   * @throws {Error} If the instruction is not found or user doesn't have access
+   *
+   * @description
+   * Permanently deletes an instruction. This action cannot be undone.
+   */
+  deleteInstruction: typeof api.deleteInstruction;
+
+  /**
+   * Sets an instruction as the default
+   * @param instructionId - The UUID of the instruction to set as default
+   * @returns A promise resolving to the updated instruction
+   * @throws {Error} If the instruction is not found
+   *
+   * @description
+   * Sets the specified instruction as the default.
+   * All other instructions for this user are automatically set to is_default: false.
+   * This operation is idempotent.
+   */
+  setDefaultInstruction: typeof api.setDefaultInstruction;
 };
 
 export const OpenSecretContext = createContext<OpenSecretContextType>({
@@ -737,7 +891,19 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   createApiKey: api.createApiKey,
   listApiKeys: api.listApiKeys,
   deleteApiKey: api.deleteApiKey,
-  transcribeAudio: api.transcribeAudio
+  transcribeAudio: api.transcribeAudio,
+  fetchResponsesList: api.fetchResponsesList,
+  fetchResponse: api.fetchResponse,
+  cancelResponse: api.cancelResponse,
+  deleteResponse: api.deleteResponse,
+  createResponse: api.createResponse,
+  listConversations: api.listConversations,
+  createInstruction: api.createInstruction,
+  listInstructions: api.listInstructions,
+  getInstruction: api.getInstruction,
+  updateInstruction: api.updateInstruction,
+  deleteInstruction: api.deleteInstruction,
+  setDefaultInstruction: api.setDefaultInstruction
 });
 
 /**
@@ -1138,7 +1304,19 @@ export function OpenSecretProvider({
     createApiKey: api.createApiKey,
     listApiKeys: api.listApiKeys,
     deleteApiKey: api.deleteApiKey,
-    transcribeAudio: api.transcribeAudio
+    transcribeAudio: api.transcribeAudio,
+    fetchResponsesList: api.fetchResponsesList,
+    fetchResponse: api.fetchResponse,
+    cancelResponse: api.cancelResponse,
+    deleteResponse: api.deleteResponse,
+    createResponse: api.createResponse,
+    listConversations: api.listConversations,
+    createInstruction: api.createInstruction,
+    listInstructions: api.listInstructions,
+    getInstruction: api.getInstruction,
+    updateInstruction: api.updateInstruction,
+    deleteInstruction: api.deleteInstruction,
+    setDefaultInstruction: api.setDefaultInstruction
   };
 
   return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
