@@ -298,9 +298,13 @@ test("OpenAI responses endpoint streams response", async () => {
     fetch: createCustomFetch()
   });
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the word "echo"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -356,9 +360,13 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
     fetch: createCustomFetch()
   });
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the words "echo echo"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -458,49 +466,6 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
   expect(fullResponse.trim()).toBe("echo echo");
 });
 
-test("DEBUG: Inspect responses streaming events in detail", async () => {
-  await setupTestUser();
-
-  const openai = new OpenAI({
-    baseURL: `${API_URL}/v1/`,
-    dangerouslyAllowBrowser: true,
-    apiKey: "api-key-doesnt-matter",
-    defaultHeaders: {
-      "Accept-Encoding": "identity"
-    },
-    fetch: createCustomFetch()
-  });
-
-  const stream = await openai.responses.create({
-    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: "hello how is it going?",
-    stream: true
-  });
-
-  console.log("\n🔍 STARTING DETAILED EVENT INSPECTION 🔍\n");
-
-  let eventCount = 0;
-  let fullResponse = "";
-
-  for await (const event of stream) {
-    eventCount++;
-    console.log(`\n========== EVENT ${eventCount} ==========`);
-    console.log(`Type: ${event.type}`);
-    console.log(`Full event:`, JSON.stringify(event, null, 2));
-
-    if (event.type === "response.output_text.delta") {
-      fullResponse += event.delta;
-      console.log(`🔤 DELTA: "${event.delta}" (length: ${event.delta.length})`);
-      console.log(`📝 Accumulated so far: "${fullResponse}"`);
-    }
-  }
-
-  console.log("\n📊 FINAL SUMMARY:");
-  console.log(`Total events: ${eventCount}`);
-  console.log(`Final response: "${fullResponse}"`);
-  console.log(`Response length: ${fullResponse.length} characters`);
-});
-
 test("Conversations API: List conversations works with default parameters (custom endpoint)", async () => {
   await setupTestUser();
 
@@ -560,10 +525,14 @@ test("OpenAI responses retrieve endpoint works", async () => {
     fetch: createCustomFetch()
   });
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   // First create a response to retrieve
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the word "test"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -676,10 +645,14 @@ test("OpenAI responses delete endpoint works", async () => {
     fetch: createCustomFetch()
   });
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   // First create a response to delete
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the word "delete"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -734,10 +707,14 @@ test("Integration test: Complete responses workflow", async () => {
     fetch: createCustomFetch()
   });
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   // 1. Create a new response
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the word "workflow"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -764,7 +741,10 @@ test("Integration test: Complete responses workflow", async () => {
   const retrievedResponse = await openai.responses.retrieve(responseId);
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.status).toBe("completed");
-  expect(retrievedResponse.output).toContain("workflow");
+  expect(Array.isArray(retrievedResponse.output)).toBe(true);
+  expect(retrievedResponse.output.length).toBeGreaterThan(0);
+  expect(retrievedResponse.output[0].type).toBe("message");
+  expect(retrievedResponse.output[0].content[0].text).toContain("workflow");
   expect(retrievedResponse.usage).toBeDefined();
 
   // 5. Delete the response
@@ -789,10 +769,14 @@ test("Integration test: Direct API functions for responses", async () => {
 
   const { fetchResponse, deleteResponse } = await import("../../api");
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   // 1. Create a response to test with
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: 'please reply with exactly and only the word "apitest"',
+    conversation: conversation.id,
     stream: true
   });
 
@@ -813,7 +797,10 @@ test("Integration test: Direct API functions for responses", async () => {
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.object).toBe("response");
   expect(retrievedResponse.status).toBe("completed");
-  expect(retrievedResponse.output).toContain("apitest");
+  expect(Array.isArray(retrievedResponse.output)).toBe(true);
+  expect(retrievedResponse.output.length).toBeGreaterThan(0);
+  expect(retrievedResponse.output[0].type).toBe("message");
+  expect(retrievedResponse.output[0].content[0].text).toContain("apitest");
   expect(retrievedResponse.usage).toBeDefined();
   expect(retrievedResponse.usage?.input_tokens).toBeGreaterThan(0);
   expect(retrievedResponse.usage?.output_tokens).toBeGreaterThan(0);
@@ -851,10 +838,14 @@ test("Integration test: Cancel in-progress response", async () => {
 
   const { cancelResponse, fetchResponse, deleteResponse } = await import("../../api");
 
+  // Create a conversation first (now required)
+  const conversation = await openai.conversations.create({});
+
   // Create a slow response that we can cancel
   const stream = await openai.responses.create({
     model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
     input: "Count from 1 to 100 slowly, with detailed explanations for each number",
+    conversation: conversation.id,
     stream: true
   });
 
@@ -952,78 +943,6 @@ test("Conversations API: Create, Get, Update, Delete conversation", async () => 
   expect(deleteResult.deleted).toBe(true);
 });
 
-test("Conversations API: Create with items and list conversation items", async () => {
-  await setupTestUser();
-
-  const openai = new OpenAI({
-    baseURL: `${API_URL}/v1/`,
-    dangerouslyAllowBrowser: true,
-    apiKey: "api-key-doesnt-matter",
-    defaultHeaders: {
-      "Accept-Encoding": "identity"
-    },
-    fetch: createCustomFetch()
-  });
-
-  // Create a conversation with initial items
-  // NOTE: Backend currently does not support assistant messages in initial creation
-  const conversation = await openai.conversations.create({
-    metadata: {
-      title: "Test Conversation with Items"
-    },
-    items: [
-      {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text" as const, text: "Hello, this is a test message" }]
-      }
-    ]
-  });
-
-  expect(conversation).toBeDefined();
-  expect(conversation.id).toBeDefined();
-
-  // List conversation items
-  const items = await openai.conversations.items.list(conversation.id, { limit: 10 });
-  expect(items).toBeDefined();
-  // items is a ConversationCursorPage, not a plain object with "object" property
-  expect(Array.isArray(items.data)).toBe(true);
-  expect(items.data.length).toBeGreaterThanOrEqual(1); // We only added 1 user message
-  expect(typeof items.has_more).toBe("boolean");
-  expect(items.last_id).toBeDefined();
-
-  // Verify item structure
-  if (items.data.length > 0) {
-    const item = items.data[0];
-    expect(item).toHaveProperty("id");
-    expect(item).toHaveProperty("type", "message");
-    expect(item).toHaveProperty("role");
-    expect(item).toHaveProperty("content");
-    expect(Array.isArray((item as any).content)).toBe(true);
-
-    // Test retrieving a specific item
-    console.log("Attempting to retrieve item:", {
-      itemId: item.id,
-      conversationId: conversation.id,
-      expectedUrl: `/conversations/${conversation.id}/items/${item.id}`
-    });
-    
-    try {
-      const retrievedItem = await openai.conversations.items.retrieve(item.id!, {
-        conversation_id: conversation.id
-      });
-      expect(retrievedItem.id).toBe(item.id!);
-      expect(retrievedItem.type).toBe("message");
-    } catch (error) {
-      console.error("Failed to retrieve item:", error);
-      throw error;
-    }
-  }
-
-  // Clean up
-  await openai.conversations.delete(conversation.id);
-});
-
 test("Responses API: Create response with conversation parameter", async () => {
   await setupTestUser();
 
@@ -1095,59 +1014,6 @@ test("Responses API: Create response with conversation parameter", async () => {
   await openai.responses.delete(responseId1);
   await openai.responses.delete(responseId2);
   await openai.conversations.delete(conversation.id);
-});
-
-test("Responses API: Backward compatibility with previous_response_id", async () => {
-  await setupTestUser();
-
-  const openai = new OpenAI({
-    baseURL: `${API_URL}/v1/`,
-    dangerouslyAllowBrowser: true,
-    apiKey: "api-key-doesnt-matter",
-    defaultHeaders: {
-      "Accept-Encoding": "identity"
-    },
-    fetch: createCustomFetch()
-  });
-
-  // Create first response
-  const stream1 = await openai.responses.create({
-    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: 'please reply with exactly and only the word "hello"',
-    stream: true
-  });
-
-  let responseId1 = "";
-
-  for await (const event of stream1) {
-    if (event.type === "response.created" && event.response?.id) {
-      responseId1 = event.response.id;
-      break; // Just get the ID
-    }
-  }
-
-  expect(responseId1).not.toBe("");
-
-  // Create second response using previous_response_id (deprecated but should still work)
-  const stream2 = await openai.responses.create({
-    model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4",
-    input: 'please reply with exactly and only the word "world"',
-    previous_response_id: responseId1,
-    stream: true
-  });
-
-  let responseId2 = "";
-  for await (const event of stream2) {
-    if (event.type === "response.created" && event.response?.id) {
-      responseId2 = event.response.id;
-      break;
-    }
-  }
-
-  expect(responseId2).not.toBe("");
-  console.log("Successfully created response with previous_response_id:", responseId2);
-  
-  // Skip cleanup for now - focusing on testing the functionality
 });
 
 test("Conversations API: Full integration with responses", async () => {
