@@ -62,6 +62,7 @@ pub fn perform_static_key_exchange(
     secret.diffie_hellman(their_public)
 }
 
+#[allow(deprecated)]
 pub fn encrypt_data(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
     let cipher = ChaCha20Poly1305::new_from_slice(key)
         .map_err(|e| Error::Crypto(format!("Failed to create cipher: {}", e)))?;
@@ -81,6 +82,7 @@ pub fn encrypt_data(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
     Ok(result)
 }
 
+#[allow(deprecated)]
 pub fn decrypt_data(key: &[u8; 32], encrypted_data: &[u8]) -> Result<Vec<u8>> {
     if encrypted_data.len() < 12 {
         return Err(Error::Decryption("Encrypted data too short".to_string()));
@@ -97,6 +99,7 @@ pub fn decrypt_data(key: &[u8; 32], encrypted_data: &[u8]) -> Result<Vec<u8>> {
         .map_err(|e| Error::Decryption(format!("Decryption failed: {}", e)))
 }
 
+#[allow(deprecated)]
 pub fn decrypt_session_key(shared_secret: &SharedSecret, encrypted_data: &str) -> Result<[u8; 32]> {
     let encrypted = BASE64.decode(encrypted_data)?;
 

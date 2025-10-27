@@ -78,11 +78,14 @@ async fn test_chat_completion_streaming() {
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!(r#"please reply with exactly and only the word "echo""#),
+            tool_calls: None,
         }],
         temperature: Some(0.0),
         max_tokens: Some(10),
         stream: Some(true),
         stream_options: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let mut stream = client
@@ -136,16 +139,20 @@ async fn test_chat_completion_with_system_message() {
                 content: serde_json::json!(
                     "You are a helpful assistant that always responds with exactly one word."
                 ),
+                tool_calls: None,
             },
             ChatMessage {
                 role: "user".to_string(),
                 content: serde_json::json!("What is 2+2? Answer in one word."),
+                tool_calls: None,
             },
         ],
         temperature: Some(0.0),
         max_tokens: Some(10),
         stream: Some(true), // Server only supports streaming
         stream_options: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let mut stream = client
@@ -211,11 +218,14 @@ async fn test_guest_user_cannot_use_ai() {
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("test"),
+            tool_calls: None,
         }],
         temperature: None,
         max_tokens: None,
         stream: Some(true), // Server only supports streaming
         stream_options: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let completion_result = client.create_chat_completion(request).await;
