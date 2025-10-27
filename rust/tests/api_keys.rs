@@ -139,11 +139,14 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("Please reply with exactly and only the word 'echo'"),
+            tool_calls: None,
         }],
         temperature: Some(0.1),
         max_tokens: Some(10),
         stream: Some(true),
         stream_options: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let mut stream = api_client.create_chat_completion_stream(request).await?;

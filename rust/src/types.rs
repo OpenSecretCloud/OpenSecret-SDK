@@ -320,11 +320,43 @@ pub struct ModelsResponse {
     pub data: Vec<Model>,
 }
 
+// Tool Calling Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tool {
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    pub function: Function,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Function {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub parameters: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    pub function: FunctionCall,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
     #[serde(default)]
     pub content: Value, // Now accepts both string and array formats
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -339,6 +371,10 @@ pub struct ChatCompletionRequest {
     pub stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<StreamOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -396,4 +432,6 @@ pub struct ChatMessageDelta {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Value>, // Also update delta to accept flexible content
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
