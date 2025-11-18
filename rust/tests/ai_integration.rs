@@ -74,7 +74,7 @@ async fn test_chat_completion_streaming() {
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4".to_string(),
+        model: "llama-3.3-70b".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!(r#"please reply with exactly and only the word "echo""#),
@@ -132,7 +132,7 @@ async fn test_chat_completion_with_system_message() {
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4".to_string(),
+        model: "llama-3.3-70b".to_string(),
         messages: vec![
             ChatMessage {
                 role: "system".to_string(),
