@@ -342,6 +342,8 @@ pub struct ToolCall {
     #[serde(rename = "type")]
     pub tool_type: String,
     pub function: FunctionCall,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
