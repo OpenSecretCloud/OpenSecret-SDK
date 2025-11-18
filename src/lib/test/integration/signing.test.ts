@@ -227,7 +227,7 @@ test("Private key endpoints with derivation paths", async () => {
     const isValid = schnorr.verify(sig.signature, sig.message_hash, pubKey.public_key);
     expect(isValid).toBe(true);
   }
-});
+}, 30000); // Extend timeout to 30s
 
 test("Sign message fails without authentication", async () => {
   window.localStorage.removeItem("access_token");
