@@ -52,7 +52,7 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     fetch: createCustomFetch()
   });
 
-  const model = "ibnzterrell/Meta-Llama-3.3-70B-Instruct-AWQ-INT4";
+  const model = "llama-3.3-70b";
   const messages = [
     { role: "user", content: 'please reply with exactly and only the word "echo"' } as ChatMessage
   ];
