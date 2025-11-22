@@ -88,24 +88,18 @@ export async function openAiAuthenticatedApiCall<T, U>(
   if (!apiKey) {
     return authenticatedApiCall<T, U>(url, method, data, errorMessage);
   }
-  
+
   // For API key auth, call internal encrypted API directly (no refresh logic)
-  const response = await internalEncryptedApiCall<T, U>(
-    url,
-    method,
-    data,
-    apiKey,
-    errorMessage
-  );
-  
+  const response = await internalEncryptedApiCall<T, U>(url, method, data, apiKey, errorMessage);
+
   if (response.error) {
     throw new Error(response.error);
   }
-  
+
   if (!response.data) {
     throw new Error(errorMessage || `Request to ${url} failed`);
   }
-  
+
   return response.data;
 }
 

@@ -298,6 +298,12 @@ pub struct ApiKeyCreateResponse {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationsDeleteResponse {
+    pub object: String,
+    pub deleted: bool,
+}
+
 // AI/OpenAI API Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {

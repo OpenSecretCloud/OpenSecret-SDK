@@ -937,6 +937,12 @@ impl OpenSecretClient {
 
     // AI/OpenAI API Methods
 
+    /// Deletes all conversations
+    pub async fn delete_conversations(&self) -> Result<ConversationsDeleteResponse> {
+        self.encrypted_api_call("/v1/conversations", "DELETE", None::<()>)
+            .await
+    }
+
     /// Fetches available AI models
     pub async fn get_models(&self) -> Result<ModelsResponse> {
         self.encrypted_openai_call("/v1/models", "GET", None::<()>)

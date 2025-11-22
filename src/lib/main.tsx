@@ -647,18 +647,18 @@ export type OpenSecretContextType = {
    * @param options - Optional transcription parameters
    * @returns A promise resolving to the transcription response
    * @throws {Error} If the user is not authenticated or transcription fails
-   * 
+   *
    * @description
    * This function transcribes audio using OpenAI's Whisper model via the encrypted API.
-   * 
+   *
    * Options:
    * - model: Model to use (default: "whisper-large-v3", routes to Tinfoil's whisper-large-v3-turbo)
    * - language: Optional ISO-639-1 language code (e.g., "en", "es", "fr")
    * - prompt: Optional context or previous segment transcript
    * - temperature: Sampling temperature between 0 and 1 (default: 0.0)
-   * 
+   *
    * Supported audio formats: MP3, WAV, MP4, M4A, FLAC, OGG, WEBM
-   * 
+   *
    * Example usage:
    * ```typescript
    * const audioFile = new File([audioData], "recording.mp3", { type: "audio/mpeg" });
@@ -752,7 +752,17 @@ export type OpenSecretContextType = {
    * - openai.conversations.items.list()
    * - openai.conversations.items.retrieve()
    */
-  listConversations: (params?: { limit?: number; after?: string; before?: string }) => Promise<api.ConversationsListResponse>;
+  listConversations: (params?: {
+    limit?: number;
+    after?: string;
+    before?: string;
+  }) => Promise<api.ConversationsListResponse>;
+
+  /**
+   * Deletes all conversations
+   * @returns A promise resolving to deletion confirmation
+   */
+  deleteConversations: typeof api.deleteConversations;
 
   /**
    * Creates a new instruction
@@ -898,6 +908,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   deleteResponse: api.deleteResponse,
   createResponse: api.createResponse,
   listConversations: api.listConversations,
+  deleteConversations: api.deleteConversations,
   createInstruction: api.createInstruction,
   listInstructions: api.listInstructions,
   getInstruction: api.getInstruction,
@@ -1311,6 +1322,7 @@ export function OpenSecretProvider({
     deleteResponse: api.deleteResponse,
     createResponse: api.createResponse,
     listConversations: api.listConversations,
+    deleteConversations: api.deleteConversations,
     createInstruction: api.createInstruction,
     listInstructions: api.listInstructions,
     getInstruction: api.getInstruction,

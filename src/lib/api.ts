@@ -1203,11 +1203,11 @@ function delay(ms: number): Promise<void> {
  * - The user is not authenticated
  * - The name is invalid
  * - The request fails
- * 
+ *
  * @description
  * IMPORTANT: The `key` field is only returned once during creation and cannot be retrieved again.
  * The SDK consumer should prompt users to save the key immediately.
- * 
+ *
  * Example usage:
  * ```typescript
  * const apiKey = await createApiKey("Production Key");
@@ -1230,12 +1230,12 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  * @throws {Error} If:
  * - The user is not authenticated
  * - The request fails
- * 
+ *
  * @description
  * Returns metadata about all API keys associated with the user's account.
  * Note that the actual key values are never returned - they are only shown once during creation.
  * The keys are sorted by created_at in descending order (newest first).
- * 
+ *
  * Example usage:
  * ```typescript
  * const response = await listApiKeys();
@@ -1251,12 +1251,10 @@ export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
     undefined,
     "Failed to list API keys"
   );
-  
+
   // Sort by created_at descending (newest first)
-  response.keys.sort((a, b) => 
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-  
+  response.keys.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
   return response;
 }
 
@@ -1269,12 +1267,12 @@ export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
  * - The API key with this name is not found
  * - The user doesn't own the API key
  * - The request fails
- * 
+ *
  * @description
  * Permanently deletes an API key. This action cannot be undone.
  * Any requests using the deleted key will immediately fail with 401 Unauthorized.
  * Names are unique per user, so this uniquely identifies the key to delete.
- * 
+ *
  * Example usage:
  * ```typescript
  * await deleteApiKey("Production Key");
@@ -1489,11 +1487,11 @@ export type WhisperTranscriptionResponse = {
  * - The user is not authenticated
  * - The file cannot be read
  * - The transcription fails
- * 
+ *
  * @description
  * This function transcribes audio using OpenAI's Whisper model via the encrypted API.
  * Default model "whisper-large-v3" routes to Tinfoil's whisper-large-v3-turbo.
- * 
+ *
  * Supported audio formats:
  * - MP3 (audio/mpeg)
  * - WAV (audio/wav)
@@ -1502,7 +1500,7 @@ export type WhisperTranscriptionResponse = {
  * - FLAC (audio/flac)
  * - OGG (audio/ogg)
  * - WEBM (audio/webm)
- * 
+ *
  * Example usage:
  * ```typescript
  * const audioFile = new File([audioData], "recording.mp3", { type: "audio/mpeg" });
@@ -1564,7 +1562,7 @@ export type ResponsesRetrieveResponse = {
     };
     total_tokens: number;
   };
-  output?: string;
+  output?: string | any[];
 };
 
 export type ThreadListItem = {
@@ -1638,6 +1636,11 @@ export type ConversationsListResponse = {
 export type ConversationDeleteResponse = {
   id: string;
   object: "conversation.deleted";
+  deleted: boolean;
+};
+
+export type ConversationsDeleteResponse = {
+  object: "list.deleted";
   deleted: boolean;
 };
 
@@ -1807,7 +1810,7 @@ export type ResponsesCreateRequest = {
  * This function creates a new conversation that can be used to group
  * related responses together. The conversation can have metadata
  * attached for organization and filtering purposes.
- * 
+ *
  * NOTE: Prefer using the OpenAI client directly for conversation operations:
  * ```typescript
  * const openai = new OpenAI({ fetch: customFetch });
@@ -1818,11 +1821,9 @@ export type ResponsesCreateRequest = {
  *
  * @deprecated Use openai.conversations.create() instead
  */
-export async function createConversation(
-  metadata?: Record<string, any>
-): Promise<Conversation> {
+export async function createConversation(metadata?: Record<string, any>): Promise<Conversation> {
   const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
-  
+
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
     `${apiUrl}/v1/conversations`,
     "POST",
@@ -1879,7 +1880,7 @@ export async function updateConversation(
   metadata: Record<string, any>
 ): Promise<Conversation> {
   const requestData: ConversationUpdateRequest = { metadata };
-  
+
   return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
     `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "POST",
@@ -1918,6 +1919,34 @@ export async function deleteConversation(
     "DELETE",
     undefined,
     "Failed to delete conversation"
+  );
+}
+
+/**
+ * Deletes all conversations
+ * @returns A promise resolving to deletion confirmation
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function permanently deletes all conversations and their associated items.
+ * This action cannot be undone.
+ *
+ * @example
+ * ```typescript
+ * const result = await deleteConversations();
+ * if (result.deleted) {
+ *   console.log("All conversations deleted successfully");
+ * }
+ * ```
+ */
+export async function deleteConversations(): Promise<ConversationsDeleteResponse> {
+  return authenticatedApiCall<void, ConversationsDeleteResponse>(
+    `${apiUrl}/v1/conversations`,
+    "DELETE",
+    undefined,
+    "Failed to delete conversations"
   );
 }
 
@@ -2030,13 +2059,11 @@ export async function listConversationItems(
  * }
  * ```
  */
-export async function listConversations(
-  params?: {
-    limit?: number;
-    after?: string;
-    before?: string;
-  }
-): Promise<ConversationsListResponse> {
+export async function listConversations(params?: {
+  limit?: number;
+  after?: string;
+  before?: string;
+}): Promise<ConversationsListResponse> {
   let url = `${apiUrl}/v1/conversations`;
   const queryParams = [];
 
@@ -2092,9 +2119,7 @@ export async function listConversations(
  * });
  * ```
  */
-export async function createResponse(
-  request: ResponsesCreateRequest
-): Promise<any> {
+export async function createResponse(request: ResponsesCreateRequest): Promise<any> {
   return authenticatedApiCall<ResponsesCreateRequest, any>(
     `${apiUrl}/v1/responses`,
     "POST",
@@ -2199,9 +2224,7 @@ export type InstructionDeleteResponse = {
  * });
  * ```
  */
-export async function createInstruction(
-  request: InstructionCreateRequest
-): Promise<Instruction> {
+export async function createInstruction(request: InstructionCreateRequest): Promise<Instruction> {
   return authenticatedApiCall<InstructionCreateRequest, Instruction>(
     `${apiUrl}/v1/instructions`,
     "POST",
@@ -2347,9 +2370,7 @@ export async function updateInstruction(
  * }
  * ```
  */
-export async function deleteInstruction(
-  instructionId: string
-): Promise<InstructionDeleteResponse> {
+export async function deleteInstruction(instructionId: string): Promise<InstructionDeleteResponse> {
   return authenticatedApiCall<void, InstructionDeleteResponse>(
     `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "DELETE",
