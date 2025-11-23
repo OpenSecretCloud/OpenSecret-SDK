@@ -1,6 +1,6 @@
 [package]
 name = "opensecret"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 authors = ["OpenSecret"]
 description = "Rust SDK for OpenSecret - secure AI API interactions with nitro attestation"
