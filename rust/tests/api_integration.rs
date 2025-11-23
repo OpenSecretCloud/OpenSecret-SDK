@@ -101,6 +101,51 @@ async fn test_kv_storage_apis() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_kv_delete_all() -> Result<()> {
+    // Load environment variables
+    let env_path = std::path::Path::new("../.env.local");
+    if env_path.exists() {
+        dotenv::from_path(env_path).ok();
+    }
+
+    let base_url = std::env::var("VITE_OPEN_SECRET_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let client_id = std::env::var("VITE_TEST_CLIENT_ID")
+        .ok()
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .expect("VITE_TEST_CLIENT_ID must be set");
+
+    // Create client and login as guest for isolation
+    let client = OpenSecretClient::new(base_url)?;
+    client.perform_attestation_handshake().await?;
+
+    client
+        .register_guest("test_kv_delete_all".to_string(), client_id)
+        .await?;
+
+    // Add multiple keys
+    client.kv_put("key1", "value1".to_string()).await?;
+    client.kv_put("key2", "value2".to_string()).await?;
+    client.kv_put("key3", "value3".to_string()).await?;
+
+    // Verify they exist
+    let list_result = client.kv_list().await?;
+    assert!(list_result.len() >= 3);
+    println!("✓ Keys added successfully");
+
+    // Delete all
+    client.kv_delete_all().await?;
+    println!("✓ kv_delete_all called");
+
+    // Verify empty
+    let list_after_delete = client.kv_list().await?;
+    assert!(list_after_delete.is_empty());
+    println!("✓ All keys deleted successfully");
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_kv_storage_with_special_characters() -> Result<()> {
     // Load environment variables
     let env_path = std::path::Path::new("../.env.local");

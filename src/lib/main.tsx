@@ -195,6 +195,13 @@ export type OpenSecretContextType = {
    */
   del: typeof api.fetchDelete;
 
+  /**
+   * Deletes all key-value pairs from the user's storage
+   * @returns A promise resolving when the deletion is complete
+   * @throws {Error} If the deletion fails
+   */
+  delAll: typeof api.fetchDeleteAllKV;
+
   verifyEmail: typeof api.verifyEmail;
   requestNewVerificationCode: typeof api.requestNewVerificationCode;
   requestNewVerificationEmail: typeof api.requestNewVerificationCode;
@@ -859,6 +866,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   put: api.fetchPut,
   list: api.fetchList,
   del: api.fetchDelete,
+  delAll: api.fetchDeleteAllKV,
   verifyEmail: api.verifyEmail,
   requestNewVerificationCode: api.requestNewVerificationCode,
   requestNewVerificationEmail: api.requestNewVerificationCode,
@@ -1269,6 +1277,7 @@ export function OpenSecretProvider({
     put: api.fetchPut,
     list: api.fetchList,
     del: api.fetchDelete,
+    delAll: api.fetchDeleteAllKV,
     refetchUser: fetchUser,
     verifyEmail: api.verifyEmail,
     requestNewVerificationCode: api.requestNewVerificationCode,

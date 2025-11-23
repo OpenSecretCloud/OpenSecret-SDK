@@ -676,6 +676,13 @@ impl OpenSecretClient {
         Ok(())
     }
 
+    pub async fn kv_delete_all(&self) -> Result<()> {
+        let _: serde_json::Value = self
+            .encrypted_api_call("/protected/kv", "DELETE", None::<()>)
+            .await?;
+        Ok(())
+    }
+
     pub async fn kv_list(&self) -> Result<Vec<KVListItem>> {
         self.encrypted_api_call("/protected/kv", "GET", None::<()>)
             .await
