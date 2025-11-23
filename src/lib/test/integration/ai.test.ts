@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { fetchLogin, fetchSignUp, transcribeAudio } from "../../api";
+import {
+  fetchLogin,
+  fetchSignUp,
+  transcribeAudio,
+  deleteConversations,
+  listConversations
+} from "../../api";
 import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
 
@@ -148,25 +154,25 @@ test.skip("text-to-speech with kokoro model", async () => {
   });
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  
+
   // Verify we got back audio data
   expect(buffer.length).toBeGreaterThan(0);
-  
+
   console.log(`TTS response size: ${buffer.length} bytes`);
-  
+
   // Log the first 20 bytes to understand the format
-  const first20Bytes = buffer.slice(0, 20).toString('hex');
+  const first20Bytes = buffer.slice(0, 20).toString("hex");
   console.log(`First 20 bytes (hex): ${first20Bytes}`);
-  
+
   // Also log as string to see if it's JSON or text
-  const first100Chars = buffer.slice(0, 100).toString('utf-8');
+  const first100Chars = buffer.slice(0, 100).toString("utf-8");
   console.log(`First 100 chars (string): ${first100Chars}`);
-  
+
   // MP3 files typically start with an ID3 tag or FF FB/FF FA (MPEG audio sync)
-  const firstBytes = buffer.slice(0, 3).toString('hex');
-  const isID3 = firstBytes === '494433'; // "ID3" in hex
-  const isMPEGSync = firstBytes.startsWith('fff') || firstBytes.startsWith('ffe');
-  
+  const firstBytes = buffer.slice(0, 3).toString("hex");
+  const isID3 = firstBytes === "494433"; // "ID3" in hex
+  const isMPEGSync = firstBytes.startsWith("fff") || firstBytes.startsWith("ffe");
+
   // For now, just verify we got data back
   // The format check might need adjustment based on what the server returns
   if (!isID3 && !isMPEGSync) {
@@ -180,25 +186,25 @@ test.skip("Whisper transcription with real MP3 file", async () => {
   await setupTestUser();
 
   // Read the test MP3 file
-  const mp3Path = new URL('./test-transcript.mp3', import.meta.url).pathname;
+  const mp3Path = new URL("./test-transcript.mp3", import.meta.url).pathname;
   const mp3Buffer = await Bun.file(mp3Path).arrayBuffer();
   const audioFile = new File([mp3Buffer], "test-transcript.mp3", { type: "audio/mpeg" });
-  
+
   console.log(`Test MP3 file size: ${mp3Buffer.byteLength} bytes`);
-  
+
   // Transcribe the MP3 file
   const transcriptionResult = await transcribeAudio(
     audioFile,
-    "whisper-large-v3",  // model
-    "en"                  // language
+    "whisper-large-v3", // model
+    "en" // language
   );
-  
+
   console.log("Transcribed text from test MP3:", transcriptionResult.text);
-  
+
   // Just verify we got some text back
   expect(transcriptionResult.text).toBeTruthy();
   expect(transcriptionResult.text.length).toBeGreaterThan(10);
-}, 20000);  // 20 second timeout for this test
+}, 20000); // 20 second timeout for this test
 
 test.skip("TTS → Whisper transcription chain", async () => {
   await setupTestUser();
@@ -215,9 +221,9 @@ test.skip("TTS → Whisper transcription chain", async () => {
 
   // Step 1: Generate speech from simple text
   const originalText = "Hello";
-  
+
   console.log("Generating speech from text:", originalText);
-  
+
   const ttsResponse = await client.audio.speech.create({
     model: "kokoro",
     voice: "af_sky" as any,
@@ -227,25 +233,25 @@ test.skip("TTS → Whisper transcription chain", async () => {
 
   const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
   console.log(`Generated audio size: ${audioBuffer.length} bytes`);
-  
+
   // Step 2: Create a Blob from the audio buffer
   const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
   const audioFile = new File([audioBlob], "tts_output.mp3", { type: "audio/mpeg" });
-  
+
   // Step 3: Transcribe the audio back to text using Whisper
   console.log("Transcribing audio back to text...");
-  
+
   const transcriptionResult = await transcribeAudio(
     audioFile,
-    "whisper-large-v3",  // model
-    "en",                // language
-    undefined,           // prompt
-    0.0                  // temperature
+    "whisper-large-v3", // model
+    "en", // language
+    undefined, // prompt
+    0.0 // temperature
   );
-  
+
   console.log("Transcribed text:", transcriptionResult.text);
   console.log("Original text:", originalText);
-  
+
   // Just check that we got "hello" back (case-insensitive)
   expect(transcriptionResult.text.toLowerCase()).toContain("hello");
 });
@@ -742,9 +748,16 @@ test("Integration test: Complete responses workflow", async () => {
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.status).toBe("completed");
   expect(Array.isArray(retrievedResponse.output)).toBe(true);
-  expect(retrievedResponse.output.length).toBeGreaterThan(0);
-  expect(retrievedResponse.output[0].type).toBe("message");
-  expect(retrievedResponse.output[0].content[0].text).toContain("workflow");
+  expect(retrievedResponse.output?.length).toBeGreaterThan(0);
+  
+  const firstItem = retrievedResponse.output![0];
+  expect(firstItem.type).toBe("message");
+  if (firstItem.type === "message") {
+    const content = firstItem.content[0];
+    if ('text' in content) {
+        expect(content.text).toContain("workflow");
+    }
+  }
   expect(retrievedResponse.usage).toBeDefined();
 
   // 5. Delete the response
@@ -798,9 +811,12 @@ test("Integration test: Direct API functions for responses", async () => {
   expect(retrievedResponse.object).toBe("response");
   expect(retrievedResponse.status).toBe("completed");
   expect(Array.isArray(retrievedResponse.output)).toBe(true);
-  expect(retrievedResponse.output.length).toBeGreaterThan(0);
-  expect(retrievedResponse.output[0].type).toBe("message");
-  expect(retrievedResponse.output[0].content[0].text).toContain("apitest");
+  expect(retrievedResponse.output?.length).toBeGreaterThan(0);
+
+  const firstItem = (retrievedResponse.output as any[])[0];
+  expect(firstItem.type).toBe("message");
+  expect(firstItem.content[0].text).toContain("apitest");
+  
   expect(retrievedResponse.usage).toBeDefined();
   expect(retrievedResponse.usage?.input_tokens).toBeGreaterThan(0);
   expect(retrievedResponse.usage?.output_tokens).toBeGreaterThan(0);
@@ -879,7 +895,7 @@ test("Integration test: Cancel in-progress response", async () => {
   } catch (error) {
     // Response might have completed already, which is okay
     console.log("Could not cancel response, it may have completed:", error);
-    
+
     // Check if it completed
     const response = await fetchResponse(responseId);
     expect(response.status).toBe("completed");
@@ -1053,7 +1069,7 @@ test("Conversations API: Full integration with responses", async () => {
       break;
     }
   }
-  
+
   const response1 = { id: responseId };
 
   expect(response1).toBeDefined();
@@ -1074,10 +1090,42 @@ test("Conversations API: Full integration with responses", async () => {
   // 5. List conversations using raw API (since it's non-standard)
   const { listConversations } = await import("../../api");
   const conversations = await listConversations({ limit: 10 });
-  const ourConv = conversations.data.find(c => c.id === conversation.id);
+  const ourConv = conversations.data.find((c) => c.id === conversation.id);
   expect(ourConv).toBeDefined();
   expect(ourConv?.metadata?.status).toBe("completed");
 
   // 6. Clean up
   await openai.conversations.delete(conversation.id);
+});
+
+test("Integration test: Delete all conversations", async () => {
+  await setupTestUser();
+
+  const openai = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  // Create a couple of conversations
+  await openai.conversations.create({});
+  await openai.conversations.create({});
+
+  // Verify we have conversations
+  const initialList = await listConversations();
+  expect(initialList.data.length).toBeGreaterThanOrEqual(2);
+
+  // Delete all conversations
+  const result = await deleteConversations();
+
+  expect(result.object).toBe("list.deleted");
+  expect(result.deleted).toBe(true);
+
+  // Verify deletion
+  const finalList = await listConversations();
+  expect(finalList.data.length).toBe(0);
 });

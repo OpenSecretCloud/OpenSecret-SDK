@@ -332,7 +332,9 @@ test("Instructions API - Create, List, Get, Update, Delete", async () => {
   });
   expect(updatedInstruction.id).toBe(instruction1.id);
   expect(updatedInstruction.name).toBe("Updated Test Instruction 1");
-  expect(updatedInstruction.prompt).toBe("You are a very helpful assistant that provides detailed explanations.");
+  expect(updatedInstruction.prompt).toBe(
+    "You are a very helpful assistant that provides detailed explanations."
+  );
   expect(updatedInstruction.prompt_tokens).toBeGreaterThan(0);
 
   // Set as default

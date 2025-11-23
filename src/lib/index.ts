@@ -24,7 +24,8 @@ export type {
   ConversationUpdateRequest,
   ConversationItemsResponse,
   ConversationsListResponse,
-  ConversationDeleteResponse
+  ConversationDeleteResponse,
+  ConversationsDeleteResponse
 } from "./api";
 
 // Export API key management functions

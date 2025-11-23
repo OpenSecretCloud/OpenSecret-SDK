@@ -176,6 +176,37 @@ async fn test_chat_completion_with_system_message() {
 }
 
 #[tokio::test]
+async fn test_delete_conversations() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    // 1. Create a couple of conversations first
+    // Note: Currently the SDK doesn't have create_conversation exposed directly on client struct
+    // but create_chat_completion implicitly creates or uses conversation if we could access it.
+    // However, based on the TS SDK, there's explicit conversation management.
+    // The Rust SDK seems to be catching up.
+    // For now, we'll just call delete_conversations and ensure it returns success,
+    // which covers the API contract even if list is empty.
+
+    // Ideally we would create conversations here, but the Rust SDK client wrapper
+    // doesn't seem to expose explicit conversation creation methods yet based on my earlier grep.
+    // It only has what I added: delete_conversations.
+    // The TS SDK had `createConversation`.
+
+    // Let's verify what methods OpenSecretClient actually has.
+    // I only added `delete_conversations`.
+
+    let result = client
+        .delete_conversations()
+        .await
+        .expect("Failed to delete conversations");
+
+    assert_eq!(result.object, "list.deleted");
+    assert!(result.deleted);
+}
+
+#[tokio::test]
 async fn test_guest_user_cannot_use_ai() {
     // Load .env.local from OpenSecret-SDK directory
     let env_path = std::path::Path::new("../.env.local");

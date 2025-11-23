@@ -6,17 +6,16 @@ export interface CustomFetchOptions {
   apiKey?: string; // Optional API key to use instead of JWT token
 }
 
-export function createCustomFetch(options?: CustomFetchOptions): (
-  input: string | URL | Request,
-  init?: RequestInit
-) => Promise<Response> {
+export function createCustomFetch(
+  options?: CustomFetchOptions
+): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
   return async (requestUrl: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const getAuthHeader = () => {
       // If an API key is provided, use it instead of JWT token
       if (options?.apiKey) {
         return `Bearer ${options.apiKey}`;
       }
-      
+
       // Otherwise, use the standard JWT token
       const currentAccessToken = window.localStorage.getItem("access_token");
       if (!currentAccessToken) {
@@ -164,11 +163,11 @@ export function createCustomFetch(options?: CustomFetchOptions): (
 
               // Return as a binary response with the proper content type
               const headersOut = new Headers(response.headers);
-              headersOut.set('content-type', decryptedData.content_type);
+              headersOut.set("content-type", decryptedData.content_type);
               // Remove headers that are no longer valid for the decoded response
-              headersOut.delete('content-encoding');
-              headersOut.delete('content-length');
-              headersOut.delete('transfer-encoding');
+              headersOut.delete("content-encoding");
+              headersOut.delete("content-length");
+              headersOut.delete("transfer-encoding");
 
               return new Response(bytes, {
                 headers: headersOut,

@@ -1,11 +1,5 @@
 import { expect, test, describe, beforeAll, afterAll } from "bun:test";
-import {
-  fetchLogin,
-  createApiKey,
-  listApiKeys,
-  deleteApiKey,
-  fetchModels
-} from "../../api";
+import { fetchLogin, createApiKey, listApiKeys, deleteApiKey, fetchModels } from "../../api";
 import { createCustomFetch } from "../../ai";
 import OpenAI from "openai";
 
@@ -37,41 +31,41 @@ describe("API Key Management", () => {
     // Create a new API key
     const keyName = `Test Key ${Date.now()}`;
     const createdKey = await createApiKey(keyName);
-    
+
     expect(createdKey.name).toBe(keyName);
     expect(createdKey.key).toBeDefined();
     expect(createdKey.created_at).toBeDefined();
-    
+
     // Verify the key format is a UUID with dashes
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     expect(createdKey.key).toMatch(uuidRegex);
-    
+
     // List API keys and verify the new key is present
     const response = await listApiKeys();
     console.log("Listed response:", response);
-    
+
     // Check if keys is an array
     expect(Array.isArray(response.keys)).toBe(true);
-    const foundKey = response.keys.find(k => k.name === createdKey.name);
-    
+    const foundKey = response.keys.find((k) => k.name === createdKey.name);
+
     expect(foundKey).toBeDefined();
     expect(foundKey!.name).toBe(keyName);
     expect(foundKey!.created_at).toBe(createdKey.created_at);
     // The key field should NOT be present in the list response
     expect((foundKey as any).key).toBeUndefined();
-    
+
     // Delete the API key
     await deleteApiKey(createdKey.name);
-    
+
     // Verify the key is deleted
     const responseAfterDelete = await listApiKeys();
-    const deletedKey = responseAfterDelete.keys.find(k => k.name === createdKey.name);
+    const deletedKey = responseAfterDelete.keys.find((k) => k.name === createdKey.name);
     expect(deletedKey).toBeUndefined();
   });
 
   test("Create multiple API keys", async () => {
     const keyNames: string[] = [];
-    
+
     try {
       // Create multiple keys
       for (let i = 0; i < 3; i++) {
@@ -79,11 +73,11 @@ describe("API Key Management", () => {
         const key = await createApiKey(keyName);
         keyNames.push(key.name);
       }
-      
+
       // List keys and verify all are present
       const response = await listApiKeys();
       for (const name of keyNames) {
-        expect(response.keys.some(k => k.name === name)).toBe(true);
+        expect(response.keys.some((k) => k.name === name)).toBe(true);
       }
     } finally {
       // Clean up: delete all created keys
@@ -104,7 +98,7 @@ describe("API Key Authentication with OpenAI", () => {
 
   beforeAll(async () => {
     await setupTestUser();
-    
+
     // Create an API key for testing
     testApiKeyName = `OpenAI Test Key ${Date.now()}`;
     const createdKey = await createApiKey(testApiKeyName);
@@ -149,10 +143,10 @@ describe("API Key Authentication with OpenAI", () => {
   test("Fetch models with API key authentication", async () => {
     // Test that fetchModels works with API key
     const models = await fetchModels(testApiKey);
-    
+
     expect(Array.isArray(models)).toBe(true);
     expect(models.length).toBeGreaterThan(0);
-    
+
     // Verify each model has required fields
     const firstModel = models[0];
     expect(firstModel.id).toBeDefined();
@@ -161,9 +155,9 @@ describe("API Key Authentication with OpenAI", () => {
 
   test("API key authentication fails with invalid key", async () => {
     const invalidApiKey = "550e8400-e29b-41d4-a716-000000000000"; // Invalid UUID
-    
+
     const customFetch = createCustomFetch({ apiKey: invalidApiKey });
-    
+
     try {
       const response = await customFetch(`${API_URL}/v1/models`, {
         method: "GET",
@@ -171,7 +165,7 @@ describe("API Key Authentication with OpenAI", () => {
           "Content-Type": "application/json"
         }
       });
-      
+
       // Should get 401 Unauthorized
       expect(response.status).toBe(401);
     } catch (error) {
