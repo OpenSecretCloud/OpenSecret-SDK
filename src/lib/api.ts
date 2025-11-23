@@ -158,6 +158,15 @@ export async function fetchDelete(key: string): Promise<void> {
   );
 }
 
+export async function fetchDeleteAllKV(): Promise<void> {
+  return authenticatedApiCall<void, void>(
+    `${apiUrl}/protected/kv`,
+    "DELETE",
+    undefined,
+    "Failed to delete all key-value pairs"
+  );
+}
+
 export async function fetchGet(key: string): Promise<string | undefined> {
   try {
     const data = await authenticatedApiCall<void, string>(

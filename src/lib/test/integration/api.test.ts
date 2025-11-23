@@ -17,7 +17,10 @@ import {
   getInstruction,
   updateInstruction,
   deleteInstruction,
-  setDefaultInstruction
+  setDefaultInstruction,
+  fetchPut,
+  fetchList,
+  fetchDeleteAllKV
 } from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -444,4 +447,27 @@ test("Instructions API - Error cases", async () => {
   } catch (error: any) {
     expect(error.message).toBeDefined();
   }
+});
+
+test("KV Store - Delete All", async () => {
+  // Login first to get authenticated
+  const { access_token, refresh_token } = await tryEmailLogin();
+  window.localStorage.setItem("access_token", access_token);
+  window.localStorage.setItem("refresh_token", refresh_token);
+
+  // Add multiple keys
+  await fetchPut("key1", "value1");
+  await fetchPut("key2", "value2");
+  await fetchPut("key3", "value3");
+
+  // Verify they exist
+  const listBefore = await fetchList();
+  expect(listBefore.length).toBeGreaterThanOrEqual(3);
+
+  // Delete all keys
+  await fetchDeleteAllKV();
+
+  // Verify they are gone
+  const listAfter = await fetchList();
+  expect(listAfter.length).toBe(0);
 });

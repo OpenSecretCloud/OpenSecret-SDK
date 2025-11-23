@@ -749,13 +749,13 @@ test("Integration test: Complete responses workflow", async () => {
   expect(retrievedResponse.status).toBe("completed");
   expect(Array.isArray(retrievedResponse.output)).toBe(true);
   expect(retrievedResponse.output?.length).toBeGreaterThan(0);
-  
+
   const firstItem = retrievedResponse.output![0];
   expect(firstItem.type).toBe("message");
   if (firstItem.type === "message") {
     const content = firstItem.content[0];
-    if ('text' in content) {
-        expect(content.text).toContain("workflow");
+    if ("text" in content) {
+      expect(content.text).toContain("workflow");
     }
   }
   expect(retrievedResponse.usage).toBeDefined();
@@ -816,7 +816,7 @@ test("Integration test: Direct API functions for responses", async () => {
   const firstItem = (retrievedResponse.output as any[])[0];
   expect(firstItem.type).toBe("message");
   expect(firstItem.content[0].text).toContain("apitest");
-  
+
   expect(retrievedResponse.usage).toBeDefined();
   expect(retrievedResponse.usage?.input_tokens).toBeGreaterThan(0);
   expect(retrievedResponse.usage?.output_tokens).toBeGreaterThan(0);
