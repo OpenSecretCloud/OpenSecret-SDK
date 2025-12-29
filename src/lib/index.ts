@@ -25,7 +25,10 @@ export type {
   ConversationItemsResponse,
   ConversationsListResponse,
   ConversationDeleteResponse,
-  ConversationsDeleteResponse
+  ConversationsDeleteResponse,
+  BatchDeleteConversationsRequest,
+  BatchDeleteItemResult,
+  BatchDeleteConversationsResponse
 } from "./api";
 
 // Export API key management functions

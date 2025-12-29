@@ -4,6 +4,7 @@ import {
   fetchSignUp,
   transcribeAudio,
   deleteConversations,
+  batchDeleteConversations,
   listConversations
 } from "../../api";
 import { createCustomFetch } from "../../ai";
@@ -1126,6 +1127,67 @@ test("Integration test: Delete all conversations", async () => {
   expect(result.deleted).toBe(true);
 
   // Verify deletion
+  const finalList = await listConversations();
+  expect(finalList.data.length).toBe(0);
+});
+
+test("Integration test: Batch delete conversations", async () => {
+  await setupTestUser();
+
+  // Clean up any existing conversations first
+  await deleteConversations();
+
+  const openai = new OpenAI({
+    baseURL: `${API_URL}/v1/`,
+    dangerouslyAllowBrowser: true,
+    apiKey: "api-key-doesnt-matter",
+    defaultHeaders: {
+      "Accept-Encoding": "identity"
+    },
+    fetch: createCustomFetch()
+  });
+
+  // Create three conversations
+  const conv1 = await openai.conversations.create({});
+  const conv2 = await openai.conversations.create({});
+  const conv3 = await openai.conversations.create({});
+
+  // Verify we have 3 conversations
+  const initialList = await listConversations();
+  expect(initialList.data.length).toBe(3);
+
+  // Batch delete only the first two
+  const result = await batchDeleteConversations([conv1.id, conv2.id]);
+
+  expect(result.object).toBe("list");
+  expect(result.data.length).toBe(2);
+  expect(result.data[0].deleted).toBe(true);
+  expect(result.data[0].object).toBe("conversation.deleted");
+  expect(result.data[1].deleted).toBe(true);
+
+  // Verify only one conversation remains
+  const afterBatchDelete = await listConversations();
+  expect(afterBatchDelete.data.length).toBe(1);
+  expect(afterBatchDelete.data[0].id).toBe(conv3.id);
+
+  // Test batch delete with a non-existent ID
+  const resultWithNotFound = await batchDeleteConversations([
+    conv3.id,
+    "00000000-0000-0000-0000-000000000000"
+  ]);
+
+  expect(resultWithNotFound.data.length).toBe(2);
+  // One should succeed
+  const successItem = resultWithNotFound.data.find((item) => item.id === conv3.id);
+  expect(successItem?.deleted).toBe(true);
+  // One should fail with not_found
+  const failedItem = resultWithNotFound.data.find(
+    (item) => item.id === "00000000-0000-0000-0000-000000000000"
+  );
+  expect(failedItem?.deleted).toBe(false);
+  expect(failedItem?.error).toBe("not_found");
+
+  // Verify all conversations are now deleted
   const finalList = await listConversations();
   expect(finalList.data.length).toBe(0);
 });

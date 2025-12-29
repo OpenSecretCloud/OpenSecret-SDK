@@ -772,6 +772,13 @@ export type OpenSecretContextType = {
   deleteConversations: typeof api.deleteConversations;
 
   /**
+   * Batch deletes multiple conversations by their IDs
+   * @param ids - Array of conversation UUIDs to delete
+   * @returns A promise resolving to per-item deletion results
+   */
+  batchDeleteConversations: typeof api.batchDeleteConversations;
+
+  /**
    * Creates a new instruction
    * @param request - The instruction creation parameters
    * @returns A promise resolving to the created instruction
@@ -917,6 +924,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   createResponse: api.createResponse,
   listConversations: api.listConversations,
   deleteConversations: api.deleteConversations,
+  batchDeleteConversations: api.batchDeleteConversations,
   createInstruction: api.createInstruction,
   listInstructions: api.listInstructions,
   getInstruction: api.getInstruction,
@@ -1332,6 +1340,7 @@ export function OpenSecretProvider({
     createResponse: api.createResponse,
     listConversations: api.listConversations,
     deleteConversations: api.deleteConversations,
+    batchDeleteConversations: api.batchDeleteConversations,
     createInstruction: api.createInstruction,
     listInstructions: api.listInstructions,
     getInstruction: api.getInstruction,

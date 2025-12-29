@@ -1653,6 +1653,22 @@ export type ConversationsDeleteResponse = {
   deleted: boolean;
 };
 
+export type BatchDeleteConversationsRequest = {
+  ids: string[];
+};
+
+export type BatchDeleteItemResult = {
+  id: string;
+  object: "conversation.deleted";
+  deleted: boolean;
+  error?: "not_found" | "delete_failed";
+};
+
+export type BatchDeleteConversationsResponse = {
+  object: "list";
+  data: BatchDeleteItemResult[];
+};
+
 /**
  * Lists user's conversation threads with pagination
  * @param params - Optional parameters for pagination and filtering
@@ -1956,6 +1972,44 @@ export async function deleteConversations(): Promise<ConversationsDeleteResponse
     "DELETE",
     undefined,
     "Failed to delete conversations"
+  );
+}
+
+/**
+ * Batch deletes multiple conversations by their IDs
+ * @param ids - Array of conversation UUIDs to delete
+ * @returns A promise resolving to per-item deletion results
+ * @throws {Error} If:
+ * - The user is not authenticated
+ * - The request fails
+ *
+ * @description
+ * This function deletes multiple conversations in a single request.
+ * Returns per-item results so callers can handle partial failures.
+ *
+ * @example
+ * ```typescript
+ * const result = await batchDeleteConversations([
+ *   "550e8400-e29b-41d4-a716-446655440000",
+ *   "550e8400-e29b-41d4-a716-446655440001"
+ * ]);
+ * for (const item of result.data) {
+ *   if (item.deleted) {
+ *     console.log(`Conversation ${item.id} deleted`);
+ *   } else {
+ *     console.log(`Failed to delete ${item.id}: ${item.error}`);
+ *   }
+ * }
+ * ```
+ */
+export async function batchDeleteConversations(
+  ids: string[]
+): Promise<BatchDeleteConversationsResponse> {
+  return authenticatedApiCall<BatchDeleteConversationsRequest, BatchDeleteConversationsResponse>(
+    `${apiUrl}/v1/conversations/batch-delete`,
+    "POST",
+    { ids },
+    "Failed to batch delete conversations"
   );
 }
 

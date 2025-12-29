@@ -950,6 +950,16 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Batch deletes multiple conversations by their IDs
+    pub async fn batch_delete_conversations(
+        &self,
+        ids: Vec<String>,
+    ) -> Result<BatchDeleteConversationsResponse> {
+        let request = BatchDeleteConversationsRequest { ids };
+        self.encrypted_api_call("/v1/conversations/batch-delete", "POST", Some(request))
+            .await
+    }
+
     /// Fetches available AI models
     pub async fn get_models(&self) -> Result<ModelsResponse> {
         self.encrypted_openai_call("/v1/models", "GET", None::<()>)
