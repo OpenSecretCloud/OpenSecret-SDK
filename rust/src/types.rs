@@ -304,6 +304,26 @@ pub struct ConversationsDeleteResponse {
     pub deleted: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteConversationsRequest {
+    pub ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteItemResult {
+    pub id: String,
+    pub object: String,
+    pub deleted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteConversationsResponse {
+    pub object: String,
+    pub data: Vec<BatchDeleteItemResult>,
+}
+
 // AI/OpenAI API Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
