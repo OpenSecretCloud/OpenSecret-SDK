@@ -463,3 +463,67 @@ pub struct ChatMessageDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
 }
+
+// Embeddings Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingRequest {
+    pub input: EmbeddingInput,
+    #[serde(default = "default_embedding_model")]
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dimensions: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+}
+
+fn default_embedding_model() -> String {
+    "nomic-embed-text".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum EmbeddingInput {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl From<String> for EmbeddingInput {
+    fn from(s: String) -> Self {
+        EmbeddingInput::Single(s)
+    }
+}
+
+impl From<&str> for EmbeddingInput {
+    fn from(s: &str) -> Self {
+        EmbeddingInput::Single(s.to_string())
+    }
+}
+
+impl From<Vec<String>> for EmbeddingInput {
+    fn from(v: Vec<String>) -> Self {
+        EmbeddingInput::Multiple(v)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingResponse {
+    pub object: String,
+    pub data: Vec<EmbeddingData>,
+    pub model: String,
+    pub usage: EmbeddingUsage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingData {
+    pub object: String,
+    pub index: i32,
+    pub embedding: Vec<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingUsage {
+    pub prompt_tokens: i32,
+    pub total_tokens: i32,
+}

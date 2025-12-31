@@ -1,5 +1,7 @@
 use futures::StreamExt;
-use opensecret::{ChatCompletionRequest, ChatMessage, OpenSecretClient, Result};
+use opensecret::{
+    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, OpenSecretClient, Result,
+};
 use std::env;
 use uuid::Uuid;
 
@@ -21,12 +23,24 @@ async fn setup_authenticated_client() -> Result<OpenSecretClient> {
     // Login with test credentials
     let email = env::var("VITE_TEST_EMAIL").expect("VITE_TEST_EMAIL must be set");
     let password = env::var("VITE_TEST_PASSWORD").expect("VITE_TEST_PASSWORD must be set");
+    let name = env::var("VITE_TEST_NAME").ok();
     let client_id = env::var("VITE_TEST_CLIENT_ID")
         .expect("VITE_TEST_CLIENT_ID must be set")
         .parse::<Uuid>()
         .expect("Invalid client_id format");
 
-    client.login(email, password, client_id).await?;
+    // Try login first, if it fails then register
+    match client
+        .login(email.clone(), password.clone(), client_id)
+        .await
+    {
+        Ok(_) => {}
+        Err(_) => {
+            // Register the user if login failed
+            client.register(email, password, client_id, name).await?;
+        }
+    }
+
     Ok(client)
 }
 
@@ -264,4 +278,119 @@ async fn test_guest_user_cannot_use_ai() {
         completion_result.is_err(),
         "Guest users should not be able to create completions"
     );
+}
+
+#[tokio::test]
+async fn test_create_embeddings_single_input() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let request = EmbeddingRequest {
+        input: EmbeddingInput::Single("Hello, world!".to_string()),
+        model: "nomic-embed-text".to_string(),
+        encoding_format: None,
+        dimensions: None,
+        user: None,
+    };
+
+    let response = client
+        .create_embeddings(request)
+        .await
+        .expect("Failed to create embeddings");
+
+    // Verify response structure
+    assert_eq!(response.object, "list");
+    assert_eq!(response.data.len(), 1);
+    assert_eq!(response.data[0].object, "embedding");
+    assert_eq!(response.data[0].index, 0);
+
+    // nomic-embed-text has 768 dimensions
+    assert_eq!(
+        response.data[0].embedding.len(),
+        768,
+        "Expected 768 dimensions for nomic-embed-text"
+    );
+
+    // Verify usage
+    assert!(response.usage.prompt_tokens > 0);
+    assert!(response.usage.total_tokens > 0);
+
+    println!(
+        "Embedding created with {} dimensions, {} tokens used",
+        response.data[0].embedding.len(),
+        response.usage.total_tokens
+    );
+}
+
+#[tokio::test]
+async fn test_create_embeddings_multiple_inputs() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let request = EmbeddingRequest {
+        input: EmbeddingInput::Multiple(vec![
+            "First text to embed".to_string(),
+            "Second text to embed".to_string(),
+            "Third text to embed".to_string(),
+        ]),
+        model: "nomic-embed-text".to_string(),
+        encoding_format: None,
+        dimensions: None,
+        user: None,
+    };
+
+    let response = client
+        .create_embeddings(request)
+        .await
+        .expect("Failed to create embeddings");
+
+    // Verify response structure
+    assert_eq!(response.object, "list");
+    assert_eq!(response.data.len(), 3, "Should have 3 embeddings");
+
+    // Check each embedding
+    for (i, embedding_data) in response.data.iter().enumerate() {
+        assert_eq!(embedding_data.object, "embedding");
+        assert_eq!(embedding_data.index as usize, i);
+        assert_eq!(
+            embedding_data.embedding.len(),
+            768,
+            "Each embedding should have 768 dimensions"
+        );
+    }
+
+    // Verify usage accounts for all inputs
+    assert!(response.usage.prompt_tokens > 0);
+
+    println!(
+        "Created {} embeddings, {} total tokens used",
+        response.data.len(),
+        response.usage.total_tokens
+    );
+}
+
+#[tokio::test]
+async fn test_embeddings_from_string_conversion() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    // Test the From<&str> conversion
+    let request = EmbeddingRequest {
+        input: "Test string conversion".into(),
+        model: "nomic-embed-text".to_string(),
+        encoding_format: None,
+        dimensions: None,
+        user: None,
+    };
+
+    let response = client
+        .create_embeddings(request)
+        .await
+        .expect("Failed to create embeddings");
+
+    assert_eq!(response.data.len(), 1);
+    assert_eq!(response.data[0].embedding.len(), 768);
 }

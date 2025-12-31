@@ -966,6 +966,24 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Creates embeddings for the given input text(s)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let request = EmbeddingRequest {
+    ///     input: "Hello, world!".into(),
+    ///     model: "nomic-embed-text".to_string(),
+    ///     encoding_format: None,
+    ///     dimensions: None,
+    ///     user: None,
+    /// };
+    /// let response = client.create_embeddings(request).await?;
+    /// ```
+    pub async fn create_embeddings(&self, request: EmbeddingRequest) -> Result<EmbeddingResponse> {
+        self.encrypted_openai_call("/v1/embeddings", "POST", Some(request))
+            .await
+    }
+
     /// Creates a chat completion (non-streaming)
     pub async fn create_chat_completion(
         &self,

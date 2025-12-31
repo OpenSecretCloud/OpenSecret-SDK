@@ -26,6 +26,7 @@ pub struct AttestationVerifier {
     allow_debug: bool,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for AttestationVerifier {
     fn default() -> Self {
         Self {
