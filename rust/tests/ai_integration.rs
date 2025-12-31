@@ -221,6 +221,7 @@ async fn test_delete_conversations() {
 }
 
 #[tokio::test]
+#[ignore = "Paid guest users can access LLMs and models endpoint"]
 async fn test_guest_user_cannot_use_ai() {
     // Load .env.local from OpenSecret-SDK directory
     let env_path = std::path::Path::new("../.env.local");
