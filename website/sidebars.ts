@@ -115,6 +115,18 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category' as const,
+      label: 'Maple AI Integration',
+      collapsed: false,
+      items: [
+        {
+          type: 'doc' as const,
+          id: 'maple-ai/index',
+          label: 'API Key Authentication',
+        },
+      ],
+    },
+    {
+      type: 'category' as const,
       label: 'Guides',
       collapsed: false,
       items: [
