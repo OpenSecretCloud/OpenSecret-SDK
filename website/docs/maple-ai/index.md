@@ -66,7 +66,7 @@ async function chat(apiKey: string, message: string) {
     baseURL: `${MAPLE_API_URL}/v1/`,
     apiKey: apiKey,
     dangerouslyAllowBrowser: true,
-    fetch: createCustomFetch({ apiKey })
+    fetch: createCustomFetch({ apiKey, apiUrl: MAPLE_API_URL })
   });
 
   const stream = await openai.chat.completions.create({
@@ -91,7 +91,7 @@ chat("your-maple-api-key", "Hello, world!");
 
 ### How It Works
 
-The `createCustomFetch({ apiKey })` function from the SDK handles:
+The `createCustomFetch({ apiKey, apiUrl })` function from the SDK handles:
 
 1. **TEE Attestation** - Verifies you're talking to genuine secure hardware
 2. **End-to-End Encryption** - Encrypts your prompts before transmission
@@ -102,35 +102,18 @@ Your application just uses the standard OpenAI client interface.
 
 ### Fetching Available Models
 
-You can list available models before making completion requests:
+You can list available models using the OpenAI client:
 
 ```typescript
-import { createCustomFetch } from "@opensecret/react";
+const openai = new OpenAI({
+  baseURL: `${MAPLE_API_URL}/v1/`,
+  apiKey: apiKey,
+  dangerouslyAllowBrowser: true,
+  fetch: createCustomFetch({ apiKey, apiUrl: MAPLE_API_URL })
+});
 
-const MAPLE_API_URL = "https://enclave.trymaple.ai";
-
-async function listModels(apiKey: string) {
-  const customFetch = createCustomFetch({ apiKey });
-  
-  const response = await customFetch(`${MAPLE_API_URL}/v1/models`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    }
-  });
-  
-  const data = await response.json();
-  return data.data; // Array of model objects
-}
-```
-
-Or using the SDK's helper function:
-
-```typescript
-import { fetchModels } from "@opensecret/react";
-
-const models = await fetchModels(apiKey);
-console.log(models.map(m => m.id));
+const models = await openai.models.list();
+console.log(models.data.map(m => m.id));
 ```
 
 ### Available Models
@@ -186,7 +169,7 @@ export function MapleChat({ apiKey }: MapleChatProps) {
         baseURL: `${MAPLE_API_URL}/v1/`,
         apiKey: apiKey,
         dangerouslyAllowBrowser: true,
-        fetch: createCustomFetch({ apiKey })
+        fetch: createCustomFetch({ apiKey, apiUrl: MAPLE_API_URL })
       });
 
       const stream = await openai.chat.completions.create({
@@ -249,7 +232,7 @@ import { createCustomFetch } from "@opensecret/react";
 const MAPLE_API_URL = "https://enclave.trymaple.ai";
 
 async function completion(apiKey: string, prompt: string) {
-  const customFetch = createCustomFetch({ apiKey });
+  const customFetch = createCustomFetch({ apiKey, apiUrl: MAPLE_API_URL });
 
   const response = await customFetch(`${MAPLE_API_URL}/v1/chat/completions`, {
     method: "POST",

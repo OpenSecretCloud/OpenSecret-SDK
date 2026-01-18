@@ -4,6 +4,7 @@ import * as api from "./api";
 
 export interface CustomFetchOptions {
   apiKey?: string; // Optional API key to use instead of JWT token
+  apiUrl?: string; // Optional API URL for attestation (required when not using OpenSecretProvider)
 }
 
 export function createCustomFetch(
@@ -28,7 +29,7 @@ export function createCustomFetch(
       const headers = new Headers(init?.headers);
       headers.set("Authorization", getAuthHeader());
 
-      const { sessionKey, sessionId } = await getAttestation();
+      const { sessionKey, sessionId } = await getAttestation(false, options?.apiUrl);
       if (!sessionKey || !sessionId) {
         throw new Error("No session key or ID available");
       }
