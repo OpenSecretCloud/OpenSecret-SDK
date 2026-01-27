@@ -385,6 +385,8 @@ pub struct ChatMessage {
     pub content: Value, // Now accepts both string and array formats
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -462,6 +464,8 @@ pub struct ChatMessageDelta {
     pub content: Option<Value>, // Also update delta to accept flexible content
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 // Embeddings Types

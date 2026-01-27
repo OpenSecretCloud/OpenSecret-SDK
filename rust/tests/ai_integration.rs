@@ -93,6 +93,7 @@ async fn test_chat_completion_streaming() {
             role: "user".to_string(),
             content: serde_json::json!(r#"please reply with exactly and only the word "echo""#),
             tool_calls: None,
+            reasoning_content: None,
         }],
         temperature: Some(0.0),
         max_tokens: Some(10),
@@ -126,9 +127,8 @@ async fn test_chat_completion_streaming() {
         }
 
         // Check if we got usage in the final chunk
-        if chunk.usage.is_some() {
+        if let Some(usage) = chunk.usage {
             saw_usage = true;
-            let usage = chunk.usage.unwrap();
             assert!(usage.prompt_tokens > 0);
             assert!(usage.completion_tokens > 0);
         }
@@ -137,6 +137,49 @@ async fn test_chat_completion_streaming() {
     assert!(chunk_count > 0, "Should have received at least one chunk");
     assert_eq!(full_response.trim().to_lowercase(), "echo");
     assert!(saw_usage, "Should have received usage information");
+}
+
+#[tokio::test]
+async fn test_reasoning_content_with_kimi_k2_thinking() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let request = ChatCompletionRequest {
+        model: "kimi-k2-thinking".to_string(),
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
+            content: serde_json::json!("What is 2+2?"),
+            tool_calls: None,
+            reasoning_content: None,
+        }],
+        temperature: Some(0.0),
+        max_tokens: Some(100),
+        stream: Some(true),
+        stream_options: None,
+        tools: None,
+        tool_choice: None,
+    };
+
+    let mut stream = client
+        .create_chat_completion_stream(request)
+        .await
+        .expect("Failed to create streaming completion");
+
+    let mut saw_reasoning_content = false;
+
+    while let Some(result) = stream.next().await {
+        let chunk = result.expect("Failed to get chunk");
+
+        if !chunk.choices.is_empty() && chunk.choices[0].delta.reasoning_content.is_some() {
+            saw_reasoning_content = true;
+        }
+    }
+
+    assert!(
+        saw_reasoning_content,
+        "kimi-k2-thinking model should return reasoning_content in the response"
+    );
 }
 
 #[tokio::test]
@@ -154,11 +197,13 @@ async fn test_chat_completion_with_system_message() {
                     "You are a helpful assistant that always responds with exactly one word."
                 ),
                 tool_calls: None,
+                reasoning_content: None,
             },
             ChatMessage {
                 role: "user".to_string(),
                 content: serde_json::json!("What is 2+2? Answer in one word."),
                 tool_calls: None,
+                reasoning_content: None,
             },
         ],
         temperature: Some(0.0),
@@ -265,6 +310,7 @@ async fn test_guest_user_cannot_use_ai() {
             role: "user".to_string(),
             content: serde_json::json!("test"),
             tool_calls: None,
+            reasoning_content: None,
         }],
         temperature: None,
         max_tokens: None,
