@@ -2468,3 +2468,232 @@ export async function setDefaultInstruction(instructionId: string): Promise<Inst
     "Failed to set default instruction"
   );
 }
+
+// ============================================================================
+// Agent API Types
+// ============================================================================
+
+export type AgentConfigResponse = {
+  enabled: boolean;
+  model: string;
+  max_context_tokens: number;
+  compaction_threshold: number;
+  system_prompt?: string;
+  conversation_id?: string;
+};
+
+export type UpdateAgentConfigRequest = {
+  enabled?: boolean;
+  model?: string;
+  max_context_tokens?: number;
+  compaction_threshold?: number;
+  system_prompt?: string;
+};
+
+export type MemoryBlockResponse = {
+  label: string;
+  description?: string;
+  value: string;
+  char_limit: number;
+  read_only: boolean;
+  version: number;
+};
+
+export type UpdateMemoryBlockRequest = {
+  description?: string;
+  value?: string;
+  char_limit?: number;
+  read_only?: boolean;
+};
+
+export type InsertArchivalRequest = {
+  text: string;
+  metadata?: Record<string, any>;
+};
+
+export type InsertArchivalResponse = {
+  id: string;
+  source_type: string;
+  embedding_model: string;
+  token_count: number;
+  created_at: string;
+};
+
+export type MemorySearchRequest = {
+  query: string;
+  top_k?: number;
+  max_tokens?: number;
+  source_types?: string[];
+};
+
+export type MemorySearchResult = {
+  content: string;
+  score: number;
+  token_count: number;
+};
+
+export type MemorySearchResponse = {
+  results: MemorySearchResult[];
+};
+
+export type AgentDeletedObjectResponse = {
+  id: string;
+  object: string;
+  deleted: boolean;
+};
+
+export type AgentMessageEvent = {
+  messages: string[];
+  step: number;
+};
+
+export type AgentDoneEvent = {
+  total_steps: number;
+  total_messages: number;
+};
+
+export type AgentErrorEvent = {
+  error: string;
+};
+
+export type AgentConversationListResponse = {
+  object: "list";
+  data: Conversation[];
+  has_more: boolean;
+  first_id?: string;
+  last_id?: string;
+};
+
+// ============================================================================
+// Agent API Functions
+// ============================================================================
+
+export async function getAgentConfig(): Promise<AgentConfigResponse> {
+  return authenticatedApiCall<void, AgentConfigResponse>(
+    `${apiUrl}/v1/agent/config`,
+    "GET",
+    undefined,
+    "Failed to get agent config"
+  );
+}
+
+export async function updateAgentConfig(
+  request: UpdateAgentConfigRequest
+): Promise<AgentConfigResponse> {
+  return authenticatedApiCall<UpdateAgentConfigRequest, AgentConfigResponse>(
+    `${apiUrl}/v1/agent/config`,
+    "PUT",
+    request,
+    "Failed to update agent config"
+  );
+}
+
+export async function listMemoryBlocks(): Promise<MemoryBlockResponse[]> {
+  return authenticatedApiCall<void, MemoryBlockResponse[]>(
+    `${apiUrl}/v1/agent/memory/blocks`,
+    "GET",
+    undefined,
+    "Failed to list memory blocks"
+  );
+}
+
+export async function getMemoryBlock(label: string): Promise<MemoryBlockResponse> {
+  return authenticatedApiCall<void, MemoryBlockResponse>(
+    `${apiUrl}/v1/agent/memory/blocks/${encodeURIComponent(label)}`,
+    "GET",
+    undefined,
+    "Failed to get memory block"
+  );
+}
+
+export async function updateMemoryBlock(
+  label: string,
+  request: UpdateMemoryBlockRequest
+): Promise<MemoryBlockResponse> {
+  return authenticatedApiCall<UpdateMemoryBlockRequest, MemoryBlockResponse>(
+    `${apiUrl}/v1/agent/memory/blocks/${encodeURIComponent(label)}`,
+    "PUT",
+    request,
+    "Failed to update memory block"
+  );
+}
+
+export async function insertArchivalMemory(
+  request: InsertArchivalRequest
+): Promise<InsertArchivalResponse> {
+  return authenticatedApiCall<InsertArchivalRequest, InsertArchivalResponse>(
+    `${apiUrl}/v1/agent/memory/archival`,
+    "POST",
+    request,
+    "Failed to insert archival memory"
+  );
+}
+
+export async function deleteArchivalMemory(id: string): Promise<AgentDeletedObjectResponse> {
+  return authenticatedApiCall<void, AgentDeletedObjectResponse>(
+    `${apiUrl}/v1/agent/memory/archival/${encodeURIComponent(id)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete archival memory"
+  );
+}
+
+export async function searchAgentMemory(
+  request: MemorySearchRequest
+): Promise<MemorySearchResponse> {
+  return authenticatedApiCall<MemorySearchRequest, MemorySearchResponse>(
+    `${apiUrl}/v1/agent/memory/search`,
+    "POST",
+    request,
+    "Failed to search agent memory"
+  );
+}
+
+export async function listAgentConversations(): Promise<AgentConversationListResponse> {
+  return authenticatedApiCall<void, AgentConversationListResponse>(
+    `${apiUrl}/v1/agent/conversations`,
+    "GET",
+    undefined,
+    "Failed to list agent conversations"
+  );
+}
+
+export async function listAgentConversationItems(
+  conversationId: string,
+  params?: { limit?: number; after?: string; order?: string }
+): Promise<ConversationItemsResponse> {
+  let url = `${apiUrl}/v1/agent/conversations/${encodeURIComponent(conversationId)}/items`;
+  const queryParams: string[] = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationItemsResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list agent conversation items"
+  );
+}
+
+export async function deleteAgentConversation(
+  conversationId: string
+): Promise<AgentDeletedObjectResponse> {
+  return authenticatedApiCall<void, AgentDeletedObjectResponse>(
+    `${apiUrl}/v1/agent/conversations/${encodeURIComponent(conversationId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete agent conversation"
+  );
+}
