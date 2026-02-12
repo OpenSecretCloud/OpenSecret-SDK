@@ -36,8 +36,7 @@ For the proxy approach, see the [Maple Proxy Documentation](https://blog.trymapl
 Each user of your application will need:
 
 1. A **paid Maple account** at [trymaple.ai](https://trymaple.ai) (Pro, Team, or Max plan)
-2. **Funded API credits** (starting at $10)
-3. An **API key** created from the [Maple dashboard](https://trymaple.ai)
+2. An **API key** created from the [Maple dashboard](https://trymaple.ai)
 
 ---
 
@@ -120,12 +119,11 @@ console.log(models.data.map(m => m.id));
 
 | Model | Best For | Price (per M tokens) |
 |-------|----------|----------------------|
-| `llama-3.3-70b` | General reasoning, daily tasks | $4 input / $4 output |
-| `gpt-oss-120b` | Quick responses, creative writing | $4 input / $4 output |
-| `deepseek-r1-0528` | Deep reasoning, research, math | $4 input / $4 output |
-| `kimi-k2-thinking` | Advanced reasoning with thinking | $4 input / $4 output |
-| `qwen3-coder-480b` | Specialized coding tasks | $4 input / $4 output |
-| `qwen3-vl-30b` | Image analysis, vision tasks | $4 input / $4 output |
+| `gpt-oss-120b` | Quick responses, creative writing | $1.50 input / $2.50 output |
+| `kimi-k2-5` | Reasoning, coding, image analysis | $3 input / $10.50 output |
+| `deepseek-r1-0528` | Deep reasoning, research, math | $3 input / $10.50 output |
+| `llama-3.3-70b` | General reasoning, daily tasks | $3.50 input / $5.50 output |
+| `qwen3-vl-30b` | Image analysis, vision tasks | $2.50 input / $8 output |
 | `gemma-3-27b` | Fast image analysis | $10 input / $10 output |
 
 For detailed model capabilities and example prompts, see the [Maple Model Guide](https://blog.trymaple.ai/maple-ai-model-guide-with-example-prompts/).
