@@ -1,6 +1,7 @@
 use futures::StreamExt;
 use opensecret::{
-    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, OpenSecretClient, Result,
+    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Function,
+    OpenSecretClient, Result, Tool,
 };
 use std::env;
 use uuid::Uuid;
@@ -116,21 +117,26 @@ async fn test_chat_completion_streaming() {
         let chunk = result.expect("Failed to get chunk");
         chunk_count += 1;
 
-        // Check chunk structure
-        assert!(!chunk.id.is_empty());
-        assert_eq!(chunk.object, "chat.completion.chunk");
+        // Check chunk structure (ChatCompletionChunk is a transparent Value wrapper)
+        assert!(chunk.0["id"].as_str().is_some_and(|s| !s.is_empty()));
+        assert_eq!(
+            chunk.0["object"].as_str().unwrap_or(""),
+            "chat.completion.chunk"
+        );
 
-        if !chunk.choices.is_empty() {
-            if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
-                full_response.push_str(s);
+        if let Some(choices) = chunk.0["choices"].as_array() {
+            if !choices.is_empty() {
+                if let Some(s) = choices[0]["delta"]["content"].as_str() {
+                    full_response.push_str(s);
+                }
             }
         }
 
         // Check if we got usage in the final chunk
-        if let Some(usage) = chunk.usage {
+        if chunk.0["usage"].is_object() {
             saw_usage = true;
-            assert!(usage.prompt_tokens > 0);
-            assert!(usage.completion_tokens > 0);
+            assert!(chunk.0["usage"]["prompt_tokens"].as_i64().unwrap_or(0) > 0);
+            assert!(chunk.0["usage"]["completion_tokens"].as_i64().unwrap_or(0) > 0);
         }
     }
 
@@ -140,13 +146,13 @@ async fn test_chat_completion_streaming() {
 }
 
 #[tokio::test]
-async fn test_reasoning_content_with_kimi_k2_thinking() {
+async fn test_reasoning_content_with_kimi_k2() {
     let client = setup_authenticated_client()
         .await
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "kimi-k2-thinking".to_string(),
+        model: "kimi-k2-5".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("What is 2+2?"),
@@ -171,14 +177,16 @@ async fn test_reasoning_content_with_kimi_k2_thinking() {
     while let Some(result) = stream.next().await {
         let chunk = result.expect("Failed to get chunk");
 
-        if !chunk.choices.is_empty() && chunk.choices[0].delta.reasoning_content.is_some() {
-            saw_reasoning_content = true;
+        if let Some(choices) = chunk.0["choices"].as_array() {
+            if !choices.is_empty() && !choices[0]["delta"]["reasoning_content"].is_null() {
+                saw_reasoning_content = true;
+            }
         }
     }
 
     assert!(
         saw_reasoning_content,
-        "kimi-k2-thinking model should return reasoning_content in the response"
+        "kimi-k2-5 model should return reasoning_content in the response"
     );
 }
 
@@ -222,9 +230,11 @@ async fn test_chat_completion_with_system_message() {
     let mut full_response = String::new();
     while let Some(result) = stream.next().await {
         let chunk = result.expect("Failed to get chunk");
-        if !chunk.choices.is_empty() {
-            if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
-                full_response.push_str(s);
+        if let Some(choices) = chunk.0["choices"].as_array() {
+            if !choices.is_empty() {
+                if let Some(s) = choices[0]["delta"]["content"].as_str() {
+                    full_response.push_str(s);
+                }
             }
         }
     }
@@ -440,4 +450,111 @@ async fn test_embeddings_from_string_conversion() {
 
     assert_eq!(response.data.len(), 1);
     assert_eq!(response.data[0].embedding.len(), 768);
+}
+
+#[tokio::test]
+async fn test_streaming_multi_tool_calls() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let tools = vec![
+        Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "get_weather".to_string(),
+                description: Some("Get current weather for a location".to_string()),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: Function {
+                name: "get_time".to_string(),
+                description: Some("Get current time for a timezone".to_string()),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "timezone": {"type": "string", "description": "IANA timezone"}
+                    },
+                    "required": ["timezone"]
+                }),
+            },
+        },
+    ];
+
+    let request = ChatCompletionRequest {
+        model: "glm-5".to_string(),
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
+            content: serde_json::json!("What is the weather in NYC and what time is it there?"),
+            tool_calls: None,
+            reasoning_content: None,
+        }],
+        temperature: Some(0.0),
+        max_tokens: Some(512),
+        stream: Some(true),
+        stream_options: None,
+        tools: Some(tools),
+        tool_choice: None,
+    };
+
+    let mut stream = client
+        .create_chat_completion_stream(request)
+        .await
+        .expect("Failed to create streaming completion");
+
+    let mut chunk_count = 0;
+    let mut saw_tool_calls = false;
+    let mut saw_finish_reason_tool_calls = false;
+    let mut tool_names: Vec<String> = Vec::new();
+
+    while let Some(result) = stream.next().await {
+        let chunk =
+            result.expect("Failed to get chunk - streaming tool_call passthrough may be broken");
+        chunk_count += 1;
+
+        if let Some(choices) = chunk.0["choices"].as_array() {
+            if !choices.is_empty() {
+                // Track tool call names from first delta of each tool
+                if let Some(tool_calls) = choices[0]["delta"]["tool_calls"].as_array() {
+                    saw_tool_calls = true;
+                    for tc in tool_calls {
+                        if let Some(name) = tc["function"]["name"].as_str() {
+                            if !name.is_empty() {
+                                tool_names.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+
+                if choices[0]["finish_reason"].as_str() == Some("tool_calls") {
+                    saw_finish_reason_tool_calls = true;
+                }
+            }
+        }
+    }
+
+    assert!(chunk_count > 0, "Should have received at least one chunk");
+    assert!(saw_tool_calls, "Should have seen tool_calls in stream");
+    assert!(
+        saw_finish_reason_tool_calls,
+        "Should have seen finish_reason=tool_calls"
+    );
+    assert!(
+        tool_names.contains(&"get_weather".to_string()),
+        "Should have called get_weather, got: {:?}",
+        tool_names
+    );
+    assert!(
+        tool_names.contains(&"get_time".to_string()),
+        "Should have called get_time, got: {:?}",
+        tool_names
+    );
 }
