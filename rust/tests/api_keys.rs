@@ -156,9 +156,11 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
-                if !chunk.choices.is_empty() {
-                    if let Some(serde_json::Value::String(s)) = &chunk.choices[0].delta.content {
-                        full_response.push_str(s);
+                if let Some(choices) = chunk.0["choices"].as_array() {
+                    if !choices.is_empty() {
+                        if let Some(s) = choices[0]["delta"]["content"].as_str() {
+                            full_response.push_str(s);
+                        }
                     }
                 }
             }

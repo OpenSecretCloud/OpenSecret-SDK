@@ -437,36 +437,12 @@ pub struct Usage {
     pub total_tokens: i32,
 }
 
-// Streaming types
+// Streaming types - transparent Value wrapper for full passthrough of any backend JSON.
+// This avoids deserialization failures when LLMs send null fields in streaming tool_call
+// deltas or introduce new fields the SDK doesn't know about yet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatCompletionChunk {
-    pub id: String,
-    pub object: String,
-    pub created: i64,
-    pub model: String,
-    pub choices: Vec<ChatChoiceDelta>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub usage: Option<Usage>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatChoiceDelta {
-    pub index: i32,
-    pub delta: ChatMessageDelta,
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessageDelta {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<Value>, // Also update delta to accept flexible content
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_content: Option<String>,
-}
+#[serde(transparent)]
+pub struct ChatCompletionChunk(pub Value);
 
 // Embeddings Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
