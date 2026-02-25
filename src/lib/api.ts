@@ -3,14 +3,8 @@ import { authenticatedApiCall, encryptedApiCall, openAiAuthenticatedApiCall } fr
 import type { Model } from "openai/resources/models.js";
 import { getConfig } from "./config";
 
-let apiUrl = "";
-
-export function setApiUrl(url: string) {
-  apiUrl = url;
-}
-
 export function getApiUrl(): string {
-  return apiUrl;
+  return getConfig().apiUrl;
 }
 
 export type LoginResponse = {
@@ -50,7 +44,7 @@ export async function fetchLogin(
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
   const response = await encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
-    `${apiUrl}/login`,
+    `${getApiUrl()}/login`,
     "POST",
     { email, password, client_id: clientId }
   );
@@ -68,7 +62,7 @@ export async function fetchGuestLogin(
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
   const response = await encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
-    `${apiUrl}/login`,
+    `${getApiUrl()}/login`,
     "POST",
     { id, password, client_id: clientId }
   );
@@ -96,7 +90,7 @@ export async function fetchSignUp(
       client_id: string;
     },
     LoginResponse
-  >(`${apiUrl}/register`, "POST", {
+  >(`${getApiUrl()}/register`, "POST", {
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
@@ -119,7 +113,7 @@ export async function fetchGuestSignUp(
   const response = await encryptedApiCall<
     { password: string; inviteCode: string; client_id: string },
     LoginResponse
-  >(`${apiUrl}/register`, "POST", {
+  >(`${getApiUrl()}/register`, "POST", {
     password,
     inviteCode: inviteCode.toLowerCase(),
     client_id: clientId
@@ -140,7 +134,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
   try {
     const response = await encryptedApiCall<typeof refreshData, RefreshResponse>(
-      `${apiUrl}/refresh`,
+      `${getApiUrl()}/refresh`,
       "POST",
       refreshData,
       undefined,
@@ -158,7 +152,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
 export async function fetchUser(): Promise<UserResponse> {
   return authenticatedApiCall<void, UserResponse>(
-    `${apiUrl}/protected/user`,
+    `${getApiUrl()}/protected/user`,
     "GET",
     undefined,
     "Failed to fetch user"
@@ -167,7 +161,7 @@ export async function fetchUser(): Promise<UserResponse> {
 
 export async function fetchPut(key: string, value: string): Promise<string> {
   return authenticatedApiCall<string, string>(
-    `${apiUrl}/protected/kv/${key}`,
+    `${getApiUrl()}/protected/kv/${key}`,
     "PUT",
     value,
     "Failed to put key-value pair"
@@ -176,7 +170,7 @@ export async function fetchPut(key: string, value: string): Promise<string> {
 
 export async function fetchDelete(key: string): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/kv/${key}`,
+    `${getApiUrl()}/protected/kv/${key}`,
     "DELETE",
     undefined,
     "Failed to delete key-value pair"
@@ -195,7 +189,7 @@ export async function fetchDeleteAllKV(): Promise<void> {
 export async function fetchGet(key: string): Promise<string | undefined> {
   try {
     const data = await authenticatedApiCall<void, string>(
-      `${apiUrl}/protected/kv/${key}`,
+      `${getApiUrl()}/protected/kv/${key}`,
       "GET",
       undefined,
       "Failed to get key-value pair"
@@ -209,7 +203,7 @@ export async function fetchGet(key: string): Promise<string | undefined> {
 
 export async function fetchList(): Promise<KVListItem[]> {
   return authenticatedApiCall<void, KVListItem[]>(
-    `${apiUrl}/protected/kv`,
+    `${getApiUrl()}/protected/kv`,
     "GET",
     undefined,
     "Failed to list key-value pairs"
@@ -222,7 +216,7 @@ export async function fetchLogout(): Promise<void> {
   if (refresh_token) {
     try {
       const refreshData = { refresh_token };
-      await encryptedApiCall<typeof refreshData, void>(`${apiUrl}/logout`, "POST", refreshData);
+      await encryptedApiCall<typeof refreshData, void>(`${getApiUrl()}/logout`, "POST", refreshData);
     } catch (error) {
       console.error("Error during logout API call:", error);
     }
@@ -236,7 +230,7 @@ export async function fetchLogout(): Promise<void> {
 
 export async function verifyEmail(code: string): Promise<void> {
   return encryptedApiCall<void, void>(
-    `${apiUrl}/verify-email/${code}`,
+    `${getApiUrl()}/verify-email/${code}`,
     "GET",
     undefined,
     undefined,
@@ -246,7 +240,7 @@ export async function verifyEmail(code: string): Promise<void> {
 
 export async function requestNewVerificationCode(): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/request_verification`,
+    `${getApiUrl()}/protected/request_verification`,
     "POST",
     undefined,
     "Failed to request new verification code"
@@ -257,7 +251,7 @@ export async function fetchAttestationDocument(
   nonce: string,
   explicitApiUrl?: string
 ): Promise<string> {
-  const url = explicitApiUrl || apiUrl;
+  const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/attestation/${nonce}`);
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
@@ -271,7 +265,7 @@ export async function keyExchange(
   nonce: string,
   explicitApiUrl?: string
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
-  const url = explicitApiUrl || apiUrl;
+  const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/key_exchange`, {
     method: "POST",
     headers: {
@@ -298,7 +292,7 @@ export async function requestPasswordReset(
     client_id: clientId
   };
   return encryptedApiCall<typeof resetData, void>(
-    `${apiUrl}/password-reset/request`,
+    `${getApiUrl()}/password-reset/request`,
     "POST",
     resetData,
     undefined,
@@ -321,7 +315,7 @@ export async function confirmPasswordReset(
     client_id: clientId
   };
   return encryptedApiCall<typeof confirmData, void>(
-    `${apiUrl}/password-reset/confirm`,
+    `${getApiUrl()}/password-reset/confirm`,
     "POST",
     confirmData,
     undefined,
@@ -335,7 +329,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
     new_password: newPassword
   };
   return authenticatedApiCall<typeof changePasswordData, void>(
-    `${apiUrl}/protected/change_password`,
+    `${getApiUrl()}/protected/change_password`,
     "POST",
     changePasswordData,
     "Failed to change password"
@@ -348,7 +342,7 @@ export async function initiateGitHubAuth(
   const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GithubAuthResponse>(
-      `${apiUrl}/auth/github`,
+      `${getApiUrl()}/auth/github`,
       "POST",
       inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
@@ -372,7 +366,7 @@ export async function handleGitHubCallback(
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/github/callback`,
+      `${getApiUrl()}/auth/github/callback`,
       "POST",
       callbackData,
       undefined,
@@ -434,7 +428,7 @@ export async function initiateGoogleAuth(
   const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GoogleAuthResponse>(
-      `${apiUrl}/auth/google`,
+      `${getApiUrl()}/auth/google`,
       "POST",
       inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
@@ -458,7 +452,7 @@ export async function handleGoogleCallback(
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/google/callback`,
+      `${getApiUrl()}/auth/google/callback`,
       "POST",
       callbackData,
       undefined,
@@ -514,7 +508,7 @@ export async function initiateAppleAuth(
   const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, AppleAuthResponse>(
-      `${apiUrl}/auth/apple`,
+      `${getApiUrl()}/auth/apple`,
       "POST",
       inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
@@ -553,7 +547,7 @@ export async function handleAppleCallback(
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/apple/callback`,
+      `${getApiUrl()}/auth/apple/callback`,
       "POST",
       callbackData,
       undefined,
@@ -644,7 +638,7 @@ export async function handleAppleNativeSignIn(
 
   try {
     const response = await encryptedApiCall<typeof signInData, LoginResponse>(
-      `${apiUrl}/auth/apple/native`,
+      `${getApiUrl()}/auth/apple/native`,
       "POST",
       signInData,
       undefined,
@@ -724,7 +718,7 @@ export type KeyOptions = {
  */
 export async function fetchPrivateKey(key_options?: KeyOptions): Promise<PrivateKeyResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/private_key`;
+  let url = `${getApiUrl()}/protected/private_key`;
   const queryParams = [];
 
   // Add seed phrase derivation path if present
@@ -792,7 +786,7 @@ export async function fetchPrivateKeyBytes(
   key_options?: KeyOptions
 ): Promise<PrivateKeyBytesResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/private_key_bytes`;
+  let url = `${getApiUrl()}/protected/private_key_bytes`;
   const queryParams = [];
 
   // Add seed phrase derivation path if present
@@ -891,7 +885,7 @@ export async function signMessage(
   };
 
   return authenticatedApiCall<typeof requestData, SignMessageResponse>(
-    `${apiUrl}/protected/sign_message`,
+    `${getApiUrl()}/protected/sign_message`,
     "POST",
     requestData,
     "Failed to sign message"
@@ -937,7 +931,7 @@ export async function fetchPublicKey(
   key_options?: KeyOptions
 ): Promise<PublicKeyResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
+  let url = `${getApiUrl()}/protected/public_key?algorithm=${algorithm}`;
 
   // Add seed phrase derivation path if present
   if (key_options?.seed_phrase_derivation_path) {
@@ -969,7 +963,7 @@ export async function convertGuestToEmailAccount(
   };
 
   return authenticatedApiCall<typeof conversionData, void>(
-    `${apiUrl}/protected/convert_guest`,
+    `${getApiUrl()}/protected/convert_guest`,
     "POST",
     conversionData,
     "Failed to convert guest account"
@@ -995,7 +989,7 @@ export type ThirdPartyTokenResponse = {
  */
 export async function generateThirdPartyToken(audience?: string): Promise<ThirdPartyTokenResponse> {
   return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
-    `${apiUrl}/protected/third_party_token`,
+    `${getApiUrl()}/protected/third_party_token`,
     "POST",
     audience ? { audience } : {},
     "Failed to generate third party token"
@@ -1057,7 +1051,7 @@ export async function encryptData(
   };
 
   return authenticatedApiCall<typeof requestData, EncryptDataResponse>(
-    `${apiUrl}/protected/encrypt`,
+    `${getApiUrl()}/protected/encrypt`,
     "POST",
     requestData,
     "Failed to encrypt data"
@@ -1116,7 +1110,7 @@ export async function decryptData(
   };
 
   return authenticatedApiCall<typeof requestData, string>(
-    `${apiUrl}/protected/decrypt`,
+    `${getApiUrl()}/protected/decrypt`,
     "POST",
     requestData,
     "Failed to decrypt data"
@@ -1140,7 +1134,7 @@ export async function requestAccountDeletion(hashedSecret: string): Promise<void
     hashed_secret: hashedSecret
   };
   return authenticatedApiCall<typeof deleteData, void>(
-    `${apiUrl}/protected/delete-account/request`,
+    `${getApiUrl()}/protected/delete-account/request`,
     "POST",
     deleteData,
     "Failed to request account deletion"
@@ -1169,7 +1163,7 @@ export async function confirmAccountDeletion(
     plaintext_secret: plaintextSecret
   };
   return authenticatedApiCall<typeof confirmData, void>(
-    `${apiUrl}/protected/delete-account/confirm`,
+    `${getApiUrl()}/protected/delete-account/confirm`,
     "POST",
     confirmData,
     "Failed to confirm account deletion"
@@ -1193,7 +1187,7 @@ type ModelsListResponse = {
 export async function fetchModels(apiKey?: string): Promise<Model[]> {
   try {
     const response = await openAiAuthenticatedApiCall<void, ModelsListResponse>(
-      `${apiUrl}/v1/models`,
+      `${getApiUrl()}/v1/models`,
       "GET",
       undefined,
       "Failed to fetch models",
@@ -1408,7 +1402,7 @@ export async function uploadDocument(file: File | Blob): Promise<DocumentUploadI
   };
 
   return authenticatedApiCall<DocumentUploadRequest, DocumentUploadInitResponse>(
-    `${apiUrl}/v1/documents/upload`,
+    `${getApiUrl()}/v1/documents/upload`,
     "POST",
     requestData,
     "Failed to upload document"
@@ -1446,7 +1440,7 @@ export async function checkDocumentStatus(taskId: string): Promise<DocumentStatu
   };
 
   return authenticatedApiCall<DocumentStatusRequest, DocumentStatusResponse>(
-    `${apiUrl}/v1/documents/status`,
+    `${getApiUrl()}/v1/documents/status`,
     "POST",
     requestData,
     "Failed to check document status"

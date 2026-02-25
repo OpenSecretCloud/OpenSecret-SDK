@@ -112,7 +112,6 @@ export {
   uploadDocumentWithPolling,
   
   // Utility
-  setApiUrl,
   getApiUrl
 } from "./api";
 
