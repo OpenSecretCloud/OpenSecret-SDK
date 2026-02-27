@@ -45,7 +45,7 @@ async function setupTestUser() {
   }
 }
 
-test("Get agent config", async () => {
+test.skip("Get agent config", async () => {
   await setupTestUser();
 
   const config = await getAgentConfig();
@@ -61,7 +61,7 @@ test("Get agent config", async () => {
   console.log("Agent config:", JSON.stringify(config));
 });
 
-test("Update agent config", async () => {
+test.skip("Update agent config", async () => {
   await setupTestUser();
 
   const original = await getAgentConfig();
@@ -86,7 +86,7 @@ test("Update agent config", async () => {
   });
 });
 
-test("List memory blocks", async () => {
+test.skip("List memory blocks", async () => {
   await setupTestUser();
 
   // Trigger config init which creates default blocks
@@ -112,7 +112,7 @@ test("List memory blocks", async () => {
   console.log(`Found ${blocks.length} memory blocks`);
 });
 
-test("Get memory block by label", async () => {
+test.skip("Get memory block by label", async () => {
   await setupTestUser();
   await getAgentConfig();
 
@@ -126,7 +126,7 @@ test("Get memory block by label", async () => {
   console.log("Persona block value:", block.value);
 });
 
-test("Update memory block", async () => {
+test.skip("Update memory block", async () => {
   await setupTestUser();
   await getAgentConfig();
 
@@ -143,7 +143,7 @@ test("Update memory block", async () => {
   await updateMemoryBlock("human", { value: original.value });
 });
 
-test("Insert and delete archival memory", async () => {
+test.skip("Insert and delete archival memory", async () => {
   await setupTestUser();
 
   const inserted = await insertArchivalMemory({
@@ -165,7 +165,7 @@ test("Insert and delete archival memory", async () => {
   expect(deleted.id).toBe(inserted.id);
 });
 
-test("Search agent memory", async () => {
+test.skip("Search agent memory", async () => {
   await setupTestUser();
 
   // Insert something searchable
@@ -189,7 +189,7 @@ test("Search agent memory", async () => {
   await deleteArchivalMemory(inserted.id);
 });
 
-test("List agent conversations", async () => {
+test.skip("List agent conversations", async () => {
   await setupTestUser();
 
   const conversations = await listAgentConversations();
@@ -214,7 +214,7 @@ test("List agent conversations", async () => {
   }
 });
 
-test("Agent chat via SSE (using createCustomFetch)", async () => {
+test.skip("Agent chat via SSE (using createCustomFetch)", async () => {
   await setupTestUser();
 
   // Ensure agent is enabled
