@@ -28,11 +28,40 @@ export type {
   ConversationsDeleteResponse,
   BatchDeleteConversationsRequest,
   BatchDeleteItemResult,
-  BatchDeleteConversationsResponse
+  BatchDeleteConversationsResponse,
+  AgentConfigResponse,
+  UpdateAgentConfigRequest,
+  MemoryBlockResponse,
+  UpdateMemoryBlockRequest,
+  InsertArchivalRequest,
+  InsertArchivalResponse,
+  MemorySearchRequest,
+  MemorySearchResult,
+  MemorySearchResponse,
+  AgentDeletedObjectResponse,
+  AgentMessageEvent,
+  AgentDoneEvent,
+  AgentErrorEvent,
+  AgentConversationListResponse
 } from "./api";
 
 // Export API key management functions
 export { createApiKey, listApiKeys, deleteApiKey } from "./api";
+
+// Export Agent API functions
+export {
+  getAgentConfig,
+  updateAgentConfig,
+  listMemoryBlocks,
+  getMemoryBlock,
+  updateMemoryBlock,
+  insertArchivalMemory,
+  deleteArchivalMemory,
+  searchAgentMemory,
+  listAgentConversations,
+  listAgentConversationItems,
+  deleteAgentConversation
+} from "./api";
 
 // Export AI customization options
 export { createCustomFetch, type CustomFetchOptions } from "./ai";

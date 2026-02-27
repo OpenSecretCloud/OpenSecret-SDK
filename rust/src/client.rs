@@ -13,6 +13,7 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use serde_cbor::Value as CborValue;
+use serde_json::Value;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
@@ -27,7 +28,9 @@ pub struct OpenSecretClient {
 impl OpenSecretClient {
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
         let base_url = base_url.into();
-        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+        let use_mock = base_url.contains("localhost")
+            || base_url.contains("127.0.0.1")
+            || base_url.contains("0.0.0.0");
 
         Ok(Self {
             client: Client::new(),
@@ -40,7 +43,9 @@ impl OpenSecretClient {
 
     pub fn new_with_api_key(base_url: impl Into<String>, api_key: String) -> Result<Self> {
         let base_url = base_url.into();
-        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+        let use_mock = base_url.contains("localhost")
+            || base_url.contains("127.0.0.1")
+            || base_url.contains("0.0.0.0");
 
         Ok(Self {
             client: Client::new(),
@@ -289,14 +294,49 @@ impl OpenSecretClient {
         response.text().await.map_err(Into::into)
     }
 
-    // Encrypted API call helper
-    async fn encrypted_api_call<T: Serialize, U: DeserializeOwned>(
+    // Encrypted API call helper -- mirrors the TypeScript SDK's retry behavior:
+    // - On no session or 400/encryption errors: re-attest and retry once
+    // - On 401: refresh JWT token and retry once
+    async fn encrypted_api_call<T: Serialize + Clone, U: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
         data: Option<T>,
     ) -> Result<U> {
-        // Ensure we have a session
+        match self
+            .encrypted_api_call_inner(endpoint, method, data.clone())
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(Error::Session(_)) => {
+                // No active session -- re-attest and retry
+                self.perform_attestation_handshake().await?;
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(Error::Api { status: 400, .. })
+            | Err(Error::Encryption(_))
+            | Err(Error::Decryption(_)) => {
+                // Bad request or encryption error -- re-attest and retry (matches TS SDK)
+                self.perform_attestation_handshake().await?;
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(Error::Api { status: 401, .. }) => {
+                // Unauthorized -- try refreshing the token, then retry
+                if self.session_manager.get_refresh_token()?.is_some() {
+                    let _ = self.refresh_token().await;
+                }
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn encrypted_api_call_inner<T: Serialize, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+    ) -> Result<U> {
         let session = self.session_manager.get_session()?.ok_or_else(|| {
             Error::Session(
                 "No active session. Call perform_attestation_handshake first".to_string(),
@@ -305,7 +345,6 @@ impl OpenSecretClient {
 
         let url = format!("{}{}", self.base_url, endpoint);
 
-        // Encrypt the request data if provided
         let encrypted_body = if let Some(data) = data {
             let json = serde_json::to_string(&data)?;
             let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
@@ -316,7 +355,6 @@ impl OpenSecretClient {
             None
         };
 
-        // Build headers
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -325,7 +363,6 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add JWT authorization header (API keys are not valid for most endpoints)
         if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
@@ -334,7 +371,6 @@ impl OpenSecretClient {
             );
         }
 
-        // Make the request
         let request_builder = match method {
             "GET" => self.client.get(&url),
             "POST" => self.client.post(&url),
@@ -369,7 +405,6 @@ impl OpenSecretClient {
             });
         }
 
-        // Decrypt the response
         let encrypted_response: EncryptedResponse<U> = response.json().await?;
         let decrypted = crypto::decrypt_data(
             &session.session_key,
@@ -578,6 +613,154 @@ impl OpenSecretClient {
         Ok(response)
     }
 
+    // OAuth Methods
+
+    pub async fn initiate_github_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<GithubAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/github", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_github_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/github/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn initiate_google_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<GoogleAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/google", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_google_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/google/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn initiate_apple_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<AppleAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/apple", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_apple_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/apple/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn handle_apple_native_sign_in(
+        &self,
+        user_identifier: String,
+        identity_token: String,
+        client_id: Uuid,
+        email: Option<String>,
+        given_name: Option<String>,
+        family_name: Option<String>,
+        nonce: Option<String>,
+        invite_code: Option<String>,
+    ) -> Result<LoginResponse> {
+        let request = AppleNativeSignInRequest {
+            user_identifier,
+            identity_token,
+            client_id,
+            email,
+            given_name,
+            family_name,
+            nonce,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/apple/native", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
     pub async fn refresh_token(&self) -> Result<()> {
         let refresh_token = self
             .session_manager
@@ -586,11 +769,11 @@ impl OpenSecretClient {
 
         let request = RefreshRequest { refresh_token };
 
+        // Use inner call to avoid infinite recursion (encrypted_api_call retries on 401)
         let response: RefreshResponse = self
-            .encrypted_api_call("/refresh", "POST", Some(request))
+            .encrypted_api_call_inner("/refresh", "POST", Some(request))
             .await?;
 
-        // Update tokens
         self.session_manager
             .set_tokens(response.access_token, Some(response.refresh_token))?;
 
@@ -1090,43 +1273,32 @@ impl OpenSecretClient {
                             return None;
                         }
 
-                        // Decrypt the event data - server sends base64 encrypted chunks
-                        match BASE64.decode(&event.data) {
-                            Ok(encrypted_bytes) => {
-                                match crypto::decrypt_data(&session_key, &encrypted_bytes) {
-                                    Ok(decrypted) => match String::from_utf8(decrypted) {
-                                        Ok(json_str) => {
-                                            match serde_json::from_str::<ChatCompletionChunk>(
-                                                &json_str,
-                                            ) {
-                                                Ok(chunk) => Some(Ok(chunk)),
-                                                Err(e) => Some(Err(Error::Api {
-                                                    status: 0,
-                                                    message: format!(
-                                                        "Failed to parse chunk: {}",
-                                                        e
-                                                    ),
-                                                })),
-                                            }
-                                        }
+                        // Decrypt the event data - server sends base64 encrypted chunks.
+                        // Skip non-base64 events (heartbeats, retries, etc.) to match TS SDK.
+                        let encrypted_bytes = match BASE64.decode(&event.data) {
+                            Ok(bytes) => bytes,
+                            Err(_) => return None,
+                        };
+                        match crypto::decrypt_data(&session_key, &encrypted_bytes) {
+                            Ok(decrypted) => match String::from_utf8(decrypted) {
+                                Ok(json_str) => {
+                                    match serde_json::from_str::<ChatCompletionChunk>(&json_str) {
+                                        Ok(chunk) => Some(Ok(chunk)),
                                         Err(e) => Some(Err(Error::Api {
                                             status: 0,
-                                            message: format!(
-                                                "Invalid UTF-8 in decrypted data: {}",
-                                                e
-                                            ),
+                                            message: format!("Failed to parse chunk: {}", e),
                                         })),
-                                    },
-                                    Err(e) => Some(Err(Error::Decryption(format!(
-                                        "Failed to decrypt chunk: {}",
-                                        e
-                                    )))),
+                                    }
                                 }
-                            }
-                            Err(e) => Some(Err(Error::Api {
-                                status: 0,
-                                message: format!("Failed to decode base64: {}", e),
-                            })),
+                                Err(e) => Some(Err(Error::Api {
+                                    status: 0,
+                                    message: format!("Invalid UTF-8 in decrypted data: {}", e),
+                                })),
+                            },
+                            Err(e) => Some(Err(Error::Decryption(format!(
+                                "Failed to decrypt chunk: {}",
+                                e
+                            )))),
                         }
                     }
                     Err(e) => Some(Err(Error::Api {
@@ -1138,6 +1310,292 @@ impl OpenSecretClient {
         });
 
         Ok(Box::pin(event_stream))
+    }
+
+    // Agent API Methods
+
+    /// Sends a message to the agent and returns a stream of SSE events.
+    /// The agent processes the message through a multi-step tool loop and
+    /// delivers messages via SSE (agent.message, agent.done, agent.error events).
+    pub async fn agent_chat(
+        &self,
+        input: &str,
+    ) -> Result<std::pin::Pin<Box<dyn futures::Stream<Item = Result<AgentSseEvent>> + Send>>> {
+        use eventsource_stream::Eventsource;
+        use futures::StreamExt;
+
+        let request = AgentChatRequest {
+            input: input.to_string(),
+        };
+
+        let session = self.session_manager.get_session()?.ok_or_else(|| {
+            Error::Session(
+                "No active session. Call perform_attestation_handshake first".to_string(),
+            )
+        })?;
+
+        let url = format!("{}/v1/agent/chat", self.base_url);
+
+        let json = serde_json::to_string(&request)?;
+        let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
+        let encrypted_request = EncryptedRequest {
+            encrypted: BASE64.encode(&encrypted),
+        };
+
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("accept", HeaderValue::from_static("text/event-stream"));
+        headers.insert(
+            "x-session-id",
+            HeaderValue::from_str(&session.session_id.to_string())
+                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
+        );
+
+        if let Some(token) = self.session_manager.get_access_token()? {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", token))
+                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
+            );
+        }
+
+        let response = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .json(&encrypted_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::Api {
+                status,
+                message: text,
+            });
+        }
+
+        let stream = response
+            .bytes_stream()
+            .map(|result| result.map_err(std::io::Error::other));
+
+        let session_key = session.session_key;
+        let event_stream = stream.eventsource().filter_map(move |event| {
+            let session_key = session_key;
+            async move {
+                match event {
+                    Ok(event) => {
+                        if event.data == "[DONE]" {
+                            return None;
+                        }
+
+                        // Skip non-base64 events (heartbeats, retries, etc.)
+                        let encrypted_bytes = match BASE64.decode(&event.data) {
+                            Ok(bytes) => bytes,
+                            Err(_) => return None,
+                        };
+                        match crypto::decrypt_data(&session_key, &encrypted_bytes) {
+                            Ok(decrypted) => match String::from_utf8(decrypted) {
+                                Ok(json_str) => {
+                                    let event_type = event.event.as_str();
+                                    match event_type {
+                                        "agent.message" => {
+                                            match serde_json::from_str::<AgentMessageEvent>(
+                                                &json_str,
+                                            ) {
+                                                Ok(msg) => Some(Ok(AgentSseEvent::Message(msg))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent message: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        "agent.done" => {
+                                            match serde_json::from_str::<AgentDoneEvent>(&json_str)
+                                            {
+                                                Ok(done) => Some(Ok(AgentSseEvent::Done(done))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent done: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        "agent.error" => {
+                                            match serde_json::from_str::<AgentErrorEvent>(&json_str)
+                                            {
+                                                Ok(err) => Some(Ok(AgentSseEvent::Error(err))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent error: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        _ => None,
+                                    }
+                                }
+                                Err(e) => Some(Err(Error::Api {
+                                    status: 0,
+                                    message: format!("Invalid UTF-8 in decrypted data: {}", e),
+                                })),
+                            },
+                            Err(e) => Some(Err(Error::Decryption(format!(
+                                "Failed to decrypt agent event: {}",
+                                e
+                            )))),
+                        }
+                    }
+                    Err(e) => Some(Err(Error::Api {
+                        status: 0,
+                        message: format!("SSE error: {}", e),
+                    })),
+                }
+            }
+        });
+
+        Ok(Box::pin(event_stream))
+    }
+
+    /// Gets the agent configuration for the current user
+    pub async fn get_agent_config(&self) -> Result<AgentConfigResponse> {
+        self.encrypted_api_call("/v1/agent/config", "GET", None::<()>)
+            .await
+    }
+
+    /// Updates the agent configuration
+    pub async fn update_agent_config(
+        &self,
+        request: UpdateAgentConfigRequest,
+    ) -> Result<AgentConfigResponse> {
+        self.encrypted_api_call("/v1/agent/config", "PUT", Some(request))
+            .await
+    }
+
+    /// Lists all memory blocks for the current user's agent
+    pub async fn list_memory_blocks(&self) -> Result<Vec<MemoryBlockResponse>> {
+        self.encrypted_api_call("/v1/agent/memory/blocks", "GET", None::<()>)
+            .await
+    }
+
+    /// Gets a specific memory block by label
+    pub async fn get_memory_block(&self, label: &str) -> Result<MemoryBlockResponse> {
+        let encoded = utf8_percent_encode(label, NON_ALPHANUMERIC).to_string();
+        self.encrypted_api_call(
+            &format!("/v1/agent/memory/blocks/{}", encoded),
+            "GET",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Updates a specific memory block by label
+    pub async fn update_memory_block(
+        &self,
+        label: &str,
+        request: UpdateMemoryBlockRequest,
+    ) -> Result<MemoryBlockResponse> {
+        let encoded = utf8_percent_encode(label, NON_ALPHANUMERIC).to_string();
+        self.encrypted_api_call(
+            &format!("/v1/agent/memory/blocks/{}", encoded),
+            "PUT",
+            Some(request),
+        )
+        .await
+    }
+
+    /// Inserts a new archival memory entry
+    pub async fn insert_archival_memory(
+        &self,
+        text: &str,
+        metadata: Option<Value>,
+    ) -> Result<InsertArchivalResponse> {
+        let request = InsertArchivalRequest {
+            text: text.to_string(),
+            metadata,
+        };
+        self.encrypted_api_call("/v1/agent/memory/archival", "POST", Some(request))
+            .await
+    }
+
+    /// Deletes an archival memory entry by UUID
+    pub async fn delete_archival_memory(&self, id: Uuid) -> Result<DeletedObjectResponse> {
+        self.encrypted_api_call(
+            &format!("/v1/agent/memory/archival/{}", id),
+            "DELETE",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Searches agent memory (archival + recall)
+    pub async fn search_agent_memory(
+        &self,
+        request: MemorySearchRequest,
+    ) -> Result<MemorySearchResponse> {
+        self.encrypted_api_call("/v1/agent/memory/search", "POST", Some(request))
+            .await
+    }
+
+    /// Lists agent conversations
+    pub async fn list_agent_conversations(&self) -> Result<AgentConversationListResponse> {
+        self.encrypted_api_call("/v1/agent/conversations", "GET", None::<()>)
+            .await
+    }
+
+    /// Gets items from an agent conversation
+    pub async fn list_agent_conversation_items(
+        &self,
+        conversation_id: &str,
+        limit: Option<i32>,
+        after: Option<&str>,
+        order: Option<&str>,
+    ) -> Result<AgentConversationItemsResponse> {
+        let encoded_id = utf8_percent_encode(conversation_id, NON_ALPHANUMERIC).to_string();
+        let mut url = format!("/v1/agent/conversations/{}/items", encoded_id);
+        let mut params = Vec::new();
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(a) = after {
+            params.push(format!(
+                "after={}",
+                utf8_percent_encode(a, NON_ALPHANUMERIC)
+            ));
+        }
+        if let Some(o) = order {
+            params.push(format!("order={}", o));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        self.encrypted_api_call(&url, "GET", None::<()>).await
+    }
+
+    /// Deletes an agent conversation
+    pub async fn delete_agent_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<DeletedObjectResponse> {
+        let encoded_id = utf8_percent_encode(conversation_id, NON_ALPHANUMERIC).to_string();
+        self.encrypted_api_call(
+            &format!("/v1/agent/conversations/{}", encoded_id),
+            "DELETE",
+            None::<()>,
+        )
+        .await
     }
 }
 
