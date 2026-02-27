@@ -1273,43 +1273,32 @@ impl OpenSecretClient {
                             return None;
                         }
 
-                        // Decrypt the event data - server sends base64 encrypted chunks
-                        match BASE64.decode(&event.data) {
-                            Ok(encrypted_bytes) => {
-                                match crypto::decrypt_data(&session_key, &encrypted_bytes) {
-                                    Ok(decrypted) => match String::from_utf8(decrypted) {
-                                        Ok(json_str) => {
-                                            match serde_json::from_str::<ChatCompletionChunk>(
-                                                &json_str,
-                                            ) {
-                                                Ok(chunk) => Some(Ok(chunk)),
-                                                Err(e) => Some(Err(Error::Api {
-                                                    status: 0,
-                                                    message: format!(
-                                                        "Failed to parse chunk: {}",
-                                                        e
-                                                    ),
-                                                })),
-                                            }
-                                        }
+                        // Decrypt the event data - server sends base64 encrypted chunks.
+                        // Skip non-base64 events (heartbeats, retries, etc.) to match TS SDK.
+                        let encrypted_bytes = match BASE64.decode(&event.data) {
+                            Ok(bytes) => bytes,
+                            Err(_) => return None,
+                        };
+                        match crypto::decrypt_data(&session_key, &encrypted_bytes) {
+                            Ok(decrypted) => match String::from_utf8(decrypted) {
+                                Ok(json_str) => {
+                                    match serde_json::from_str::<ChatCompletionChunk>(&json_str) {
+                                        Ok(chunk) => Some(Ok(chunk)),
                                         Err(e) => Some(Err(Error::Api {
                                             status: 0,
-                                            message: format!(
-                                                "Invalid UTF-8 in decrypted data: {}",
-                                                e
-                                            ),
+                                            message: format!("Failed to parse chunk: {}", e),
                                         })),
-                                    },
-                                    Err(e) => Some(Err(Error::Decryption(format!(
-                                        "Failed to decrypt chunk: {}",
-                                        e
-                                    )))),
+                                    }
                                 }
-                            }
-                            Err(e) => Some(Err(Error::Api {
-                                status: 0,
-                                message: format!("Failed to decode base64: {}", e),
-                            })),
+                                Err(e) => Some(Err(Error::Api {
+                                    status: 0,
+                                    message: format!("Invalid UTF-8 in decrypted data: {}", e),
+                                })),
+                            },
+                            Err(e) => Some(Err(Error::Decryption(format!(
+                                "Failed to decrypt chunk: {}",
+                                e
+                            )))),
                         }
                     }
                     Err(e) => Some(Err(Error::Api {
@@ -1404,82 +1393,68 @@ impl OpenSecretClient {
                             return None;
                         }
 
-                        match BASE64.decode(&event.data) {
-                            Ok(encrypted_bytes) => {
-                                match crypto::decrypt_data(&session_key, &encrypted_bytes) {
-                                    Ok(decrypted) => match String::from_utf8(decrypted) {
-                                        Ok(json_str) => {
-                                            let event_type = event.event.as_str();
-                                            match event_type {
-                                                "agent.message" => {
-                                                    match serde_json::from_str::<AgentMessageEvent>(
-                                                        &json_str,
-                                                    ) {
-                                                        Ok(msg) => {
-                                                            Some(Ok(AgentSseEvent::Message(msg)))
-                                                        }
-                                                        Err(e) => Some(Err(Error::Api {
-                                                            status: 0,
-                                                            message: format!(
-                                                                "Failed to parse agent message: {}",
-                                                                e
-                                                            ),
-                                                        })),
-                                                    }
-                                                }
-                                                "agent.done" => {
-                                                    match serde_json::from_str::<AgentDoneEvent>(
-                                                        &json_str,
-                                                    ) {
-                                                        Ok(done) => {
-                                                            Some(Ok(AgentSseEvent::Done(done)))
-                                                        }
-                                                        Err(e) => Some(Err(Error::Api {
-                                                            status: 0,
-                                                            message: format!(
-                                                                "Failed to parse agent done: {}",
-                                                                e
-                                                            ),
-                                                        })),
-                                                    }
-                                                }
-                                                "agent.error" => {
-                                                    match serde_json::from_str::<AgentErrorEvent>(
-                                                        &json_str,
-                                                    ) {
-                                                        Ok(err) => {
-                                                            Some(Ok(AgentSseEvent::Error(err)))
-                                                        }
-                                                        Err(e) => Some(Err(Error::Api {
-                                                            status: 0,
-                                                            message: format!(
-                                                                "Failed to parse agent error: {}",
-                                                                e
-                                                            ),
-                                                        })),
-                                                    }
-                                                }
-                                                _ => None,
+                        // Skip non-base64 events (heartbeats, retries, etc.)
+                        let encrypted_bytes = match BASE64.decode(&event.data) {
+                            Ok(bytes) => bytes,
+                            Err(_) => return None,
+                        };
+                        match crypto::decrypt_data(&session_key, &encrypted_bytes) {
+                            Ok(decrypted) => match String::from_utf8(decrypted) {
+                                Ok(json_str) => {
+                                    let event_type = event.event.as_str();
+                                    match event_type {
+                                        "agent.message" => {
+                                            match serde_json::from_str::<AgentMessageEvent>(
+                                                &json_str,
+                                            ) {
+                                                Ok(msg) => Some(Ok(AgentSseEvent::Message(msg))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent message: {}",
+                                                        e
+                                                    ),
+                                                })),
                                             }
                                         }
-                                        Err(e) => Some(Err(Error::Api {
-                                            status: 0,
-                                            message: format!(
-                                                "Invalid UTF-8 in decrypted data: {}",
-                                                e
-                                            ),
-                                        })),
-                                    },
-                                    Err(e) => Some(Err(Error::Decryption(format!(
-                                        "Failed to decrypt agent event: {}",
-                                        e
-                                    )))),
+                                        "agent.done" => {
+                                            match serde_json::from_str::<AgentDoneEvent>(&json_str)
+                                            {
+                                                Ok(done) => Some(Ok(AgentSseEvent::Done(done))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent done: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        "agent.error" => {
+                                            match serde_json::from_str::<AgentErrorEvent>(&json_str)
+                                            {
+                                                Ok(err) => Some(Ok(AgentSseEvent::Error(err))),
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent error: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
+                                        _ => None,
+                                    }
                                 }
-                            }
-                            Err(e) => Some(Err(Error::Api {
-                                status: 0,
-                                message: format!("Failed to decode base64: {}", e),
-                            })),
+                                Err(e) => Some(Err(Error::Api {
+                                    status: 0,
+                                    message: format!("Invalid UTF-8 in decrypted data: {}", e),
+                                })),
+                            },
+                            Err(e) => Some(Err(Error::Decryption(format!(
+                                "Failed to decrypt agent event: {}",
+                                e
+                            )))),
                         }
                     }
                     Err(e) => Some(Err(Error::Api {
