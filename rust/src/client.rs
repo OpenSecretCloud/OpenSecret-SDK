@@ -28,7 +28,9 @@ pub struct OpenSecretClient {
 impl OpenSecretClient {
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
         let base_url = base_url.into();
-        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+        let use_mock = base_url.contains("localhost")
+            || base_url.contains("127.0.0.1")
+            || base_url.contains("0.0.0.0");
 
         Ok(Self {
             client: Client::new(),
@@ -41,7 +43,9 @@ impl OpenSecretClient {
 
     pub fn new_with_api_key(base_url: impl Into<String>, api_key: String) -> Result<Self> {
         let base_url = base_url.into();
-        let use_mock = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+        let use_mock = base_url.contains("localhost")
+            || base_url.contains("127.0.0.1")
+            || base_url.contains("0.0.0.0");
 
         Ok(Self {
             client: Client::new(),
@@ -290,14 +294,44 @@ impl OpenSecretClient {
         response.text().await.map_err(Into::into)
     }
 
-    // Encrypted API call helper
-    async fn encrypted_api_call<T: Serialize, U: DeserializeOwned>(
+    // Encrypted API call helper -- mirrors the TypeScript SDK's retry behavior:
+    // - On no session or 400/encryption errors: re-attest and retry once
+    // - On 401: refresh JWT token and retry once
+    async fn encrypted_api_call<T: Serialize + Clone, U: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
         data: Option<T>,
     ) -> Result<U> {
-        // Ensure we have a session
+        match self.encrypted_api_call_inner(endpoint, method, data.clone()).await {
+            Ok(result) => Ok(result),
+            Err(Error::Session(_)) => {
+                // No active session -- re-attest and retry
+                self.perform_attestation_handshake().await?;
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(Error::Api { status: 400, .. }) | Err(Error::Encryption(_)) | Err(Error::Decryption(_)) => {
+                // Bad request or encryption error -- re-attest and retry (matches TS SDK)
+                self.perform_attestation_handshake().await?;
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(Error::Api { status: 401, .. }) => {
+                // Unauthorized -- try refreshing the token, then retry
+                if self.session_manager.get_refresh_token()?.is_some() {
+                    let _ = self.refresh_token().await;
+                }
+                self.encrypted_api_call_inner(endpoint, method, data).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn encrypted_api_call_inner<T: Serialize, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+    ) -> Result<U> {
         let session = self.session_manager.get_session()?.ok_or_else(|| {
             Error::Session(
                 "No active session. Call perform_attestation_handshake first".to_string(),
@@ -306,7 +340,6 @@ impl OpenSecretClient {
 
         let url = format!("{}{}", self.base_url, endpoint);
 
-        // Encrypt the request data if provided
         let encrypted_body = if let Some(data) = data {
             let json = serde_json::to_string(&data)?;
             let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
@@ -317,7 +350,6 @@ impl OpenSecretClient {
             None
         };
 
-        // Build headers
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -326,7 +358,6 @@ impl OpenSecretClient {
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // Add JWT authorization header (API keys are not valid for most endpoints)
         if let Some(token) = self.session_manager.get_access_token()? {
             headers.insert(
                 AUTHORIZATION,
@@ -335,7 +366,6 @@ impl OpenSecretClient {
             );
         }
 
-        // Make the request
         let request_builder = match method {
             "GET" => self.client.get(&url),
             "POST" => self.client.post(&url),
@@ -370,7 +400,6 @@ impl OpenSecretClient {
             });
         }
 
-        // Decrypt the response
         let encrypted_response: EncryptedResponse<U> = response.json().await?;
         let decrypted = crypto::decrypt_data(
             &session.session_key,
@@ -579,6 +608,153 @@ impl OpenSecretClient {
         Ok(response)
     }
 
+    // OAuth Methods
+
+    pub async fn initiate_github_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<GithubAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/github", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_github_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/github/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn initiate_google_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<GoogleAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/google", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_google_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/google/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn initiate_apple_auth(
+        &self,
+        client_id: Uuid,
+        invite_code: Option<String>,
+    ) -> Result<AppleAuthResponse> {
+        let request = OAuthInitRequest {
+            client_id,
+            invite_code,
+        };
+        self.encrypted_api_call("/auth/apple", "POST", Some(request))
+            .await
+    }
+
+    pub async fn handle_apple_callback(
+        &self,
+        code: String,
+        state: String,
+        invite_code: String,
+    ) -> Result<LoginResponse> {
+        let request = OAuthCallbackRequest {
+            code,
+            state,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/apple/callback", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
+    pub async fn handle_apple_native_sign_in(
+        &self,
+        user_identifier: String,
+        identity_token: String,
+        client_id: Uuid,
+        email: Option<String>,
+        given_name: Option<String>,
+        family_name: Option<String>,
+        nonce: Option<String>,
+        invite_code: Option<String>,
+    ) -> Result<LoginResponse> {
+        let request = AppleNativeSignInRequest {
+            user_identifier,
+            identity_token,
+            client_id,
+            email,
+            given_name,
+            family_name,
+            nonce,
+            invite_code,
+        };
+
+        let response: LoginResponse = self
+            .encrypted_api_call("/auth/apple/native", "POST", Some(request))
+            .await?;
+
+        self.session_manager.set_tokens(
+            response.access_token.clone(),
+            Some(response.refresh_token.clone()),
+        )?;
+
+        Ok(response)
+    }
+
     pub async fn refresh_token(&self) -> Result<()> {
         let refresh_token = self
             .session_manager
@@ -587,11 +763,11 @@ impl OpenSecretClient {
 
         let request = RefreshRequest { refresh_token };
 
+        // Use inner call to avoid infinite recursion (encrypted_api_call retries on 401)
         let response: RefreshResponse = self
-            .encrypted_api_call("/refresh", "POST", Some(request))
+            .encrypted_api_call_inner("/refresh", "POST", Some(request))
             .await?;
 
-        // Update tokens
         self.session_manager
             .set_tokens(response.access_token, Some(response.refresh_token))?;
 

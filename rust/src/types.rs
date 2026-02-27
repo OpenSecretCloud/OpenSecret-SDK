@@ -96,6 +96,58 @@ pub struct EncryptedResponse<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
+// OAuth Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuthInitRequest {
+    pub client_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invite_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GithubAuthResponse {
+    pub auth_url: String,
+    #[serde(alias = "csrf_token")]
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleAuthResponse {
+    pub auth_url: String,
+    #[serde(alias = "csrf_token")]
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppleAuthResponse {
+    pub auth_url: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuthCallbackRequest {
+    pub code: String,
+    pub state: String,
+    pub invite_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppleNativeSignInRequest {
+    pub user_identifier: String,
+    pub identity_token: String,
+    pub client_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub given_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invite_code: Option<String>,
+}
+
 // User Profile Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
