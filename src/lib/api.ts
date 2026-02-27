@@ -179,7 +179,7 @@ export async function fetchDelete(key: string): Promise<void> {
 
 export async function fetchDeleteAllKV(): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/kv`,
+    `${getApiUrl()}/protected/kv`,
     "DELETE",
     undefined,
     "Failed to delete all key-value pairs"
@@ -1282,7 +1282,7 @@ function delay(ms: number): Promise<void> {
  */
 export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
   return authenticatedApiCall<{ name: string }, ApiKeyCreateResponse>(
-    `${apiUrl}/protected/api-keys`,
+    `${getApiUrl()}/protected/api-keys`,
     "POST",
     { name },
     "Failed to create API key"
@@ -1311,7 +1311,7 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  */
 export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
   const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
-    `${apiUrl}/protected/api-keys`,
+    `${getApiUrl()}/protected/api-keys`,
     "GET",
     undefined,
     "Failed to list API keys"
@@ -1348,7 +1348,7 @@ export async function deleteApiKey(name: string): Promise<void> {
   // URL-encode the name to handle special characters
   const encodedName = encodeURIComponent(name);
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/api-keys/${encodedName}`,
+    `${getApiUrl()}/protected/api-keys/${encodedName}`,
     "DELETE",
     undefined,
     "Failed to delete API key"
@@ -1602,7 +1602,7 @@ export async function transcribeAudio(
 
   // Use openAiAuthenticatedApiCall to support both JWT and API key auth
   return openAiAuthenticatedApiCall<WhisperTranscriptionRequest, WhisperTranscriptionResponse>(
-    `${apiUrl}/v1/audio/transcriptions`,
+    `${getApiUrl()}/v1/audio/transcriptions`,
     "POST",
     requestData,
     "Failed to transcribe audio",
@@ -1766,7 +1766,7 @@ export type BatchDeleteConversationsResponse = {
 export async function fetchResponsesList(
   params?: ResponsesListParams
 ): Promise<ResponsesListResponse> {
-  let url = `${apiUrl}/v1/responses`;
+  let url = `${getApiUrl()}/v1/responses`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -1816,7 +1816,7 @@ export async function fetchResponsesList(
  */
 export async function fetchResponse(responseId: string): Promise<ResponsesRetrieveResponse> {
   return authenticatedApiCall<void, ResponsesRetrieveResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
     "GET",
     undefined,
     "Failed to retrieve response"
@@ -1857,7 +1857,7 @@ export type ResponsesCancelResponse = {
  */
 export async function cancelResponse(responseId: string): Promise<ResponsesCancelResponse> {
   return authenticatedApiCall<void, ResponsesCancelResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
     "POST",
     undefined,
     "Failed to cancel response"
@@ -1906,7 +1906,7 @@ export async function createConversation(metadata?: Record<string, any>): Promis
   const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
 
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
-    `${apiUrl}/v1/conversations`,
+    `${getApiUrl()}/v1/conversations`,
     "POST",
     requestData,
     "Failed to create conversation"
@@ -1931,7 +1931,7 @@ export async function createConversation(metadata?: Record<string, any>): Promis
  */
 export async function getConversation(conversationId: string): Promise<Conversation> {
   return authenticatedApiCall<void, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "GET",
     undefined,
     "Failed to retrieve conversation"
@@ -1963,7 +1963,7 @@ export async function updateConversation(
   const requestData: ConversationUpdateRequest = { metadata };
 
   return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "POST",
     requestData,
     "Failed to update conversation"
@@ -1996,7 +1996,7 @@ export async function deleteConversation(
   conversationId: string
 ): Promise<ConversationDeleteResponse> {
   return authenticatedApiCall<void, ConversationDeleteResponse>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "DELETE",
     undefined,
     "Failed to delete conversation"
@@ -2024,7 +2024,7 @@ export async function deleteConversation(
  */
 export async function deleteConversations(): Promise<ConversationsDeleteResponse> {
   return authenticatedApiCall<void, ConversationsDeleteResponse>(
-    `${apiUrl}/v1/conversations`,
+    `${getApiUrl()}/v1/conversations`,
     "DELETE",
     undefined,
     "Failed to delete conversations"
@@ -2062,7 +2062,7 @@ export async function batchDeleteConversations(
   ids: string[]
 ): Promise<BatchDeleteConversationsResponse> {
   return authenticatedApiCall<BatchDeleteConversationsRequest, BatchDeleteConversationsResponse>(
-    `${apiUrl}/v1/conversations/batch-delete`,
+    `${getApiUrl()}/v1/conversations/batch-delete`,
     "POST",
     { ids },
     "Failed to batch delete conversations"
@@ -2096,7 +2096,7 @@ export async function addConversationItems(
   items: Partial<ConversationItem>[]
 ): Promise<Conversation> {
   return authenticatedApiCall<{ items: Partial<ConversationItem>[] }, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
     "POST",
     { items },
     "Failed to add conversation items"
@@ -2132,7 +2132,7 @@ export async function listConversationItems(
     before?: string;
   }
 ): Promise<ConversationItemsResponse> {
-  let url = `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
+  let url = `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2183,7 +2183,7 @@ export async function listConversations(params?: {
   after?: string;
   before?: string;
 }): Promise<ConversationsListResponse> {
-  let url = `${apiUrl}/v1/conversations`;
+  let url = `${getApiUrl()}/v1/conversations`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2240,7 +2240,7 @@ export async function listConversations(params?: {
  */
 export async function createResponse(request: ResponsesCreateRequest): Promise<any> {
   return authenticatedApiCall<ResponsesCreateRequest, any>(
-    `${apiUrl}/v1/responses`,
+    `${getApiUrl()}/v1/responses`,
     "POST",
     request,
     "Failed to create response"
@@ -2270,7 +2270,7 @@ export async function createResponse(request: ResponsesCreateRequest): Promise<a
  */
 export async function deleteResponse(responseId: string): Promise<ResponsesDeleteResponse> {
   return authenticatedApiCall<void, ResponsesDeleteResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
     "DELETE",
     undefined,
     "Failed to delete response"
@@ -2345,7 +2345,7 @@ export type InstructionDeleteResponse = {
  */
 export async function createInstruction(request: InstructionCreateRequest): Promise<Instruction> {
   return authenticatedApiCall<InstructionCreateRequest, Instruction>(
-    `${apiUrl}/v1/instructions`,
+    `${getApiUrl()}/v1/instructions`,
     "POST",
     request,
     "Failed to create instruction"
@@ -2383,7 +2383,7 @@ export async function createInstruction(request: InstructionCreateRequest): Prom
 export async function listInstructions(
   params?: InstructionListParams
 ): Promise<InstructionListResponse> {
-  let url = `${apiUrl}/v1/instructions`;
+  let url = `${getApiUrl()}/v1/instructions`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2427,7 +2427,7 @@ export async function listInstructions(
  */
 export async function getInstruction(instructionId: string): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "GET",
     undefined,
     "Failed to retrieve instruction"
@@ -2462,7 +2462,7 @@ export async function updateInstruction(
   request: InstructionUpdateRequest
 ): Promise<Instruction> {
   return authenticatedApiCall<InstructionUpdateRequest, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "POST",
     request,
     "Failed to update instruction"
@@ -2491,7 +2491,7 @@ export async function updateInstruction(
  */
 export async function deleteInstruction(instructionId: string): Promise<InstructionDeleteResponse> {
   return authenticatedApiCall<void, InstructionDeleteResponse>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "DELETE",
     undefined,
     "Failed to delete instruction"
@@ -2518,7 +2518,7 @@ export async function deleteInstruction(instructionId: string): Promise<Instruct
  */
 export async function setDefaultInstruction(instructionId: string): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
     "POST",
     undefined,
     "Failed to set default instruction"
