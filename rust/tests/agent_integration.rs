@@ -42,6 +42,7 @@ async fn setup_authenticated_client() -> Result<OpenSecretClient> {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_get_agent_config() {
     let client = setup_authenticated_client()
         .await
@@ -69,6 +70,7 @@ async fn test_get_agent_config() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_update_agent_config() {
     let client = setup_authenticated_client()
         .await
@@ -114,6 +116,7 @@ async fn test_update_agent_config() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_list_memory_blocks() {
     let client = setup_authenticated_client()
         .await
@@ -145,6 +148,7 @@ async fn test_list_memory_blocks() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_get_memory_block() {
     let client = setup_authenticated_client()
         .await
@@ -168,6 +172,7 @@ async fn test_get_memory_block() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_update_memory_block() {
     let client = setup_authenticated_client()
         .await
@@ -212,6 +217,7 @@ async fn test_update_memory_block() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_archival_memory_insert_and_delete() {
     let client = setup_authenticated_client()
         .await
@@ -243,6 +249,7 @@ async fn test_archival_memory_insert_and_delete() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_memory_search() {
     let client = setup_authenticated_client()
         .await
@@ -274,6 +281,7 @@ async fn test_memory_search() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_agent_conversations() {
     let client = setup_authenticated_client()
         .await
@@ -300,6 +308,7 @@ async fn test_agent_conversations() {
 }
 
 #[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_agent_chat_sse() {
     let client = setup_authenticated_client()
         .await
