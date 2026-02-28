@@ -5,6 +5,10 @@
     "access": "public"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MakePrisms/OpenSecret-SDK"
+  },
   "type": "module",
   "files": [
     "dist"
