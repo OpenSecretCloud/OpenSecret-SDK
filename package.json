@@ -1,6 +1,9 @@
 {
-  "name": "@opensecret/react",
-  "version": "1.5.4",
+  "name": "@agicash/opensecret-sdk",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "type": "module",
   "files": [
