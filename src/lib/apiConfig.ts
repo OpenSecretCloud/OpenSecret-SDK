@@ -2,6 +2,8 @@
  * API configuration service that manages endpoints for both app and platform APIs
  */
 
+import { getConfig, isConfigured } from "./config";
+
 export type ApiContext = "app" | "platform";
 
 export interface ApiEndpoint {
@@ -13,14 +15,12 @@ export interface ApiEndpoint {
  * ApiConfig service that manages URL configuration for both contexts
  */
 class ApiConfigService {
-  private _appApiUrl: string = "";
   private _platformApiUrl: string = "";
 
   /**
-   * Configure the API URLs for both app and platform contexts
+   * Configure the platform API URL
    */
-  configure(appApiUrl: string, platformApiUrl: string) {
-    this._appApiUrl = appApiUrl;
+  configurePlatform(platformApiUrl: string) {
     this._platformApiUrl = platformApiUrl;
   }
 
@@ -32,10 +32,10 @@ class ApiConfigService {
   }
 
   /**
-   * Get the app API URL
+   * Get the app API URL (derived from global config)
    */
   get appApiUrl(): string {
-    return this._appApiUrl;
+    return isConfigured() ? getConfig().apiUrl : "";
   }
 
   /**
@@ -52,7 +52,7 @@ class ApiConfigService {
     const isPlatform = this.isPlatformPath(path);
 
     return {
-      baseUrl: isPlatform ? this._platformApiUrl : this._appApiUrl,
+      baseUrl: isPlatform ? this._platformApiUrl : this.appApiUrl,
       context: isPlatform ? "platform" : "app"
     };
   }

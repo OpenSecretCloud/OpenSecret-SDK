@@ -1,5 +1,4 @@
 import { configure } from "../config";
-import { setApiUrl } from "../api";
 
 const TEST_API_URL = process.env.VITE_OPEN_SECRET_API_URL;
 
@@ -15,8 +14,5 @@ configure({
   apiUrl: TEST_API_URL,
   clientId: TEST_CLIENT_ID
 });
-
-// Also set the API URL directly for backward compatibility with existing tests
-setApiUrl(TEST_API_URL);
 
 export { TEST_API_URL, TEST_CLIENT_ID };

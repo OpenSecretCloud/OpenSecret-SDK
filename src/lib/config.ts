@@ -34,22 +34,11 @@ export function configure(options: OpenSecretConfig): void {
   if (!options.clientId || options.clientId.trim() === '') {
     throw new Error('OpenSecret SDK requires a non-empty clientId');
   }
-  
+
   config = {
     apiUrl: options.apiUrl.replace(/\/$/, ''), // Remove trailing slash
     clientId: options.clientId
   };
-  
-  // Update the API module with the new URL
-  import('./api').then(({ setApiUrl }) => {
-    setApiUrl(config!.apiUrl);
-  });
-  
-  // Update apiConfig service
-  import('./apiConfig').then(({ apiConfig }) => {
-    const platformUrl = apiConfig.platformApiUrl || '';
-    apiConfig.configure(config!.apiUrl, platformUrl);
-  });
 }
 
 /**
