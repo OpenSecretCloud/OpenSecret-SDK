@@ -15,8 +15,7 @@ if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID || !API_URL) {
 async function setupTestUser() {
   const { access_token, refresh_token } = await fetchLogin(
     TEST_EMAIL!,
-    TEST_PASSWORD!,
-    TEST_CLIENT_ID!
+    TEST_PASSWORD!
   );
   window.localStorage.setItem("access_token", access_token);
   window.localStorage.setItem("refresh_token", refresh_token);
