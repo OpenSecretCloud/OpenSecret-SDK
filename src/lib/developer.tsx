@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as platformApi from "./platformApi";
 import { setPlatformApiUrl } from "./platformApi";
+import { apiConfig } from "./apiConfig";
 import { getAttestation } from "./getAttestation";
 import { authenticate } from "./attestation";
 import {
@@ -518,20 +519,7 @@ export function OpenSecretDeveloper({
       );
     }
     setPlatformApiUrl(apiUrl);
-
-    // Configure the apiConfig service with the platform URL
-    // Using dynamic import to avoid circular dependencies
-    import("./apiConfig")
-      .then(({ apiConfig }) => {
-        const appUrl = apiConfig.appApiUrl || "";
-        apiConfig.configure(appUrl, apiUrl);
-      })
-      .catch((error) => {
-        console.error("Failed to load apiConfig:", error);
-        throw new Error(
-          "Failed to initialize OpenSecretDeveloper - could not load required dependencies"
-        );
-      });
+    apiConfig.configurePlatform(apiUrl);
   }, [apiUrl]);
 
   async function fetchDeveloper() {

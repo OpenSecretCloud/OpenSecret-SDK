@@ -13,6 +13,7 @@ import {
 import type { AttestationDocument } from "./attestation";
 import type { LoginResponse, ThirdPartyTokenResponse, DocumentResponse } from "./api";
 import { PcrConfig } from "./pcr";
+import { configure } from "./config";
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -935,6 +936,26 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
 
 /**
  * Provider component for OpenSecret authentication and key-value storage.
+ * 
+ * @deprecated The OpenSecretProvider is deprecated. Instead, use the `configure` function
+ * and import API functions directly. This provider will be removed in a future version.
+ * 
+ * Migration guide:
+ * ```tsx
+ * // Old approach (deprecated)
+ * <OpenSecretProvider apiUrl="..." clientId="...">
+ *   <App />
+ * </OpenSecretProvider>
+ * 
+ * // New approach
+ * import { configure, signIn, get, put } from '@opensecret/react';
+ * 
+ * configure({ apiUrl: '...', clientId: '...' });
+ * 
+ * // Use functions directly
+ * await signIn(email, password);
+ * const value = await get('key');
+ * ```
  *
  * @param props - Configuration properties for the OpenSecret provider
  * @param props.children - React child components to be wrapped by the provider
@@ -1005,14 +1026,9 @@ export function OpenSecretProvider({
         "OpenSecretProvider requires a non-empty clientId. Please provide a valid project UUID."
       );
     }
-    api.setApiUrl(apiUrl);
-
-    // Configure the apiConfig service with the app URL
-    // Using dynamic import to avoid circular dependencies
-    import("./apiConfig").then(({ apiConfig }) => {
-      const platformUrl = apiConfig.platformApiUrl || "";
-      apiConfig.configure(apiUrl, platformUrl);
-    });
+    
+    // Configure the SDK with the provided values
+    configure({ apiUrl, clientId });
   }, [apiUrl, clientId]);
 
   // Create aiCustomFetch when API is configured (supports JWT or API key internally)
@@ -1058,10 +1074,7 @@ export function OpenSecretProvider({
   async function signIn(email: string, password: string) {
     console.log("Signing in");
     try {
-      const { access_token, refresh_token } = await api.fetchLogin(email, password, clientId);
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on new sign-in to ensure user-scoped keys
+      await api.fetchLogin(email, password);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1072,16 +1085,12 @@ export function OpenSecretProvider({
 
   async function signUp(email: string, password: string, inviteCode: string, name?: string) {
     try {
-      const { access_token, refresh_token } = await api.fetchSignUp(
+      await api.fetchSignUp(
         email,
         password,
         inviteCode,
-        clientId,
         name || null
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on new sign-up to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1093,10 +1102,7 @@ export function OpenSecretProvider({
   async function signInGuest(id: string, password: string) {
     console.log("Signing in Guest");
     try {
-      const { access_token, refresh_token } = await api.fetchGuestLogin(id, password, clientId);
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on guest sign-in to ensure user-scoped keys
+      await api.fetchGuestLogin(id, password);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1107,17 +1113,13 @@ export function OpenSecretProvider({
 
   async function signUpGuest(password: string, inviteCode: string) {
     try {
-      const { access_token, refresh_token, id } = await api.fetchGuestSignUp(
+      const response = await api.fetchGuestSignUp(
         password,
-        inviteCode,
-        clientId
+        inviteCode
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on guest sign-up to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
-      return { access_token, refresh_token, id };
+      return response;
     } catch (error) {
       console.error(error);
       throw error;
@@ -1135,19 +1137,7 @@ export function OpenSecretProvider({
   }
 
   async function signOut() {
-    const refresh_token = window.localStorage.getItem("refresh_token");
-    if (refresh_token) {
-      try {
-        await api.fetchLogout(refresh_token);
-      } catch (error) {
-        console.error("Error during logout:", error);
-      }
-    }
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    sessionStorage.removeItem("sessionKey");
-    sessionStorage.removeItem("sessionId");
-    // Clear any in-memory API key so no post-logout calls can use it
+    await api.fetchLogout();
     setApiKey(undefined);
     setAuth({
       loading: false,
@@ -1157,7 +1147,7 @@ export function OpenSecretProvider({
 
   const initiateGitHubAuth = async (inviteCode: string) => {
     try {
-      return await api.initiateGitHubAuth(clientId, inviteCode);
+      return await api.initiateGitHubAuth(inviteCode);
     } catch (error) {
       console.error("Failed to initiate GitHub auth:", error);
       throw error;
@@ -1166,14 +1156,11 @@ export function OpenSecretProvider({
 
   const handleGitHubCallback = async (code: string, state: string, inviteCode: string) => {
     try {
-      const { access_token, refresh_token } = await api.handleGitHubCallback(
+      await api.handleGitHubCallback(
         code,
         state,
         inviteCode
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on OAuth sign-in to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1184,7 +1171,7 @@ export function OpenSecretProvider({
 
   const initiateGoogleAuth = async (inviteCode: string) => {
     try {
-      return await api.initiateGoogleAuth(clientId, inviteCode);
+      return await api.initiateGoogleAuth(inviteCode);
     } catch (error) {
       console.error("Failed to initiate Google auth:", error);
       throw error;
@@ -1193,14 +1180,11 @@ export function OpenSecretProvider({
 
   const handleGoogleCallback = async (code: string, state: string, inviteCode: string) => {
     try {
-      const { access_token, refresh_token } = await api.handleGoogleCallback(
+      await api.handleGoogleCallback(
         code,
         state,
         inviteCode
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on OAuth sign-in to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1211,7 +1195,7 @@ export function OpenSecretProvider({
 
   const initiateAppleAuth = async (inviteCode: string) => {
     try {
-      return await api.initiateAppleAuth(clientId, inviteCode);
+      return await api.initiateAppleAuth(inviteCode);
     } catch (error) {
       console.error("Failed to initiate Apple auth:", error);
       throw error;
@@ -1220,14 +1204,11 @@ export function OpenSecretProvider({
 
   const handleAppleCallback = async (code: string, state: string, inviteCode: string) => {
     try {
-      const { access_token, refresh_token } = await api.handleAppleCallback(
+      await api.handleAppleCallback(
         code,
         state,
         inviteCode
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on OAuth sign-in to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1238,14 +1219,10 @@ export function OpenSecretProvider({
 
   const handleAppleNativeSignIn = async (appleUser: api.AppleUser, inviteCode?: string) => {
     try {
-      const { access_token, refresh_token } = await api.handleAppleNativeSignIn(
+      await api.handleAppleNativeSignIn(
         appleUser,
-        clientId,
         inviteCode
       );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
-      // Clear API key on OAuth sign-in to ensure user-scoped keys
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1292,14 +1269,8 @@ export function OpenSecretProvider({
     requestNewVerificationEmail: api.requestNewVerificationCode,
     changePassword: api.changePassword,
     refreshAccessToken: api.refreshToken,
-    requestPasswordReset: (email: string, hashedSecret: string) =>
-      api.requestPasswordReset(email, hashedSecret, clientId),
-    confirmPasswordReset: (
-      email: string,
-      alphanumericCode: string,
-      plaintextSecret: string,
-      newPassword: string
-    ) => api.confirmPasswordReset(email, alphanumericCode, plaintextSecret, newPassword, clientId),
+    requestPasswordReset: api.requestPasswordReset,
+    confirmPasswordReset: api.confirmPasswordReset,
     requestAccountDeletion: api.requestAccountDeletion,
     confirmAccountDeletion: api.confirmAccountDeletion,
     initiateGitHubAuth,

@@ -36,3 +36,6 @@ global.localStorage = storageMock();
 global.sessionStorage = storageMock();
 // @ts-expect-error - window is not defined
 global.window = global;
+
+// Import setup to configure the SDK for tests
+import "./setup";

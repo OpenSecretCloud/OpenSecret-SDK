@@ -1,13 +1,2 @@
-import { setApiUrl } from "../api";
-
-// Get the API URL from environment variables
-const apiUrl = process.env.VITE_OPEN_SECRET_API_URL;
-
-if (!apiUrl) {
-  throw new Error("VITE_OPEN_SECRET_API_URL must be set in environment variables");
-}
-
-// Set the API URL before tests run
-setApiUrl(apiUrl);
-
-console.log("API URL set to:", apiUrl);
+// This file is no longer needed as the SDK is now configured via the setup.ts file
+// The setup.ts file handles all configuration including API URL and client ID

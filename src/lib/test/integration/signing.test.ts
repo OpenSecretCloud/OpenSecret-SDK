@@ -3,19 +3,19 @@ import { fetchLogin, signMessage, fetchPublicKey, fetchPrivateKeyBytes } from ".
 import { bytesToHex } from "../utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
+import "../setup"; // Configure the SDK
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
-const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 
-if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID) {
+if (!TEST_EMAIL || !TEST_PASSWORD) {
   throw new Error("Test credentials must be set in .env.local");
 }
 
 async function tryEmailLogin() {
   try {
     // Try to login
-    const loginResponse = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    const loginResponse = await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
     window.localStorage.setItem("access_token", loginResponse.access_token);
     window.localStorage.setItem("refresh_token", loginResponse.refresh_token);
 

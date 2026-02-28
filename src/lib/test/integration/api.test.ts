@@ -22,25 +22,25 @@ import {
   fetchList,
   fetchDeleteAllKV
 } from "../../api";
+import "../setup"; // Configure the SDK
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 const TEST_NAME = process.env.VITE_TEST_NAME;
-const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 
-if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_NAME || !TEST_CLIENT_ID) {
+if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_NAME) {
   throw new Error("Test credentials must be set in .env.local");
 }
 
 async function tryEmailLogin() {
   // Ensure the test user exists
   try {
-    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   } catch (error) {
     console.warn(error);
     console.log("Login failed, attempting signup");
-    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", TEST_CLIENT_ID!, TEST_NAME!);
-    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    await fetchSignUp(TEST_EMAIL!, TEST_PASSWORD!, "", TEST_NAME!);
+    return await fetchLogin(TEST_EMAIL!, TEST_PASSWORD!);
   }
 }
 
@@ -68,20 +68,20 @@ test("Refresh token works", async () => {
 });
 
 test("Logout doesn't error", async () => {
-  const { refresh_token } = await tryEmailLogin();
-  await fetchLogout(refresh_token);
+  await tryEmailLogin();
+  await fetchLogout();
 });
 
 test("Guest signup and login flow", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "", TEST_CLIENT_ID!);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
   expect(guestSignup.id).toBeDefined();
   expect(guestSignup.email).toBeNull();
   expect(guestSignup.access_token).toBeDefined();
   expect(guestSignup.refresh_token).toBeDefined();
 
   // Login as guest
-  const guestLogin = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!, TEST_CLIENT_ID!);
+  const guestLogin = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
   expect(guestLogin.id).toBe(guestSignup.id);
   expect(guestLogin.access_token).toBeDefined();
 
@@ -124,14 +124,14 @@ test("Guest signup and login flow", async () => {
   }
 
   // Try login with new email and password (should succeed)
-  const emailLogin = await fetchLogin(newEmail, newPassword, TEST_CLIENT_ID!);
+  const emailLogin = await fetchLogin(newEmail, newPassword);
   expect(emailLogin.id).toBe(guestSignup.id);
   expect(emailLogin.email).toBe(newEmail);
   expect(emailLogin.access_token).toBeDefined();
 
   // Try guest login with old credentials (should fail)
   try {
-    await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!, TEST_CLIENT_ID!);
+    await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
     throw new Error("Should not be able to login with old guest credentials");
   } catch (error: any) {
     expect(error.message).toBe("Invalid email, password, or login method");
@@ -141,8 +141,8 @@ test("Guest signup and login flow", async () => {
 
 test("Guest refresh token works", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "", TEST_CLIENT_ID!);
-  const guestLogin = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!, TEST_CLIENT_ID!);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
+  const guestLogin = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
 
   // Set tokens for authenticated requests
   window.localStorage.setItem("access_token", guestLogin.access_token);
@@ -160,9 +160,9 @@ test("Guest refresh token works", async () => {
 
 test("Guest logout doesn't error", async () => {
   // Sign up as guest
-  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "", TEST_CLIENT_ID!);
-  const { refresh_token } = await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!, TEST_CLIENT_ID!);
-  await fetchLogout(refresh_token);
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "");
+  await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!);
+  await fetchLogout();
 });
 
 test("Third party token generation", async () => {

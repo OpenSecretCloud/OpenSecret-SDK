@@ -1,15 +1,10 @@
 import { encode } from "@stablelib/base64";
 import { authenticatedApiCall, encryptedApiCall, openAiAuthenticatedApiCall } from "./encryptedApi";
 import type { Model } from "openai/resources/models.js";
-
-let apiUrl = "";
-
-export function setApiUrl(url: string) {
-  apiUrl = url;
-}
+import { getConfig } from "./config";
 
 export function getApiUrl(): string {
-  return apiUrl;
+  return getConfig().apiUrl;
 }
 
 export type LoginResponse = {
@@ -31,7 +26,7 @@ export type UserResponse = {
   };
 };
 
-type RefreshResponse = {
+export type RefreshResponse = {
   access_token: string;
   refresh_token: string;
 };
@@ -45,36 +40,48 @@ export type KVListItem = {
 
 export async function fetchLogin(
   email: string,
-  password: string,
-  client_id: string
+  password: string
 ): Promise<LoginResponse> {
-  return encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
-    `${apiUrl}/login`,
+  const { clientId } = getConfig();
+  const response = await encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
+    `${getApiUrl()}/login`,
     "POST",
-    { email, password, client_id }
+    { email, password, client_id: clientId }
   );
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchGuestLogin(
   id: string,
-  password: string,
-  client_id: string
+  password: string
 ): Promise<LoginResponse> {
-  return encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
-    `${apiUrl}/login`,
+  const { clientId } = getConfig();
+  const response = await encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
+    `${getApiUrl()}/login`,
     "POST",
-    { id, password, client_id }
+    { id, password, client_id: clientId }
   );
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchSignUp(
   email: string,
   password: string,
   inviteCode: string,
-  client_id: string,
   name?: string | null
 ): Promise<LoginResponse> {
-  return encryptedApiCall<
+  const { clientId } = getConfig();
+  const response = await encryptedApiCall<
     {
       email: string;
       password: string;
@@ -83,28 +90,40 @@ export async function fetchSignUp(
       client_id: string;
     },
     LoginResponse
-  >(`${apiUrl}/register`, "POST", {
+  >(`${getApiUrl()}/register`, "POST", {
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
-    client_id,
+    client_id: clientId,
     name
   });
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function fetchGuestSignUp(
   password: string,
-  inviteCode: string,
-  client_id: string
+  inviteCode: string
 ): Promise<LoginResponse> {
-  return encryptedApiCall<
+  const { clientId } = getConfig();
+  const response = await encryptedApiCall<
     { password: string; inviteCode: string; client_id: string },
     LoginResponse
-  >(`${apiUrl}/register`, "POST", {
+  >(`${getApiUrl()}/register`, "POST", {
     password,
     inviteCode: inviteCode.toLowerCase(),
-    client_id
+    client_id: clientId
   });
+  
+  // Store tokens automatically
+  window.localStorage.setItem("access_token", response.access_token);
+  window.localStorage.setItem("refresh_token", response.refresh_token);
+  
+  return response;
 }
 
 export async function refreshToken(): Promise<RefreshResponse> {
@@ -115,7 +134,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
   try {
     const response = await encryptedApiCall<typeof refreshData, RefreshResponse>(
-      `${apiUrl}/refresh`,
+      `${getApiUrl()}/refresh`,
       "POST",
       refreshData,
       undefined,
@@ -133,7 +152,7 @@ export async function refreshToken(): Promise<RefreshResponse> {
 
 export async function fetchUser(): Promise<UserResponse> {
   return authenticatedApiCall<void, UserResponse>(
-    `${apiUrl}/protected/user`,
+    `${getApiUrl()}/protected/user`,
     "GET",
     undefined,
     "Failed to fetch user"
@@ -142,7 +161,7 @@ export async function fetchUser(): Promise<UserResponse> {
 
 export async function fetchPut(key: string, value: string): Promise<string> {
   return authenticatedApiCall<string, string>(
-    `${apiUrl}/protected/kv/${key}`,
+    `${getApiUrl()}/protected/kv/${key}`,
     "PUT",
     value,
     "Failed to put key-value pair"
@@ -151,7 +170,7 @@ export async function fetchPut(key: string, value: string): Promise<string> {
 
 export async function fetchDelete(key: string): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/kv/${key}`,
+    `${getApiUrl()}/protected/kv/${key}`,
     "DELETE",
     undefined,
     "Failed to delete key-value pair"
@@ -160,7 +179,7 @@ export async function fetchDelete(key: string): Promise<void> {
 
 export async function fetchDeleteAllKV(): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/kv`,
+    `${getApiUrl()}/protected/kv`,
     "DELETE",
     undefined,
     "Failed to delete all key-value pairs"
@@ -170,7 +189,7 @@ export async function fetchDeleteAllKV(): Promise<void> {
 export async function fetchGet(key: string): Promise<string | undefined> {
   try {
     const data = await authenticatedApiCall<void, string>(
-      `${apiUrl}/protected/kv/${key}`,
+      `${getApiUrl()}/protected/kv/${key}`,
       "GET",
       undefined,
       "Failed to get key-value pair"
@@ -184,21 +203,34 @@ export async function fetchGet(key: string): Promise<string | undefined> {
 
 export async function fetchList(): Promise<KVListItem[]> {
   return authenticatedApiCall<void, KVListItem[]>(
-    `${apiUrl}/protected/kv`,
+    `${getApiUrl()}/protected/kv`,
     "GET",
     undefined,
     "Failed to list key-value pairs"
   );
 }
 
-export async function fetchLogout(refresh_token: string): Promise<void> {
-  const refreshData = { refresh_token };
-  return encryptedApiCall<typeof refreshData, void>(`${apiUrl}/logout`, "POST", refreshData);
+export async function fetchLogout(): Promise<void> {
+  const refresh_token = window.localStorage.getItem("refresh_token");
+  
+  if (refresh_token) {
+    try {
+      const refreshData = { refresh_token };
+      await encryptedApiCall<typeof refreshData, void>(`${getApiUrl()}/logout`, "POST", refreshData);
+    } catch (error) {
+      console.error("Error during logout API call:", error);
+    }
+  }
+  
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  sessionStorage.removeItem("sessionKey");
+  sessionStorage.removeItem("sessionId");
 }
 
 export async function verifyEmail(code: string): Promise<void> {
   return encryptedApiCall<void, void>(
-    `${apiUrl}/verify-email/${code}`,
+    `${getApiUrl()}/verify-email/${code}`,
     "GET",
     undefined,
     undefined,
@@ -208,7 +240,7 @@ export async function verifyEmail(code: string): Promise<void> {
 
 export async function requestNewVerificationCode(): Promise<void> {
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/request_verification`,
+    `${getApiUrl()}/protected/request_verification`,
     "POST",
     undefined,
     "Failed to request new verification code"
@@ -219,7 +251,7 @@ export async function fetchAttestationDocument(
   nonce: string,
   explicitApiUrl?: string
 ): Promise<string> {
-  const url = explicitApiUrl || apiUrl;
+  const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/attestation/${nonce}`);
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
@@ -233,7 +265,7 @@ export async function keyExchange(
   nonce: string,
   explicitApiUrl?: string
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
-  const url = explicitApiUrl || apiUrl;
+  const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/key_exchange`, {
     method: "POST",
     headers: {
@@ -251,16 +283,16 @@ export async function keyExchange(
 
 export async function requestPasswordReset(
   email: string,
-  hashedSecret: string,
-  client_id: string
+  hashedSecret: string
 ): Promise<void> {
+  const { clientId } = getConfig();
   const resetData = {
     email,
     hashed_secret: hashedSecret,
-    client_id
+    client_id: clientId
   };
   return encryptedApiCall<typeof resetData, void>(
-    `${apiUrl}/password-reset/request`,
+    `${getApiUrl()}/password-reset/request`,
     "POST",
     resetData,
     undefined,
@@ -272,18 +304,18 @@ export async function confirmPasswordReset(
   email: string,
   alphanumericCode: string,
   plaintextSecret: string,
-  newPassword: string,
-  client_id: string
+  newPassword: string
 ): Promise<void> {
+  const { clientId } = getConfig();
   const confirmData = {
     email,
     alphanumeric_code: alphanumericCode,
     plaintext_secret: plaintextSecret,
     new_password: newPassword,
-    client_id
+    client_id: clientId
   };
   return encryptedApiCall<typeof confirmData, void>(
-    `${apiUrl}/password-reset/confirm`,
+    `${getApiUrl()}/password-reset/confirm`,
     "POST",
     confirmData,
     undefined,
@@ -297,7 +329,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
     new_password: newPassword
   };
   return authenticatedApiCall<typeof changePasswordData, void>(
-    `${apiUrl}/protected/change_password`,
+    `${getApiUrl()}/protected/change_password`,
     "POST",
     changePasswordData,
     "Failed to change password"
@@ -305,14 +337,14 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function initiateGitHubAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<GithubAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GithubAuthResponse>(
-      `${apiUrl}/auth/github`,
+      `${getApiUrl()}/auth/github`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate GitHub auth"
     );
@@ -333,13 +365,19 @@ export async function handleGitHubCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/github/callback`,
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
+      `${getApiUrl()}/auth/github/callback`,
       "POST",
       callbackData,
       undefined,
       "GitHub callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed GitHub callback error:", error);
     if (error instanceof Error) {
@@ -385,14 +423,14 @@ export type AppleAuthResponse = {
 };
 
 export async function initiateGoogleAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<GoogleAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, GoogleAuthResponse>(
-      `${apiUrl}/auth/google`,
+      `${getApiUrl()}/auth/google`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate Google auth"
     );
@@ -413,13 +451,19 @@ export async function handleGoogleCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/google/callback`,
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
+      `${getApiUrl()}/auth/google/callback`,
       "POST",
       callbackData,
       undefined,
       "Google callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Google callback error:", error);
     if (error instanceof Error) {
@@ -459,14 +503,14 @@ export async function handleGoogleCallback(
  * The handleAppleCallback function should be used to complete the authentication process.
  */
 export async function initiateAppleAuth(
-  client_id: string,
   inviteCode?: string
 ): Promise<AppleAuthResponse> {
+  const { clientId } = getConfig();
   try {
     return await encryptedApiCall<{ invite_code?: string; client_id: string }, AppleAuthResponse>(
-      `${apiUrl}/auth/apple`,
+      `${getApiUrl()}/auth/apple`,
       "POST",
-      inviteCode ? { invite_code: inviteCode, client_id } : { client_id },
+      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
       undefined,
       "Failed to initiate Apple auth"
     );
@@ -502,13 +546,19 @@ export async function handleAppleCallback(
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
-    return await encryptedApiCall<typeof callbackData, LoginResponse>(
-      `${apiUrl}/auth/apple/callback`,
+    const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
+      `${getApiUrl()}/auth/apple/callback`,
       "POST",
       callbackData,
       undefined,
       "Apple callback failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Apple callback error:", error);
     if (error instanceof Error) {
@@ -576,24 +626,30 @@ export type AppleUser = {
  */
 export async function handleAppleNativeSignIn(
   appleUser: AppleUser,
-  client_id: string,
   inviteCode?: string
 ): Promise<LoginResponse> {
+  const { clientId } = getConfig();
   // Combine the Apple user data with our app's client ID
   const signInData = {
     ...appleUser,
-    client_id,
+    client_id: clientId,
     ...(inviteCode ? { invite_code: inviteCode } : {})
   };
 
   try {
-    return await encryptedApiCall<typeof signInData, LoginResponse>(
-      `${apiUrl}/auth/apple/native`,
+    const response = await encryptedApiCall<typeof signInData, LoginResponse>(
+      `${getApiUrl()}/auth/apple/native`,
       "POST",
       signInData,
       undefined,
       "Apple Sign-In failed"
     );
+    
+    // Store tokens automatically
+    window.localStorage.setItem("access_token", response.access_token);
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+    
+    return response;
   } catch (error) {
     console.error("Detailed Apple Sign-In error:", error);
     if (error instanceof Error) {
@@ -662,7 +718,7 @@ export type KeyOptions = {
  */
 export async function fetchPrivateKey(key_options?: KeyOptions): Promise<PrivateKeyResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/private_key`;
+  let url = `${getApiUrl()}/protected/private_key`;
   const queryParams = [];
 
   // Add seed phrase derivation path if present
@@ -730,7 +786,7 @@ export async function fetchPrivateKeyBytes(
   key_options?: KeyOptions
 ): Promise<PrivateKeyBytesResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/private_key_bytes`;
+  let url = `${getApiUrl()}/protected/private_key_bytes`;
   const queryParams = [];
 
   // Add seed phrase derivation path if present
@@ -829,7 +885,7 @@ export async function signMessage(
   };
 
   return authenticatedApiCall<typeof requestData, SignMessageResponse>(
-    `${apiUrl}/protected/sign_message`,
+    `${getApiUrl()}/protected/sign_message`,
     "POST",
     requestData,
     "Failed to sign message"
@@ -875,7 +931,7 @@ export async function fetchPublicKey(
   key_options?: KeyOptions
 ): Promise<PublicKeyResponse> {
   // Build URL with query parameters
-  let url = `${apiUrl}/protected/public_key?algorithm=${algorithm}`;
+  let url = `${getApiUrl()}/protected/public_key?algorithm=${algorithm}`;
 
   // Add seed phrase derivation path if present
   if (key_options?.seed_phrase_derivation_path) {
@@ -907,7 +963,7 @@ export async function convertGuestToEmailAccount(
   };
 
   return authenticatedApiCall<typeof conversionData, void>(
-    `${apiUrl}/protected/convert_guest`,
+    `${getApiUrl()}/protected/convert_guest`,
     "POST",
     conversionData,
     "Failed to convert guest account"
@@ -933,7 +989,7 @@ export type ThirdPartyTokenResponse = {
  */
 export async function generateThirdPartyToken(audience?: string): Promise<ThirdPartyTokenResponse> {
   return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
-    `${apiUrl}/protected/third_party_token`,
+    `${getApiUrl()}/protected/third_party_token`,
     "POST",
     audience ? { audience } : {},
     "Failed to generate third party token"
@@ -995,7 +1051,7 @@ export async function encryptData(
   };
 
   return authenticatedApiCall<typeof requestData, EncryptDataResponse>(
-    `${apiUrl}/protected/encrypt`,
+    `${getApiUrl()}/protected/encrypt`,
     "POST",
     requestData,
     "Failed to encrypt data"
@@ -1054,7 +1110,7 @@ export async function decryptData(
   };
 
   return authenticatedApiCall<typeof requestData, string>(
-    `${apiUrl}/protected/decrypt`,
+    `${getApiUrl()}/protected/decrypt`,
     "POST",
     requestData,
     "Failed to decrypt data"
@@ -1078,7 +1134,7 @@ export async function requestAccountDeletion(hashedSecret: string): Promise<void
     hashed_secret: hashedSecret
   };
   return authenticatedApiCall<typeof deleteData, void>(
-    `${apiUrl}/protected/delete-account/request`,
+    `${getApiUrl()}/protected/delete-account/request`,
     "POST",
     deleteData,
     "Failed to request account deletion"
@@ -1107,7 +1163,7 @@ export async function confirmAccountDeletion(
     plaintext_secret: plaintextSecret
   };
   return authenticatedApiCall<typeof confirmData, void>(
-    `${apiUrl}/protected/delete-account/confirm`,
+    `${getApiUrl()}/protected/delete-account/confirm`,
     "POST",
     confirmData,
     "Failed to confirm account deletion"
@@ -1131,7 +1187,7 @@ type ModelsListResponse = {
 export async function fetchModels(apiKey?: string): Promise<Model[]> {
   try {
     const response = await openAiAuthenticatedApiCall<void, ModelsListResponse>(
-      `${apiUrl}/v1/models`,
+      `${getApiUrl()}/v1/models`,
       "GET",
       undefined,
       "Failed to fetch models",
@@ -1226,7 +1282,7 @@ function delay(ms: number): Promise<void> {
  */
 export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
   return authenticatedApiCall<{ name: string }, ApiKeyCreateResponse>(
-    `${apiUrl}/protected/api-keys`,
+    `${getApiUrl()}/protected/api-keys`,
     "POST",
     { name },
     "Failed to create API key"
@@ -1255,7 +1311,7 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  */
 export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
   const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
-    `${apiUrl}/protected/api-keys`,
+    `${getApiUrl()}/protected/api-keys`,
     "GET",
     undefined,
     "Failed to list API keys"
@@ -1292,7 +1348,7 @@ export async function deleteApiKey(name: string): Promise<void> {
   // URL-encode the name to handle special characters
   const encodedName = encodeURIComponent(name);
   return authenticatedApiCall<void, void>(
-    `${apiUrl}/protected/api-keys/${encodedName}`,
+    `${getApiUrl()}/protected/api-keys/${encodedName}`,
     "DELETE",
     undefined,
     "Failed to delete API key"
@@ -1346,7 +1402,7 @@ export async function uploadDocument(file: File | Blob): Promise<DocumentUploadI
   };
 
   return authenticatedApiCall<DocumentUploadRequest, DocumentUploadInitResponse>(
-    `${apiUrl}/v1/documents/upload`,
+    `${getApiUrl()}/v1/documents/upload`,
     "POST",
     requestData,
     "Failed to upload document"
@@ -1384,7 +1440,7 @@ export async function checkDocumentStatus(taskId: string): Promise<DocumentStatu
   };
 
   return authenticatedApiCall<DocumentStatusRequest, DocumentStatusResponse>(
-    `${apiUrl}/v1/documents/status`,
+    `${getApiUrl()}/v1/documents/status`,
     "POST",
     requestData,
     "Failed to check document status"
@@ -1546,7 +1602,7 @@ export async function transcribeAudio(
 
   // Use openAiAuthenticatedApiCall to support both JWT and API key auth
   return openAiAuthenticatedApiCall<WhisperTranscriptionRequest, WhisperTranscriptionResponse>(
-    `${apiUrl}/v1/audio/transcriptions`,
+    `${getApiUrl()}/v1/audio/transcriptions`,
     "POST",
     requestData,
     "Failed to transcribe audio",
@@ -1710,7 +1766,7 @@ export type BatchDeleteConversationsResponse = {
 export async function fetchResponsesList(
   params?: ResponsesListParams
 ): Promise<ResponsesListResponse> {
-  let url = `${apiUrl}/v1/responses`;
+  let url = `${getApiUrl()}/v1/responses`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -1760,7 +1816,7 @@ export async function fetchResponsesList(
  */
 export async function fetchResponse(responseId: string): Promise<ResponsesRetrieveResponse> {
   return authenticatedApiCall<void, ResponsesRetrieveResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
     "GET",
     undefined,
     "Failed to retrieve response"
@@ -1801,7 +1857,7 @@ export type ResponsesCancelResponse = {
  */
 export async function cancelResponse(responseId: string): Promise<ResponsesCancelResponse> {
   return authenticatedApiCall<void, ResponsesCancelResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
     "POST",
     undefined,
     "Failed to cancel response"
@@ -1850,7 +1906,7 @@ export async function createConversation(metadata?: Record<string, any>): Promis
   const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
 
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
-    `${apiUrl}/v1/conversations`,
+    `${getApiUrl()}/v1/conversations`,
     "POST",
     requestData,
     "Failed to create conversation"
@@ -1875,7 +1931,7 @@ export async function createConversation(metadata?: Record<string, any>): Promis
  */
 export async function getConversation(conversationId: string): Promise<Conversation> {
   return authenticatedApiCall<void, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "GET",
     undefined,
     "Failed to retrieve conversation"
@@ -1907,7 +1963,7 @@ export async function updateConversation(
   const requestData: ConversationUpdateRequest = { metadata };
 
   return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "POST",
     requestData,
     "Failed to update conversation"
@@ -1940,7 +1996,7 @@ export async function deleteConversation(
   conversationId: string
 ): Promise<ConversationDeleteResponse> {
   return authenticatedApiCall<void, ConversationDeleteResponse>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
     "DELETE",
     undefined,
     "Failed to delete conversation"
@@ -1968,7 +2024,7 @@ export async function deleteConversation(
  */
 export async function deleteConversations(): Promise<ConversationsDeleteResponse> {
   return authenticatedApiCall<void, ConversationsDeleteResponse>(
-    `${apiUrl}/v1/conversations`,
+    `${getApiUrl()}/v1/conversations`,
     "DELETE",
     undefined,
     "Failed to delete conversations"
@@ -2006,7 +2062,7 @@ export async function batchDeleteConversations(
   ids: string[]
 ): Promise<BatchDeleteConversationsResponse> {
   return authenticatedApiCall<BatchDeleteConversationsRequest, BatchDeleteConversationsResponse>(
-    `${apiUrl}/v1/conversations/batch-delete`,
+    `${getApiUrl()}/v1/conversations/batch-delete`,
     "POST",
     { ids },
     "Failed to batch delete conversations"
@@ -2040,7 +2096,7 @@ export async function addConversationItems(
   items: Partial<ConversationItem>[]
 ): Promise<Conversation> {
   return authenticatedApiCall<{ items: Partial<ConversationItem>[] }, Conversation>(
-    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
+    `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
     "POST",
     { items },
     "Failed to add conversation items"
@@ -2076,7 +2132,7 @@ export async function listConversationItems(
     before?: string;
   }
 ): Promise<ConversationItemsResponse> {
-  let url = `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
+  let url = `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2127,7 +2183,7 @@ export async function listConversations(params?: {
   after?: string;
   before?: string;
 }): Promise<ConversationsListResponse> {
-  let url = `${apiUrl}/v1/conversations`;
+  let url = `${getApiUrl()}/v1/conversations`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2184,7 +2240,7 @@ export async function listConversations(params?: {
  */
 export async function createResponse(request: ResponsesCreateRequest): Promise<any> {
   return authenticatedApiCall<ResponsesCreateRequest, any>(
-    `${apiUrl}/v1/responses`,
+    `${getApiUrl()}/v1/responses`,
     "POST",
     request,
     "Failed to create response"
@@ -2214,7 +2270,7 @@ export async function createResponse(request: ResponsesCreateRequest): Promise<a
  */
 export async function deleteResponse(responseId: string): Promise<ResponsesDeleteResponse> {
   return authenticatedApiCall<void, ResponsesDeleteResponse>(
-    `${apiUrl}/v1/responses/${encodeURIComponent(responseId)}`,
+    `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
     "DELETE",
     undefined,
     "Failed to delete response"
@@ -2289,7 +2345,7 @@ export type InstructionDeleteResponse = {
  */
 export async function createInstruction(request: InstructionCreateRequest): Promise<Instruction> {
   return authenticatedApiCall<InstructionCreateRequest, Instruction>(
-    `${apiUrl}/v1/instructions`,
+    `${getApiUrl()}/v1/instructions`,
     "POST",
     request,
     "Failed to create instruction"
@@ -2327,7 +2383,7 @@ export async function createInstruction(request: InstructionCreateRequest): Prom
 export async function listInstructions(
   params?: InstructionListParams
 ): Promise<InstructionListResponse> {
-  let url = `${apiUrl}/v1/instructions`;
+  let url = `${getApiUrl()}/v1/instructions`;
   const queryParams = [];
 
   if (params?.limit !== undefined) {
@@ -2371,7 +2427,7 @@ export async function listInstructions(
  */
 export async function getInstruction(instructionId: string): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "GET",
     undefined,
     "Failed to retrieve instruction"
@@ -2406,7 +2462,7 @@ export async function updateInstruction(
   request: InstructionUpdateRequest
 ): Promise<Instruction> {
   return authenticatedApiCall<InstructionUpdateRequest, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "POST",
     request,
     "Failed to update instruction"
@@ -2435,7 +2491,7 @@ export async function updateInstruction(
  */
 export async function deleteInstruction(instructionId: string): Promise<InstructionDeleteResponse> {
   return authenticatedApiCall<void, InstructionDeleteResponse>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
     "DELETE",
     undefined,
     "Failed to delete instruction"
@@ -2462,7 +2518,7 @@ export async function deleteInstruction(instructionId: string): Promise<Instruct
  */
 export async function setDefaultInstruction(instructionId: string): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
-    `${apiUrl}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
+    `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
     "POST",
     undefined,
     "Failed to set default instruction"
