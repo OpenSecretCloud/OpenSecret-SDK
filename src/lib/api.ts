@@ -1571,7 +1571,7 @@ export type ResponsesRetrieveResponse = {
     };
     total_tokens: number;
   };
-  output?: string | any[];
+  output?: string | unknown[];
 };
 
 export type ThreadListItem = {
@@ -1615,15 +1615,15 @@ export type Conversation = {
   id: string;
   object: "conversation";
   created_at: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 };
 
 export type ConversationCreateRequest = {
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 };
 
 export type ConversationUpdateRequest = {
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 };
 
 export type ConversationItemsResponse = {
@@ -1820,7 +1820,7 @@ export type ResponsesCreateRequest = {
   conversation?: string | { id: string };
   previous_response_id?: string; // Deprecated but still supported
   stream?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 };
 
 /**
@@ -1846,7 +1846,9 @@ export type ResponsesCreateRequest = {
  *
  * @deprecated Use openai.conversations.create() instead
  */
-export async function createConversation(metadata?: Record<string, any>): Promise<Conversation> {
+export async function createConversation(
+  metadata?: Record<string, unknown>
+): Promise<Conversation> {
   const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
 
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
@@ -1902,7 +1904,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
  */
 export async function updateConversation(
   conversationId: string,
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
 ): Promise<Conversation> {
   const requestData: ConversationUpdateRequest = { metadata };
 
@@ -2182,8 +2184,10 @@ export async function listConversations(params?: {
  * });
  * ```
  */
-export async function createResponse(request: ResponsesCreateRequest): Promise<any> {
-  return authenticatedApiCall<ResponsesCreateRequest, any>(
+export async function createResponse(
+  request: ResponsesCreateRequest
+): Promise<ResponsesRetrieveResponse> {
+  return authenticatedApiCall<ResponsesCreateRequest, ResponsesRetrieveResponse>(
     `${apiUrl}/v1/responses`,
     "POST",
     request,
@@ -2473,67 +2477,19 @@ export async function setDefaultInstruction(instructionId: string): Promise<Inst
 // Agent API Types
 // ============================================================================
 
-export type AgentConfigResponse = {
-  enabled: boolean;
-  model: string;
-  max_context_tokens: number;
-  compaction_threshold: number;
-  system_prompt?: string;
-  conversation_id?: string;
+export type CreateSubagentRequest = {
+  display_name?: string;
+  purpose: string;
 };
 
-export type UpdateAgentConfigRequest = {
-  enabled?: boolean;
-  model?: string;
-  max_context_tokens?: number;
-  compaction_threshold?: number;
-  system_prompt?: string;
-};
-
-export type MemoryBlockResponse = {
-  label: string;
-  description?: string;
-  value: string;
-  char_limit: number;
-  read_only: boolean;
-  version: number;
-};
-
-export type UpdateMemoryBlockRequest = {
-  description?: string;
-  value?: string;
-  char_limit?: number;
-  read_only?: boolean;
-};
-
-export type InsertArchivalRequest = {
-  text: string;
-  metadata?: Record<string, any>;
-};
-
-export type InsertArchivalResponse = {
+export type SubagentResponse = {
   id: string;
-  source_type: string;
-  embedding_model: string;
-  token_count: number;
-  created_at: string;
-};
-
-export type MemorySearchRequest = {
-  query: string;
-  top_k?: number;
-  max_tokens?: number;
-  source_types?: string[];
-};
-
-export type MemorySearchResult = {
-  content: string;
-  score: number;
-  token_count: number;
-};
-
-export type MemorySearchResponse = {
-  results: MemorySearchResult[];
+  object: "agent.subagent";
+  conversation_id: string;
+  display_name: string;
+  purpose: string;
+  created_by: string;
+  created_at: number;
 };
 
 export type AgentDeletedObjectResponse = {
@@ -2556,144 +2512,24 @@ export type AgentErrorEvent = {
   error: string;
 };
 
-export type AgentConversationListResponse = {
-  object: "list";
-  data: Conversation[];
-  has_more: boolean;
-  first_id?: string;
-  last_id?: string;
-};
-
 // ============================================================================
 // Agent API Functions
 // ============================================================================
 
-export async function getAgentConfig(): Promise<AgentConfigResponse> {
-  return authenticatedApiCall<void, AgentConfigResponse>(
-    `${apiUrl}/v1/agent/config`,
-    "GET",
-    undefined,
-    "Failed to get agent config"
-  );
-}
-
-export async function updateAgentConfig(
-  request: UpdateAgentConfigRequest
-): Promise<AgentConfigResponse> {
-  return authenticatedApiCall<UpdateAgentConfigRequest, AgentConfigResponse>(
-    `${apiUrl}/v1/agent/config`,
-    "PUT",
-    request,
-    "Failed to update agent config"
-  );
-}
-
-export async function listMemoryBlocks(): Promise<MemoryBlockResponse[]> {
-  return authenticatedApiCall<void, MemoryBlockResponse[]>(
-    `${apiUrl}/v1/agent/memory/blocks`,
-    "GET",
-    undefined,
-    "Failed to list memory blocks"
-  );
-}
-
-export async function getMemoryBlock(label: string): Promise<MemoryBlockResponse> {
-  return authenticatedApiCall<void, MemoryBlockResponse>(
-    `${apiUrl}/v1/agent/memory/blocks/${encodeURIComponent(label)}`,
-    "GET",
-    undefined,
-    "Failed to get memory block"
-  );
-}
-
-export async function updateMemoryBlock(
-  label: string,
-  request: UpdateMemoryBlockRequest
-): Promise<MemoryBlockResponse> {
-  return authenticatedApiCall<UpdateMemoryBlockRequest, MemoryBlockResponse>(
-    `${apiUrl}/v1/agent/memory/blocks/${encodeURIComponent(label)}`,
-    "PUT",
-    request,
-    "Failed to update memory block"
-  );
-}
-
-export async function insertArchivalMemory(
-  request: InsertArchivalRequest
-): Promise<InsertArchivalResponse> {
-  return authenticatedApiCall<InsertArchivalRequest, InsertArchivalResponse>(
-    `${apiUrl}/v1/agent/memory/archival`,
+export async function createSubagent(request: CreateSubagentRequest): Promise<SubagentResponse> {
+  return authenticatedApiCall<CreateSubagentRequest, SubagentResponse>(
+    `${apiUrl}/v1/agent/subagents`,
     "POST",
     request,
-    "Failed to insert archival memory"
+    "Failed to create subagent"
   );
 }
 
-export async function deleteArchivalMemory(id: string): Promise<AgentDeletedObjectResponse> {
+export async function deleteSubagent(id: string): Promise<AgentDeletedObjectResponse> {
   return authenticatedApiCall<void, AgentDeletedObjectResponse>(
-    `${apiUrl}/v1/agent/memory/archival/${encodeURIComponent(id)}`,
+    `${apiUrl}/v1/agent/subagents/${encodeURIComponent(id)}`,
     "DELETE",
     undefined,
-    "Failed to delete archival memory"
-  );
-}
-
-export async function searchAgentMemory(
-  request: MemorySearchRequest
-): Promise<MemorySearchResponse> {
-  return authenticatedApiCall<MemorySearchRequest, MemorySearchResponse>(
-    `${apiUrl}/v1/agent/memory/search`,
-    "POST",
-    request,
-    "Failed to search agent memory"
-  );
-}
-
-export async function listAgentConversations(): Promise<AgentConversationListResponse> {
-  return authenticatedApiCall<void, AgentConversationListResponse>(
-    `${apiUrl}/v1/agent/conversations`,
-    "GET",
-    undefined,
-    "Failed to list agent conversations"
-  );
-}
-
-export async function listAgentConversationItems(
-  conversationId: string,
-  params?: { limit?: number; after?: string; order?: string }
-): Promise<ConversationItemsResponse> {
-  let url = `${apiUrl}/v1/agent/conversations/${encodeURIComponent(conversationId)}/items`;
-  const queryParams: string[] = [];
-
-  if (params?.limit !== undefined) {
-    queryParams.push(`limit=${params.limit}`);
-  }
-  if (params?.after) {
-    queryParams.push(`after=${encodeURIComponent(params.after)}`);
-  }
-  if (params?.order) {
-    queryParams.push(`order=${encodeURIComponent(params.order)}`);
-  }
-
-  if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
-  }
-
-  return authenticatedApiCall<void, ConversationItemsResponse>(
-    url,
-    "GET",
-    undefined,
-    "Failed to list agent conversation items"
-  );
-}
-
-export async function deleteAgentConversation(
-  conversationId: string
-): Promise<AgentDeletedObjectResponse> {
-  return authenticatedApiCall<void, AgentDeletedObjectResponse>(
-    `${apiUrl}/v1/agent/conversations/${encodeURIComponent(conversationId)}`,
-    "DELETE",
-    undefined,
-    "Failed to delete agent conversation"
+    "Failed to delete subagent"
   );
 }

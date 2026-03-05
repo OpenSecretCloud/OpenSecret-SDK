@@ -568,91 +568,21 @@ pub struct AgentChatRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConfigResponse {
-    pub enabled: bool,
-    pub model: String,
-    pub max_context_tokens: i32,
-    pub compaction_threshold: f32,
+pub struct CreateSubagentRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_prompt: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conversation_id: Option<Uuid>,
+    pub display_name: Option<String>,
+    pub purpose: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateAgentConfigRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_context_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compaction_threshold: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_prompt: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryBlockResponse {
-    pub label: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    pub value: String,
-    pub char_limit: i32,
-    pub read_only: bool,
-    pub version: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateMemoryBlockRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub char_limit: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub read_only: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsertArchivalRequest {
-    pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsertArchivalResponse {
+pub struct SubagentResponse {
     pub id: Uuid,
-    pub source_type: String,
-    pub embedding_model: String,
-    pub token_count: i32,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchRequest {
-    pub query: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_k: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_types: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchResult {
-    pub content: String,
-    pub score: f32,
-    pub token_count: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchResponse {
-    pub results: Vec<MemorySearchResult>,
+    pub object: String,
+    pub conversation_id: Uuid,
+    pub display_name: String,
+    pub purpose: String,
+    pub created_by: String,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -686,36 +616,4 @@ pub enum AgentSseEvent {
     Message(AgentMessageEvent),
     Done(AgentDoneEvent),
     Error(AgentErrorEvent),
-}
-
-// Agent conversations reuse existing conversation types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversationListResponse {
-    pub object: String,
-    pub data: Vec<AgentConversation>,
-    pub has_more: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversation {
-    pub id: String,
-    pub object: String,
-    pub created_at: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversationItemsResponse {
-    pub object: String,
-    pub data: Vec<Value>,
-    pub has_more: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_id: Option<String>,
 }
