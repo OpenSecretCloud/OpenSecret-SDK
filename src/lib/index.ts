@@ -29,8 +29,13 @@ export type {
   BatchDeleteConversationsRequest,
   BatchDeleteItemResult,
   BatchDeleteConversationsResponse,
+  AgentCreatedBy,
+  MainAgentResponse,
   CreateSubagentRequest,
+  AgentItemsListParams,
+  ListSubagentsParams,
   SubagentResponse,
+  SubagentListResponse,
   AgentDeletedObjectResponse,
   AgentMessageEvent,
   AgentDoneEvent,
@@ -41,7 +46,17 @@ export type {
 export { createApiKey, listApiKeys, deleteApiKey } from "./api";
 
 // Export Agent API functions
-export { createSubagent, deleteSubagent } from "./api";
+export {
+  getMainAgent,
+  listMainAgentItems,
+  getMainAgentItem,
+  listSubagents,
+  getSubagent,
+  createSubagent,
+  deleteSubagent,
+  listSubagentItems,
+  getSubagentItem
+} from "./api";
 
 // Export AI customization options
 export { createCustomFetch, type CustomFetchOptions } from "./ai";

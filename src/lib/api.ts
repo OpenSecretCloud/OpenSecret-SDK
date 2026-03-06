@@ -2482,14 +2482,50 @@ export type CreateSubagentRequest = {
   purpose: string;
 };
 
+export type AgentCreatedBy = "user" | "agent";
+
+export type MainAgentResponse = {
+  id: string;
+  object: "agent.main";
+  kind: "main";
+  conversation_id: string;
+  display_name: string;
+  created_at: number;
+  updated_at: number;
+};
+
 export type SubagentResponse = {
   id: string;
   object: "agent.subagent";
+  kind: "subagent";
   conversation_id: string;
   display_name: string;
   purpose: string;
-  created_by: string;
+  created_by: AgentCreatedBy;
   created_at: number;
+  updated_at: number;
+};
+
+export type AgentItemsListParams = {
+  limit?: number;
+  after?: string;
+  order?: string;
+  include?: string[];
+};
+
+export type ListSubagentsParams = {
+  limit?: number;
+  after?: string;
+  order?: string;
+  created_by?: AgentCreatedBy;
+};
+
+export type SubagentListResponse = {
+  object: "list";
+  data: SubagentResponse[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
 };
 
 export type AgentDeletedObjectResponse = {
@@ -2516,6 +2552,95 @@ export type AgentErrorEvent = {
 // Agent API Functions
 // ============================================================================
 
+export async function getMainAgent(): Promise<MainAgentResponse> {
+  return authenticatedApiCall<void, MainAgentResponse>(
+    `${apiUrl}/v1/agent`,
+    "GET",
+    undefined,
+    "Failed to get main agent"
+  );
+}
+
+export async function listMainAgentItems(
+  params?: AgentItemsListParams
+): Promise<ConversationItemsResponse> {
+  let url = `${apiUrl}/v1/agent/items`;
+  const queryParams: string[] = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+  if (params?.include) {
+    for (const includeValue of params.include) {
+      queryParams.push(`include=${encodeURIComponent(includeValue)}`);
+    }
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationItemsResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list main agent items"
+  );
+}
+
+export async function getMainAgentItem(itemId: string): Promise<ConversationItem> {
+  return authenticatedApiCall<void, ConversationItem>(
+    `${apiUrl}/v1/agent/items/${encodeURIComponent(itemId)}`,
+    "GET",
+    undefined,
+    "Failed to get main agent item"
+  );
+}
+
+export async function listSubagents(params?: ListSubagentsParams): Promise<SubagentListResponse> {
+  let url = `${apiUrl}/v1/agent/subagents`;
+  const queryParams: string[] = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+  if (params?.created_by) {
+    queryParams.push(`created_by=${encodeURIComponent(params.created_by)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, SubagentListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list subagents"
+  );
+}
+
+export async function getSubagent(id: string): Promise<SubagentResponse> {
+  return authenticatedApiCall<void, SubagentResponse>(
+    `${apiUrl}/v1/agent/subagents/${encodeURIComponent(id)}`,
+    "GET",
+    undefined,
+    "Failed to get subagent"
+  );
+}
+
 export async function createSubagent(request: CreateSubagentRequest): Promise<SubagentResponse> {
   return authenticatedApiCall<CreateSubagentRequest, SubagentResponse>(
     `${apiUrl}/v1/agent/subagents`,
@@ -2531,5 +2656,48 @@ export async function deleteSubagent(id: string): Promise<AgentDeletedObjectResp
     "DELETE",
     undefined,
     "Failed to delete subagent"
+  );
+}
+
+export async function listSubagentItems(
+  id: string,
+  params?: AgentItemsListParams
+): Promise<ConversationItemsResponse> {
+  let url = `${apiUrl}/v1/agent/subagents/${encodeURIComponent(id)}/items`;
+  const queryParams: string[] = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+  if (params?.include) {
+    for (const includeValue of params.include) {
+      queryParams.push(`include=${encodeURIComponent(includeValue)}`);
+    }
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationItemsResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list subagent items"
+  );
+}
+
+export async function getSubagentItem(id: string, itemId: string): Promise<ConversationItem> {
+  return authenticatedApiCall<void, ConversationItem>(
+    `${apiUrl}/v1/agent/subagents/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+    "GET",
+    undefined,
+    "Failed to get subagent item"
   );
 }

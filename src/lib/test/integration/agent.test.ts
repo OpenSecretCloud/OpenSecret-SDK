@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
 import { createCustomFetch } from "../../ai";
-import { createSubagent, deleteSubagent, fetchLogin, fetchSignUp } from "../../api";
+import {
+  createSubagent,
+  deleteSubagent,
+  fetchLogin,
+  fetchSignUp,
+  getMainAgent,
+  getMainAgentItem,
+  getSubagent,
+  getSubagentItem,
+  listMainAgentItems,
+  listSubagentItems,
+  listSubagents
+} from "../../api";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
@@ -84,6 +96,50 @@ test.skip("Create and delete subagent", async () => {
   expect(deleted.object).toBe("agent.subagent.deleted");
 });
 
+test.skip("Get main agent and list main agent items", async () => {
+  await setupTestUser();
+
+  const mainAgent = await getMainAgent();
+
+  expect(mainAgent.id).toBeDefined();
+  expect(mainAgent.object).toBe("agent.main");
+  expect(mainAgent.kind).toBe("main");
+  expect(mainAgent.conversation_id).toBeDefined();
+  expect(mainAgent.display_name.length).toBeGreaterThan(0);
+
+  const items = await listMainAgentItems({ limit: 10, order: "desc" });
+
+  expect(items.object).toBe("list");
+  expect(Array.isArray(items.data)).toBe(true);
+
+  if (items.data.length > 0) {
+    const item = await getMainAgentItem(items.data[0].id);
+    expect(item.id).toBe(items.data[0].id);
+  }
+});
+
+test.skip("List and get subagents", async () => {
+  await setupTestUser();
+
+  const subagent = await createTestSubagent();
+
+  try {
+    const list = await listSubagents({ limit: 10, created_by: "user" });
+
+    expect(list.object).toBe("list");
+    expect(Array.isArray(list.data)).toBe(true);
+    expect(list.data.some((item) => item.id === subagent.id)).toBe(true);
+
+    const fetched = await getSubagent(subagent.id);
+
+    expect(fetched.id).toBe(subagent.id);
+    expect(fetched.object).toBe("agent.subagent");
+    expect(fetched.kind).toBe("subagent");
+  } finally {
+    await deleteSubagent(subagent.id);
+  }
+});
+
 test.skip("Agent chat via SSE (using createCustomFetch)", async () => {
   await setupTestUser();
 
@@ -105,6 +161,16 @@ test.skip("Subagent chat via SSE (using createCustomFetch)", async () => {
       `${API_URL}/v1/agent/subagents/${encodeURIComponent(subagent.id)}/chat`,
       "Please reply with the word 'subpong'."
     );
+
+    const items = await listSubagentItems(subagent.id, { limit: 10, order: "desc" });
+
+    expect(items.object).toBe("list");
+    expect(Array.isArray(items.data)).toBe(true);
+
+    if (items.data.length > 0) {
+      const item = await getSubagentItem(subagent.id, items.data[0].id);
+      expect(item.id).toBe(items.data[0].id);
+    }
 
     console.log("Subagent chat SSE completed, response length:", text.length);
   } finally {

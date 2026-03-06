@@ -24,6 +24,67 @@ pub struct OpenSecretClient {
     server_public_key: Arc<RwLock<Option<Vec<u8>>>>, // Store server's public key from attestation
 }
 
+fn append_query_param(query: &mut Vec<String>, key: &str, value: impl ToString) {
+    let encoded = utf8_percent_encode(&value.to_string(), NON_ALPHANUMERIC).to_string();
+    query.push(format!("{}={}", key, encoded));
+}
+
+fn build_agent_items_endpoint(base: &str, params: Option<&AgentItemsListParams>) -> String {
+    let mut endpoint = base.to_string();
+    let mut query = Vec::new();
+
+    if let Some(params) = params {
+        if let Some(limit) = params.limit {
+            append_query_param(&mut query, "limit", limit);
+        }
+        if let Some(after) = params.after {
+            append_query_param(&mut query, "after", after);
+        }
+        if let Some(order) = &params.order {
+            append_query_param(&mut query, "order", order);
+        }
+        if let Some(include) = &params.include {
+            for include_value in include {
+                append_query_param(&mut query, "include", include_value);
+            }
+        }
+    }
+
+    if !query.is_empty() {
+        endpoint.push('?');
+        endpoint.push_str(&query.join("&"));
+    }
+
+    endpoint
+}
+
+fn build_subagents_endpoint(params: Option<&ListSubagentsParams>) -> String {
+    let mut endpoint = "/v1/agent/subagents".to_string();
+    let mut query = Vec::new();
+
+    if let Some(params) = params {
+        if let Some(limit) = params.limit {
+            append_query_param(&mut query, "limit", limit);
+        }
+        if let Some(after) = params.after {
+            append_query_param(&mut query, "after", after);
+        }
+        if let Some(order) = &params.order {
+            append_query_param(&mut query, "order", order);
+        }
+        if let Some(created_by) = &params.created_by {
+            append_query_param(&mut query, "created_by", created_by);
+        }
+    }
+
+    if !query.is_empty() {
+        endpoint.push('?');
+        endpoint.push_str(&query.join("&"));
+    }
+
+    endpoint
+}
+
 impl OpenSecretClient {
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
         let base_url = base_url.into();
@@ -1472,6 +1533,27 @@ impl OpenSecretClient {
 
     // Agent API Methods
 
+    /// Fetches the current user's main agent.
+    pub async fn get_main_agent(&self) -> Result<MainAgentResponse> {
+        self.encrypted_api_call("/v1/agent", "GET", None::<()>)
+            .await
+    }
+
+    /// Lists items in the main agent conversation.
+    pub async fn list_main_agent_items(
+        &self,
+        params: Option<AgentItemsListParams>,
+    ) -> Result<AgentItemsListResponse> {
+        let endpoint = build_agent_items_endpoint("/v1/agent/items", params.as_ref());
+        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+    }
+
+    /// Fetches a single item from the main agent conversation.
+    pub async fn get_main_agent_item(&self, item_id: Uuid) -> Result<serde_json::Value> {
+        self.encrypted_api_call(&format!("/v1/agent/items/{}", item_id), "GET", None::<()>)
+            .await
+    }
+
     /// Sends a message to the main agent and returns a stream of SSE events.
     pub async fn agent_chat(
         &self,
@@ -1490,6 +1572,21 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Lists subagents for the current user with pagination and filtering.
+    pub async fn list_subagents(
+        &self,
+        params: Option<ListSubagentsParams>,
+    ) -> Result<SubagentListResponse> {
+        let endpoint = build_subagents_endpoint(params.as_ref());
+        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+    }
+
+    /// Fetches a single subagent by UUID.
+    pub async fn get_subagent(&self, id: Uuid) -> Result<SubagentResponse> {
+        self.encrypted_api_call(&format!("/v1/agent/subagents/{}", id), "GET", None::<()>)
+            .await
+    }
+
     /// Sends a message to a specific subagent and returns a stream of SSE events.
     pub async fn subagent_chat(
         &self,
@@ -1498,6 +1595,29 @@ impl OpenSecretClient {
     ) -> Result<std::pin::Pin<Box<dyn futures::Stream<Item = Result<AgentSseEvent>> + Send>>> {
         self.agent_chat_stream(format!("/v1/agent/subagents/{}/chat", id), input)
             .await
+    }
+
+    /// Lists items in a subagent conversation.
+    pub async fn list_subagent_items(
+        &self,
+        id: Uuid,
+        params: Option<AgentItemsListParams>,
+    ) -> Result<AgentItemsListResponse> {
+        let endpoint = build_agent_items_endpoint(
+            &format!("/v1/agent/subagents/{}/items", id),
+            params.as_ref(),
+        );
+        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+    }
+
+    /// Fetches a single item from a subagent conversation.
+    pub async fn get_subagent_item(&self, id: Uuid, item_id: Uuid) -> Result<serde_json::Value> {
+        self.encrypted_api_call(
+            &format!("/v1/agent/subagents/{}/items/{}", id, item_id),
+            "GET",
+            None::<()>,
+        )
+        .await
     }
 
     /// Deletes a subagent by UUID.

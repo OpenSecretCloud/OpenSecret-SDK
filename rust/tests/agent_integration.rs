@@ -1,5 +1,8 @@
 use futures::StreamExt;
-use opensecret::{AgentSseEvent, CreateSubagentRequest, OpenSecretClient, Result};
+use opensecret::{
+    AgentItemsListParams, AgentSseEvent, CreateSubagentRequest, ListSubagentsParams,
+    OpenSecretClient, Result,
+};
 use std::env;
 use uuid::Uuid;
 
@@ -71,6 +74,83 @@ async fn test_create_and_delete_subagent() {
     assert!(deleted.deleted);
     assert_eq!(deleted.id, subagent.id);
     assert_eq!(deleted.object, "agent.subagent.deleted");
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
+async fn test_get_main_agent_and_items() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let main_agent = client
+        .get_main_agent()
+        .await
+        .expect("Failed to get main agent");
+
+    assert_eq!(main_agent.object, "agent.main");
+    assert_eq!(main_agent.kind, "main");
+    assert!(!main_agent.display_name.is_empty());
+
+    let items = client
+        .list_main_agent_items(Some(AgentItemsListParams {
+            limit: Some(10),
+            order: Some("desc".to_string()),
+            ..Default::default()
+        }))
+        .await
+        .expect("Failed to list main agent items");
+
+    assert_eq!(items.object, "list");
+
+    if let Some(first_item) = items.data.first() {
+        let item_id = first_item
+            .get("id")
+            .and_then(|value| value.as_str())
+            .expect("Expected item id string");
+
+        client
+            .get_main_agent_item(item_id.parse().expect("Invalid item UUID"))
+            .await
+            .expect("Failed to get main agent item");
+    }
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
+async fn test_list_and_get_subagents() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let subagent = create_test_subagent(&client)
+        .await
+        .expect("Failed to create subagent");
+
+    let list = client
+        .list_subagents(Some(ListSubagentsParams {
+            limit: Some(10),
+            created_by: Some("user".to_string()),
+            ..Default::default()
+        }))
+        .await
+        .expect("Failed to list subagents");
+
+    assert_eq!(list.object, "list");
+    assert!(list.data.iter().any(|item| item.id == subagent.id));
+
+    let fetched = client
+        .get_subagent(subagent.id)
+        .await
+        .expect("Failed to get subagent");
+
+    assert_eq!(fetched.id, subagent.id);
+    assert_eq!(fetched.kind, "subagent");
+
+    client
+        .delete_subagent(subagent.id)
+        .await
+        .expect("Failed to delete subagent");
 }
 
 #[tokio::test]
@@ -165,6 +245,32 @@ async fn test_subagent_chat_sse() {
                 panic!("Stream error: {:?}", e);
             }
         }
+    }
+
+    let items = client
+        .list_subagent_items(
+            subagent.id,
+            Some(AgentItemsListParams {
+                limit: Some(10),
+                order: Some("desc".to_string()),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("Failed to list subagent items");
+
+    assert_eq!(items.object, "list");
+
+    if let Some(first_item) = items.data.first() {
+        let item_id = first_item
+            .get("id")
+            .and_then(|value| value.as_str())
+            .expect("Expected item id string");
+
+        client
+            .get_subagent_item(subagent.id, item_id.parse().expect("Invalid item UUID"))
+            .await
+            .expect("Failed to get subagent item");
     }
 
     let deleted = client

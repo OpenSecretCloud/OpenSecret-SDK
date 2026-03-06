@@ -575,14 +575,69 @@ pub struct CreateSubagentRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MainAgentResponse {
+    pub id: Uuid,
+    pub object: String,
+    pub kind: String,
+    pub conversation_id: Uuid,
+    pub display_name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentResponse {
     pub id: Uuid,
     pub object: String,
+    pub kind: String,
     pub conversation_id: Uuid,
     pub display_name: String,
     pub purpose: String,
     pub created_by: String,
     pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentItemsListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListSubagentsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentItemsListResponse {
+    pub object: String,
+    pub data: Vec<Value>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubagentListResponse {
+    pub object: String,
+    pub data: Vec<SubagentResponse>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
