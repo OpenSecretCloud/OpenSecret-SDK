@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createCustomFetch } from "../../ai";
 import {
   createSubagent,
+  deleteMainAgent,
   deleteSubagent,
   fetchLogin,
   fetchSignUp,
@@ -116,6 +117,25 @@ test.skip("Get main agent and list main agent items", async () => {
     const item = await getMainAgentItem(items.data[0].id);
     expect(item.id).toBe(items.data[0].id);
   }
+});
+
+test.skip("Delete main agent resets the agent tree", async () => {
+  await setupTestUser();
+
+  const mainAgent = await getMainAgent();
+  const subagent = await createTestSubagent();
+
+  const deleted = await deleteMainAgent();
+
+  expect(deleted.deleted).toBe(true);
+  expect(deleted.id).toBe(mainAgent.id);
+  expect(deleted.object).toBe("agent.main.deleted");
+
+  const subagents = await listSubagents({ limit: 10 });
+  expect(subagents.data.some((item) => item.id === subagent.id)).toBe(false);
+
+  const recreatedMainAgent = await getMainAgent();
+  expect(recreatedMainAgent.id).toBeDefined();
 });
 
 test.skip("List and get subagents", async () => {

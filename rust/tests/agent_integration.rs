@@ -125,6 +125,49 @@ async fn test_get_main_agent_and_items() {
 
 #[tokio::test]
 #[ignore = "Requires agent API on server"]
+async fn test_delete_main_agent_resets_agent_tree() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let main_agent = client
+        .get_main_agent()
+        .await
+        .expect("Failed to get main agent");
+
+    let subagent = create_test_subagent(&client)
+        .await
+        .expect("Failed to create subagent");
+
+    let deleted = client
+        .delete_main_agent()
+        .await
+        .expect("Failed to delete main agent");
+
+    assert!(deleted.deleted);
+    assert_eq!(deleted.id, main_agent.id);
+    assert_eq!(deleted.object, "agent.main.deleted");
+
+    let subagents = client
+        .list_subagents(Some(ListSubagentsParams {
+            limit: Some(10),
+            ..Default::default()
+        }))
+        .await
+        .expect("Failed to list subagents after main deletion");
+
+    assert!(!subagents.data.iter().any(|item| item.id == subagent.id));
+
+    let recreated = client
+        .get_main_agent()
+        .await
+        .expect("Failed to recreate main agent");
+
+    assert_eq!(recreated.object, "agent.main");
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
 async fn test_list_and_get_subagents() {
     let client = setup_authenticated_client()
         .await

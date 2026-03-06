@@ -1555,6 +1555,12 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Deletes the current user's main agent and resets shared agent state.
+    pub async fn delete_main_agent(&self) -> Result<DeletedObjectResponse> {
+        self.encrypted_api_call("/v1/agent", "DELETE", None::<()>)
+            .await
+    }
+
     /// Lists items in the main agent conversation.
     pub async fn list_main_agent_items(
         &self,

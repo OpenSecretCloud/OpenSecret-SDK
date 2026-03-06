@@ -48,6 +48,7 @@ export { createApiKey, listApiKeys, deleteApiKey } from "./api";
 // Export Agent API functions
 export {
   getMainAgent,
+  deleteMainAgent,
   listMainAgentItems,
   getMainAgentItem,
   listSubagents,

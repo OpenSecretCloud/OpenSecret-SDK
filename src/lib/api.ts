@@ -2561,6 +2561,15 @@ export async function getMainAgent(): Promise<MainAgentResponse> {
   );
 }
 
+export async function deleteMainAgent(): Promise<AgentDeletedObjectResponse> {
+  return authenticatedApiCall<void, AgentDeletedObjectResponse>(
+    `${apiUrl}/v1/agent`,
+    "DELETE",
+    undefined,
+    "Failed to delete main agent"
+  );
+}
+
 export async function listMainAgentItems(
   params?: AgentItemsListParams
 ): Promise<ConversationItemsResponse> {
