@@ -30,7 +30,8 @@ impl OpenSecretClient {
         let base_url = base_url.into();
         let use_mock = base_url.contains("localhost")
             || base_url.contains("127.0.0.1")
-            || base_url.contains("0.0.0.0");
+            || base_url.contains("0.0.0.0")
+            || base_url.contains("10.0.2.2");
 
         Ok(Self {
             client: Client::new(),
@@ -45,7 +46,8 @@ impl OpenSecretClient {
         let base_url = base_url.into();
         let use_mock = base_url.contains("localhost")
             || base_url.contains("127.0.0.1")
-            || base_url.contains("0.0.0.0");
+            || base_url.contains("0.0.0.0")
+            || base_url.contains("10.0.2.2");
 
         Ok(Self {
             client: Client::new(),
@@ -804,6 +806,11 @@ impl OpenSecretClient {
 
     pub fn get_refresh_token(&self) -> Result<Option<String>> {
         self.session_manager.get_refresh_token()
+    }
+
+    pub fn set_tokens(&self, access_token: String, refresh_token: Option<String>) -> Result<()> {
+        self.session_manager.clear_session()?;
+        self.session_manager.set_tokens(access_token, refresh_token)
     }
 
     // User Profile API
