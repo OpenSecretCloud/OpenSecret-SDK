@@ -623,9 +623,76 @@ pub struct ListSubagentsParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ConversationContent {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "input_text")]
+    InputText { text: String },
+    #[serde(rename = "output_text")]
+    OutputText { text: String },
+    #[serde(rename = "input_image")]
+    InputImage { image_url: String },
+    #[serde(rename = "input_file")]
+    InputFile { filename: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ReasoningContentItem {
+    #[serde(rename = "text")]
+    Text { text: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ConversationItem {
+    #[serde(rename = "message")]
+    Message {
+        id: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        role: String,
+        content: Vec<ConversationContent>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "function_call")]
+    FunctionToolCall {
+        id: Uuid,
+        call_id: Uuid,
+        name: String,
+        arguments: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "function_call_output")]
+    FunctionToolCallOutput {
+        id: Uuid,
+        call_id: Uuid,
+        output: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "reasoning")]
+    Reasoning {
+        id: Uuid,
+        content: Vec<ReasoningContentItem>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentItemsListResponse {
     pub object: String,
-    pub data: Vec<Value>,
+    pub data: Vec<ConversationItem>,
     pub first_id: Option<Uuid>,
     pub last_id: Option<Uuid>,
     pub has_more: bool,
@@ -655,6 +722,11 @@ pub struct AgentMessageEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTypingEvent {
+    pub step: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentDoneEvent {
     pub total_steps: usize,
     pub total_messages: usize,
@@ -669,6 +741,7 @@ pub struct AgentErrorEvent {
 #[derive(Debug, Clone)]
 pub enum AgentSseEvent {
     Message(AgentMessageEvent),
+    Typing(AgentTypingEvent),
     Done(AgentDoneEvent),
     Error(AgentErrorEvent),
 }

@@ -1,10 +1,19 @@
 use futures::StreamExt;
 use opensecret::{
-    AgentItemsListParams, AgentSseEvent, CreateSubagentRequest, ListSubagentsParams,
-    OpenSecretClient, Result,
+    AgentItemsListParams, AgentSseEvent, ConversationItem, CreateSubagentRequest,
+    ListSubagentsParams, OpenSecretClient, Result,
 };
 use std::env;
 use uuid::Uuid;
+
+fn conversation_item_id(item: &ConversationItem) -> Uuid {
+    match item {
+        ConversationItem::Message { id, .. }
+        | ConversationItem::FunctionToolCall { id, .. }
+        | ConversationItem::FunctionToolCallOutput { id, .. }
+        | ConversationItem::Reasoning { id, .. } => *id,
+    }
+}
 
 async fn setup_authenticated_client() -> Result<OpenSecretClient> {
     let env_path = std::path::Path::new("../.env.local");
@@ -104,15 +113,13 @@ async fn test_get_main_agent_and_items() {
     assert_eq!(items.object, "list");
 
     if let Some(first_item) = items.data.first() {
-        let item_id = first_item
-            .get("id")
-            .and_then(|value| value.as_str())
-            .expect("Expected item id string");
-
-        client
-            .get_main_agent_item(item_id.parse().expect("Invalid item UUID"))
+        let item_id = conversation_item_id(first_item);
+        let item = client
+            .get_main_agent_item(item_id)
             .await
             .expect("Failed to get main agent item");
+
+        assert_eq!(conversation_item_id(&item), item_id);
     }
 }
 
@@ -177,6 +184,9 @@ async fn test_agent_chat_sse() {
                     all_messages.extend(msg.messages);
                     println!("Agent message at step {}: {:?}", msg.step, all_messages);
                 }
+                AgentSseEvent::Typing(typing) => {
+                    println!("Agent typing at step {}", typing.step);
+                }
                 AgentSseEvent::Done(done) => {
                     got_done = true;
                     println!(
@@ -230,6 +240,9 @@ async fn test_subagent_chat_sse() {
                     all_messages.extend(msg.messages);
                     println!("Subagent message at step {}: {:?}", msg.step, all_messages);
                 }
+                AgentSseEvent::Typing(typing) => {
+                    println!("Subagent typing at step {}", typing.step);
+                }
                 AgentSseEvent::Done(done) => {
                     got_done = true;
                     println!(
@@ -262,15 +275,13 @@ async fn test_subagent_chat_sse() {
     assert_eq!(items.object, "list");
 
     if let Some(first_item) = items.data.first() {
-        let item_id = first_item
-            .get("id")
-            .and_then(|value| value.as_str())
-            .expect("Expected item id string");
-
-        client
-            .get_subagent_item(subagent.id, item_id.parse().expect("Invalid item UUID"))
+        let item_id = conversation_item_id(first_item);
+        let item = client
+            .get_subagent_item(subagent.id, item_id)
             .await
             .expect("Failed to get subagent item");
+
+        assert_eq!(conversation_item_id(&item), item_id);
     }
 
     let deleted = client

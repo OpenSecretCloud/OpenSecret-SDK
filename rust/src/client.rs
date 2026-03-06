@@ -1480,6 +1480,22 @@ impl OpenSecretClient {
                                                 })),
                                             }
                                         }
+                                        "agent.typing" => {
+                                            match serde_json::from_str::<AgentTypingEvent>(
+                                                &json_str,
+                                            ) {
+                                                Ok(typing) => {
+                                                    Some(Ok(AgentSseEvent::Typing(typing)))
+                                                }
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent typing: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
                                         "agent.done" => {
                                             match serde_json::from_str::<AgentDoneEvent>(&json_str)
                                             {
@@ -1549,7 +1565,7 @@ impl OpenSecretClient {
     }
 
     /// Fetches a single item from the main agent conversation.
-    pub async fn get_main_agent_item(&self, item_id: Uuid) -> Result<serde_json::Value> {
+    pub async fn get_main_agent_item(&self, item_id: Uuid) -> Result<ConversationItem> {
         self.encrypted_api_call(&format!("/v1/agent/items/{}", item_id), "GET", None::<()>)
             .await
     }
@@ -1611,7 +1627,7 @@ impl OpenSecretClient {
     }
 
     /// Fetches a single item from a subagent conversation.
-    pub async fn get_subagent_item(&self, id: Uuid, item_id: Uuid) -> Result<serde_json::Value> {
+    pub async fn get_subagent_item(&self, id: Uuid, item_id: Uuid) -> Result<ConversationItem> {
         self.encrypted_api_call(
             &format!("/v1/agent/subagents/{}/items/{}", id, item_id),
             "GET",
