@@ -1,11 +1,19 @@
 use futures::StreamExt;
 use opensecret::{
-    AgentSseEvent, MemorySearchRequest, OpenSecretClient, Result, UpdateAgentConfigRequest,
-    UpdateMemoryBlockRequest,
+    AgentItemsListParams, AgentSseEvent, ConversationItem, CreateSubagentRequest,
+    ListSubagentsParams, OpenSecretClient, Result,
 };
-use serde_json::json;
 use std::env;
 use uuid::Uuid;
+
+fn conversation_item_id(item: &ConversationItem) -> Uuid {
+    match item {
+        ConversationItem::Message { id, .. }
+        | ConversationItem::FunctionToolCall { id, .. }
+        | ConversationItem::FunctionToolCallOutput { id, .. }
+        | ConversationItem::Reasoning { id, .. } => *id,
+    }
+}
 
 async fn setup_authenticated_client() -> Result<OpenSecretClient> {
     let env_path = std::path::Path::new("../.env.local");
@@ -41,270 +49,158 @@ async fn setup_authenticated_client() -> Result<OpenSecretClient> {
     Ok(client)
 }
 
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_get_agent_config() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
+async fn create_test_subagent(client: &OpenSecretClient) -> Result<opensecret::SubagentResponse> {
+    let suffix = Uuid::new_v4();
 
-    let config = client
-        .get_agent_config()
-        .await
-        .expect("Failed to get agent config");
-
-    assert!(!config.model.is_empty(), "Model should not be empty");
-    assert!(
-        config.max_context_tokens > 0,
-        "Max context tokens should be positive"
-    );
-    assert!(
-        config.compaction_threshold > 0.0 && config.compaction_threshold <= 1.0,
-        "Compaction threshold should be between 0 and 1"
-    );
-
-    println!(
-        "Agent config: model={}, enabled={}",
-        config.model, config.enabled
-    );
-}
-
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_update_agent_config() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
-
-    let original = client
-        .get_agent_config()
-        .await
-        .expect("Failed to get original config");
-
-    let update = UpdateAgentConfigRequest {
-        enabled: Some(true),
-        model: None,
-        max_context_tokens: Some(80_000),
-        compaction_threshold: None,
-        system_prompt: Some("You are a test assistant.".to_string()),
-    };
-
-    let updated = client
-        .update_agent_config(update)
-        .await
-        .expect("Failed to update agent config");
-
-    assert!(updated.enabled);
-    assert_eq!(updated.max_context_tokens, 80_000);
-    assert_eq!(
-        updated.system_prompt.as_deref(),
-        Some("You are a test assistant.")
-    );
-
-    // Restore original
-    let restore = UpdateAgentConfigRequest {
-        enabled: Some(original.enabled),
-        model: Some(original.model),
-        max_context_tokens: Some(original.max_context_tokens),
-        compaction_threshold: Some(original.compaction_threshold),
-        system_prompt: original.system_prompt,
-    };
     client
-        .update_agent_config(restore)
+        .create_subagent(CreateSubagentRequest {
+            display_name: Some(format!("Rust SDK Test {}", suffix)),
+            purpose: format!("Rust SDK integration test subagent {}", suffix),
+        })
         .await
-        .expect("Failed to restore config");
 }
 
 #[tokio::test]
 #[ignore = "Requires agent API on server"]
-async fn test_list_memory_blocks() {
+async fn test_create_and_delete_subagent() {
     let client = setup_authenticated_client()
         .await
         .expect("Failed to setup client");
 
-    // Trigger agent config init (which creates default blocks)
-    let _ = client.get_agent_config().await;
-
-    let blocks = client
-        .list_memory_blocks()
+    let subagent = create_test_subagent(&client)
         .await
-        .expect("Failed to list memory blocks");
+        .expect("Failed to create subagent");
 
-    assert!(
-        blocks.len() >= 2,
-        "Should have at least persona and human blocks"
-    );
-
-    let labels: Vec<&str> = blocks.iter().map(|b| b.label.as_str()).collect();
-    assert!(labels.contains(&"persona"), "Should have persona block");
-    assert!(labels.contains(&"human"), "Should have human block");
-
-    for block in &blocks {
-        assert!(!block.label.is_empty());
-        assert!(block.char_limit > 0);
-    }
-
-    println!("Found {} memory blocks", blocks.len());
-}
-
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_get_memory_block() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
-
-    let _ = client.get_agent_config().await;
-
-    let block = client
-        .get_memory_block("persona")
-        .await
-        .expect("Failed to get persona block");
-
-    assert_eq!(block.label, "persona");
-    assert!(
-        !block.value.is_empty(),
-        "Persona block should have a default value"
-    );
-    assert!(block.char_limit > 0);
-
-    println!("Persona block: {}", block.value);
-}
-
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_update_memory_block() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
-
-    let _ = client.get_agent_config().await;
-
-    let original = client
-        .get_memory_block("human")
-        .await
-        .expect("Failed to get human block");
-
-    let update = UpdateMemoryBlockRequest {
-        description: None,
-        value: Some("Test user info from Rust SDK integration test.".to_string()),
-        char_limit: None,
-        read_only: None,
-    };
-
-    let updated = client
-        .update_memory_block("human", update)
-        .await
-        .expect("Failed to update human block");
-
-    assert_eq!(updated.label, "human");
-    assert_eq!(
-        updated.value,
-        "Test user info from Rust SDK integration test."
-    );
-
-    // Restore original
-    let restore = UpdateMemoryBlockRequest {
-        description: None,
-        value: Some(original.value),
-        char_limit: None,
-        read_only: None,
-    };
-    client
-        .update_memory_block("human", restore)
-        .await
-        .expect("Failed to restore human block");
-}
-
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_archival_memory_insert_and_delete() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
-
-    let inserted = client
-        .insert_archival_memory(
-            "Rust SDK test: The capital of France is Paris.",
-            Some(json!({"tags": ["test", "geography"]})),
-        )
-        .await
-        .expect("Failed to insert archival memory");
-
-    assert_eq!(inserted.source_type, "archival");
-    assert!(inserted.token_count > 0);
-
-    println!(
-        "Inserted archival memory: id={}, model={}",
-        inserted.id, inserted.embedding_model
-    );
+    assert_eq!(subagent.object, "agent.subagent");
+    assert!(!subagent.display_name.is_empty());
+    assert!(!subagent.purpose.is_empty());
 
     let deleted = client
-        .delete_archival_memory(inserted.id)
+        .delete_subagent(subagent.id)
         .await
-        .expect("Failed to delete archival memory");
+        .expect("Failed to delete subagent");
 
     assert!(deleted.deleted);
-    assert_eq!(deleted.id, inserted.id);
+    assert_eq!(deleted.id, subagent.id);
+    assert_eq!(deleted.object, "agent.subagent.deleted");
 }
 
 #[tokio::test]
 #[ignore = "Requires agent API on server"]
-async fn test_memory_search() {
+async fn test_get_main_agent_and_items() {
     let client = setup_authenticated_client()
         .await
         .expect("Failed to setup client");
 
-    // Insert something searchable first
-    let inserted = client
-        .insert_archival_memory("Rust SDK search test: quantum computing uses qubits.", None)
+    let main_agent = client
+        .get_main_agent()
         .await
-        .expect("Failed to insert archival memory");
+        .expect("Failed to get main agent");
 
-    // Search for it
-    let search = MemorySearchRequest {
-        query: "quantum computing qubits".to_string(),
-        top_k: Some(5),
-        max_tokens: None,
-        source_types: Some(vec!["archival".to_string()]),
-    };
+    assert_eq!(main_agent.object, "agent.main");
+    assert_eq!(main_agent.kind, "main");
+    assert!(!main_agent.display_name.is_empty());
 
-    let results = client
-        .search_agent_memory(search)
+    let items = client
+        .list_main_agent_items(Some(AgentItemsListParams {
+            limit: Some(10),
+            order: Some("desc".to_string()),
+            ..Default::default()
+        }))
         .await
-        .expect("Failed to search agent memory");
+        .expect("Failed to list main agent items");
 
-    println!("Search returned {} results", results.results.len());
+    assert_eq!(items.object, "list");
 
-    // Clean up
-    let _ = client.delete_archival_memory(inserted.id).await;
-}
-
-#[tokio::test]
-#[ignore = "Requires agent API on server"]
-async fn test_agent_conversations() {
-    let client = setup_authenticated_client()
-        .await
-        .expect("Failed to setup client");
-
-    let conversations = client
-        .list_agent_conversations()
-        .await
-        .expect("Failed to list agent conversations");
-
-    assert_eq!(conversations.object, "list");
-
-    println!("Agent has {} conversations", conversations.data.len());
-
-    if let Some(conv) = conversations.data.first() {
-        let items = client
-            .list_agent_conversation_items(&conv.id, Some(10), None, None)
+    if let Some(first_item) = items.data.first() {
+        let item_id = conversation_item_id(first_item);
+        let item = client
+            .get_main_agent_item(item_id)
             .await
-            .expect("Failed to list conversation items");
+            .expect("Failed to get main agent item");
 
-        assert_eq!(items.object, "list");
-        println!("First conversation has {} items (page)", items.data.len());
+        assert_eq!(conversation_item_id(&item), item_id);
     }
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
+async fn test_delete_main_agent_resets_agent_tree() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let main_agent = client
+        .get_main_agent()
+        .await
+        .expect("Failed to get main agent");
+
+    let subagent = create_test_subagent(&client)
+        .await
+        .expect("Failed to create subagent");
+
+    let deleted = client
+        .delete_main_agent()
+        .await
+        .expect("Failed to delete main agent");
+
+    assert!(deleted.deleted);
+    assert_eq!(deleted.id, main_agent.id);
+    assert_eq!(deleted.object, "agent.main.deleted");
+
+    let subagents = client
+        .list_subagents(Some(ListSubagentsParams {
+            limit: Some(10),
+            ..Default::default()
+        }))
+        .await
+        .expect("Failed to list subagents after main deletion");
+
+    assert!(!subagents.data.iter().any(|item| item.id == subagent.id));
+
+    let recreated = client
+        .get_main_agent()
+        .await
+        .expect("Failed to recreate main agent");
+
+    assert_eq!(recreated.object, "agent.main");
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
+async fn test_list_and_get_subagents() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let subagent = create_test_subagent(&client)
+        .await
+        .expect("Failed to create subagent");
+
+    let list = client
+        .list_subagents(Some(ListSubagentsParams {
+            limit: Some(10),
+            created_by: Some("user".to_string()),
+            ..Default::default()
+        }))
+        .await
+        .expect("Failed to list subagents");
+
+    assert_eq!(list.object, "list");
+    assert!(list.data.iter().any(|item| item.id == subagent.id));
+
+    let fetched = client
+        .get_subagent(subagent.id)
+        .await
+        .expect("Failed to get subagent");
+
+    assert_eq!(fetched.id, subagent.id);
+    assert_eq!(fetched.kind, "subagent");
+
+    client
+        .delete_subagent(subagent.id)
+        .await
+        .expect("Failed to delete subagent");
 }
 
 #[tokio::test]
@@ -313,17 +209,6 @@ async fn test_agent_chat_sse() {
     let client = setup_authenticated_client()
         .await
         .expect("Failed to setup client");
-
-    // Ensure agent is enabled
-    let _ = client
-        .update_agent_config(UpdateAgentConfigRequest {
-            enabled: Some(true),
-            model: None,
-            max_context_tokens: None,
-            compaction_threshold: None,
-            system_prompt: None,
-        })
-        .await;
 
     let mut stream = client
         .agent_chat("Hello, please respond with just the word 'pong'.")
@@ -341,6 +226,9 @@ async fn test_agent_chat_sse() {
                     got_message = true;
                     all_messages.extend(msg.messages);
                     println!("Agent message at step {}: {:?}", msg.step, all_messages);
+                }
+                AgentSseEvent::Typing(typing) => {
+                    println!("Agent typing at step {}", typing.step);
                 }
                 AgentSseEvent::Done(done) => {
                     got_done = true;
@@ -365,4 +253,93 @@ async fn test_agent_chat_sse() {
     );
     assert!(got_done, "Should have received a done event");
     assert!(!all_messages.is_empty(), "Should have at least one message");
+}
+
+#[tokio::test]
+#[ignore = "Requires agent API on server"]
+async fn test_subagent_chat_sse() {
+    let client = setup_authenticated_client()
+        .await
+        .expect("Failed to setup client");
+
+    let subagent = create_test_subagent(&client)
+        .await
+        .expect("Failed to create subagent");
+
+    let mut stream = client
+        .subagent_chat(subagent.id, "Please reply with the word 'subpong'.")
+        .await
+        .expect("Failed to start subagent chat");
+
+    let mut got_message = false;
+    let mut got_done = false;
+    let mut all_messages: Vec<String> = Vec::new();
+
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(event) => match event {
+                AgentSseEvent::Message(msg) => {
+                    got_message = true;
+                    all_messages.extend(msg.messages);
+                    println!("Subagent message at step {}: {:?}", msg.step, all_messages);
+                }
+                AgentSseEvent::Typing(typing) => {
+                    println!("Subagent typing at step {}", typing.step);
+                }
+                AgentSseEvent::Done(done) => {
+                    got_done = true;
+                    println!(
+                        "Subagent done: {} steps, {} messages",
+                        done.total_steps, done.total_messages
+                    );
+                }
+                AgentSseEvent::Error(err) => {
+                    panic!("Subagent error: {}", err.error);
+                }
+            },
+            Err(e) => {
+                panic!("Stream error: {:?}", e);
+            }
+        }
+    }
+
+    let items = client
+        .list_subagent_items(
+            subagent.id,
+            Some(AgentItemsListParams {
+                limit: Some(10),
+                order: Some("desc".to_string()),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("Failed to list subagent items");
+
+    assert_eq!(items.object, "list");
+
+    if let Some(first_item) = items.data.first() {
+        let item_id = conversation_item_id(first_item);
+        let item = client
+            .get_subagent_item(subagent.id, item_id)
+            .await
+            .expect("Failed to get subagent item");
+
+        assert_eq!(conversation_item_id(&item), item_id);
+    }
+
+    let deleted = client
+        .delete_subagent(subagent.id)
+        .await
+        .expect("Failed to delete subagent after chat");
+
+    assert!(deleted.deleted);
+    assert!(
+        got_message,
+        "Should have received at least one subagent message"
+    );
+    assert!(got_done, "Should have received a subagent done event");
+    assert!(
+        !all_messages.is_empty(),
+        "Should have at least one subagent message"
+    );
 }

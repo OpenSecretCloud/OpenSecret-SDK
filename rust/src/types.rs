@@ -568,91 +568,143 @@ pub struct AgentChatRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConfigResponse {
-    pub enabled: bool,
-    pub model: String,
-    pub max_context_tokens: i32,
-    pub compaction_threshold: f32,
+pub struct CreateSubagentRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_prompt: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conversation_id: Option<Uuid>,
+    pub display_name: Option<String>,
+    pub purpose: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateAgentConfigRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_context_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compaction_threshold: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_prompt: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryBlockResponse {
-    pub label: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    pub value: String,
-    pub char_limit: i32,
-    pub read_only: bool,
-    pub version: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateMemoryBlockRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub char_limit: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub read_only: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsertArchivalRequest {
-    pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsertArchivalResponse {
+pub struct MainAgentResponse {
     pub id: Uuid,
-    pub source_type: String,
-    pub embedding_model: String,
-    pub token_count: i32,
-    pub created_at: DateTime<Utc>,
+    pub object: String,
+    pub kind: String,
+    pub conversation_id: Uuid,
+    pub display_name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchRequest {
-    pub query: String,
+pub struct SubagentResponse {
+    pub id: Uuid,
+    pub object: String,
+    pub kind: String,
+    pub conversation_id: Uuid,
+    pub display_name: String,
+    pub purpose: String,
+    pub created_by: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentItemsListParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_k: Option<usize>,
+    pub limit: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i32>,
+    pub after: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_types: Option<Vec<String>>,
+    pub order: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListSubagentsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchResult {
-    pub content: String,
-    pub score: f32,
-    pub token_count: i32,
+#[serde(tag = "type")]
+pub enum ConversationContent {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "input_text")]
+    InputText { text: String },
+    #[serde(rename = "output_text")]
+    OutputText { text: String },
+    #[serde(rename = "input_image")]
+    InputImage { image_url: String },
+    #[serde(rename = "input_file")]
+    InputFile { filename: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySearchResponse {
-    pub results: Vec<MemorySearchResult>,
+#[serde(tag = "type")]
+pub enum ReasoningContentItem {
+    #[serde(rename = "text")]
+    Text { text: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ConversationItem {
+    #[serde(rename = "message")]
+    Message {
+        id: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        role: String,
+        content: Vec<ConversationContent>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "function_call")]
+    FunctionToolCall {
+        id: Uuid,
+        call_id: Uuid,
+        name: String,
+        arguments: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "function_call_output")]
+    FunctionToolCallOutput {
+        id: Uuid,
+        call_id: Uuid,
+        output: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+    #[serde(rename = "reasoning")]
+    Reasoning {
+        id: Uuid,
+        content: Vec<ReasoningContentItem>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        created_at: Option<i64>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentItemsListResponse {
+    pub object: String,
+    pub data: Vec<ConversationItem>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubagentListResponse {
+    pub object: String,
+    pub data: Vec<SubagentResponse>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -666,6 +718,11 @@ pub struct DeletedObjectResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessageEvent {
     pub messages: Vec<String>,
+    pub step: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTypingEvent {
     pub step: usize,
 }
 
@@ -684,38 +741,7 @@ pub struct AgentErrorEvent {
 #[derive(Debug, Clone)]
 pub enum AgentSseEvent {
     Message(AgentMessageEvent),
+    Typing(AgentTypingEvent),
     Done(AgentDoneEvent),
     Error(AgentErrorEvent),
-}
-
-// Agent conversations reuse existing conversation types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversationListResponse {
-    pub object: String,
-    pub data: Vec<AgentConversation>,
-    pub has_more: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversation {
-    pub id: String,
-    pub object: String,
-    pub created_at: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConversationItemsResponse {
-    pub object: String,
-    pub data: Vec<Value>,
-    pub has_more: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_id: Option<String>,
 }

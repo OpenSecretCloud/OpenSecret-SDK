@@ -29,20 +29,17 @@ export type {
   BatchDeleteConversationsRequest,
   BatchDeleteItemResult,
   BatchDeleteConversationsResponse,
-  AgentConfigResponse,
-  UpdateAgentConfigRequest,
-  MemoryBlockResponse,
-  UpdateMemoryBlockRequest,
-  InsertArchivalRequest,
-  InsertArchivalResponse,
-  MemorySearchRequest,
-  MemorySearchResult,
-  MemorySearchResponse,
+  AgentCreatedBy,
+  MainAgentResponse,
+  CreateSubagentRequest,
+  AgentItemsListParams,
+  ListSubagentsParams,
+  SubagentResponse,
+  SubagentListResponse,
   AgentDeletedObjectResponse,
   AgentMessageEvent,
   AgentDoneEvent,
-  AgentErrorEvent,
-  AgentConversationListResponse
+  AgentErrorEvent
 } from "./api";
 
 // Export API key management functions
@@ -50,17 +47,16 @@ export { createApiKey, listApiKeys, deleteApiKey } from "./api";
 
 // Export Agent API functions
 export {
-  getAgentConfig,
-  updateAgentConfig,
-  listMemoryBlocks,
-  getMemoryBlock,
-  updateMemoryBlock,
-  insertArchivalMemory,
-  deleteArchivalMemory,
-  searchAgentMemory,
-  listAgentConversations,
-  listAgentConversationItems,
-  deleteAgentConversation
+  getMainAgent,
+  deleteMainAgent,
+  listMainAgentItems,
+  getMainAgentItem,
+  listSubagents,
+  getSubagent,
+  createSubagent,
+  deleteSubagent,
+  listSubagentItems,
+  getSubagentItem
 } from "./api";
 
 // Export AI customization options
