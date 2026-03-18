@@ -85,6 +85,13 @@ fn build_subagents_endpoint(params: Option<&ListSubagentsParams>) -> String {
     endpoint
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuthHeaderMode {
+    None,
+    Jwt,
+    ApiKeyOrJwt,
+}
+
 impl OpenSecretClient {
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
         let base_url = base_url.into();
@@ -194,15 +201,6 @@ impl OpenSecretClient {
 
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
-        // Key exchange only uses JWT tokens, never API keys
-        if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
-            );
-        }
 
         let response = self
             .client
@@ -356,49 +354,155 @@ impl OpenSecretClient {
         response.text().await.map_err(Into::into)
     }
 
-    // Encrypted API call helper -- mirrors the TypeScript SDK's retry behavior:
-    // - On no session or 400/encryption errors: re-attest and retry once
-    // - On 401: refresh JWT token and retry once
     async fn encrypted_api_call<T: Serialize + Clone, U: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
         data: Option<T>,
     ) -> Result<U> {
-        match self
-            .encrypted_api_call_inner(endpoint, method, data.clone())
+        self.retry_encrypted_json_call_without_refresh(endpoint, method, data, AuthHeaderMode::None)
             .await
-        {
-            Ok(result) => Ok(result),
-            Err(Error::Session(_)) => {
-                // No active session -- re-attest and retry
-                self.perform_attestation_handshake().await?;
-                self.encrypted_api_call_inner(endpoint, method, data).await
-            }
-            Err(Error::Api { status: 400, .. })
-            | Err(Error::Encryption(_))
-            | Err(Error::Decryption(_)) => {
-                // Bad request or encryption error -- re-attest and retry (matches TS SDK)
-                self.perform_attestation_handshake().await?;
-                self.encrypted_api_call_inner(endpoint, method, data).await
-            }
-            Err(Error::Api { status: 401, .. }) => {
-                // Unauthorized -- try refreshing the token, then retry
-                if self.session_manager.get_refresh_token()?.is_some() {
-                    let _ = self.refresh_token().await;
-                }
-                self.encrypted_api_call_inner(endpoint, method, data).await
-            }
-            Err(e) => Err(e),
-        }
     }
 
-    async fn encrypted_api_call_inner<T: Serialize, U: DeserializeOwned>(
+    async fn authenticated_api_call<T: Serialize + Clone, U: DeserializeOwned>(
         &self,
         endpoint: &str,
         method: &str,
         data: Option<T>,
     ) -> Result<U> {
+        self.retry_encrypted_json_call(endpoint, method, data, AuthHeaderMode::Jwt, true)
+            .await
+    }
+
+    async fn retry_encrypted_json_call_without_refresh<
+        T: Serialize + Clone,
+        U: DeserializeOwned,
+    >(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+        auth_mode: AuthHeaderMode,
+    ) -> Result<U> {
+        let mut retried_attestation = false;
+
+        loop {
+            match self
+                .encrypted_json_call_inner(endpoint, method, data.clone(), auth_mode)
+                .await
+            {
+                Ok(result) => return Ok(result),
+                Err(error) if !retried_attestation && Self::is_attestation_retryable(&error) => {
+                    self.perform_attestation_handshake().await?;
+                    retried_attestation = true;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn retry_encrypted_json_call<T: Serialize + Clone, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+        auth_mode: AuthHeaderMode,
+        allow_refresh: bool,
+    ) -> Result<U> {
+        let mut retried_attestation = false;
+        let mut retried_refresh = false;
+
+        loop {
+            match self
+                .encrypted_json_call_inner(endpoint, method, data.clone(), auth_mode)
+                .await
+            {
+                Ok(result) => return Ok(result),
+                Err(error) if !retried_attestation && Self::is_attestation_retryable(&error) => {
+                    self.perform_attestation_handshake().await?;
+                    retried_attestation = true;
+                }
+                Err(Error::Api { status: 401, .. })
+                    if allow_refresh && !retried_refresh && !self.using_api_key(auth_mode)? =>
+                {
+                    self.refresh_token().await?;
+                    retried_refresh = true;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn encrypted_json_call_inner<T: Serialize, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+        auth_mode: AuthHeaderMode,
+    ) -> Result<U> {
+        let (response, session_key) = self
+            .send_encrypted_request(endpoint, method, data, auth_mode, false)
+            .await?;
+        let encrypted_response: EncryptedResponse<U> = response.json().await?;
+        let decrypted =
+            crypto::decrypt_data(&session_key, &BASE64.decode(&encrypted_response.encrypted)?)?;
+        let result: U = serde_json::from_slice(&decrypted)?;
+
+        Ok(result)
+    }
+
+    /// Encrypted API call specifically for OpenAI endpoints (/v1/*)
+    /// This supports both API key and JWT authentication, with API key taking priority
+    async fn encrypted_openai_call<T: Serialize + Clone, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+    ) -> Result<U> {
+        self.retry_encrypted_json_call(endpoint, method, data, AuthHeaderMode::ApiKeyOrJwt, true)
+            .await
+    }
+
+    async fn retry_encrypted_stream_call<T: Serialize + Clone>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+        auth_mode: AuthHeaderMode,
+        allow_refresh: bool,
+    ) -> Result<(reqwest::Response, [u8; 32])> {
+        let mut retried_attestation = false;
+        let mut retried_refresh = false;
+
+        loop {
+            match self
+                .send_encrypted_request(endpoint, method, data.clone(), auth_mode, true)
+                .await
+            {
+                Ok(response) => return Ok(response),
+                Err(error) if !retried_attestation && Self::is_attestation_retryable(&error) => {
+                    self.perform_attestation_handshake().await?;
+                    retried_attestation = true;
+                }
+                Err(Error::Api { status: 401, .. })
+                    if allow_refresh && !retried_refresh && !self.using_api_key(auth_mode)? =>
+                {
+                    self.refresh_token().await?;
+                    retried_refresh = true;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn send_encrypted_request<T: Serialize>(
+        &self,
+        endpoint: &str,
+        method: &str,
+        data: Option<T>,
+        auth_mode: AuthHeaderMode,
+        accept_sse: bool,
+    ) -> Result<(reqwest::Response, [u8; 32])> {
         let session = self.session_manager.get_session()?.ok_or_else(|| {
             Error::Session(
                 "No active session. Call perform_attestation_handshake first".to_string(),
@@ -417,22 +521,7 @@ impl OpenSecretClient {
             None
         };
 
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(
-            "x-session-id",
-            HeaderValue::from_str(&session.session_id.to_string())
-                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
-        );
-
-        if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
-            );
-        }
-
+        let headers = self.build_encrypted_headers(&session, auth_mode, accept_sse)?;
         let request_builder = match method {
             "GET" => self.client.get(&url),
             "POST" => self.client.post(&url),
@@ -447,131 +536,87 @@ impl OpenSecretClient {
         };
 
         let request_builder = request_builder.headers(headers);
-        let request_builder = if let Some(body) = encrypted_body {
-            request_builder.json(&body)
+        let response = if let Some(body) = encrypted_body {
+            request_builder.json(&body).send().await?
         } else {
-            request_builder
+            request_builder.send().await?
         };
 
-        let response = request_builder.send().await?;
-        let status = response.status().as_u16();
-
         if !response.status().is_success() {
-            let text = response
+            let status = response.status().as_u16();
+            let error_msg = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::Api {
                 status,
-                message: text,
+                message: error_msg,
             });
         }
 
-        let encrypted_response: EncryptedResponse<U> = response.json().await?;
-        let decrypted = crypto::decrypt_data(
-            &session.session_key,
-            &BASE64.decode(&encrypted_response.encrypted)?,
-        )?;
-        let result: U = serde_json::from_slice(&decrypted)?;
-
-        Ok(result)
+        Ok((response, session.session_key))
     }
 
-    /// Encrypted API call specifically for OpenAI endpoints (/v1/*)
-    /// This supports both API key and JWT authentication, with API key taking priority
-    async fn encrypted_openai_call<T: Serialize, U: DeserializeOwned>(
+    fn build_encrypted_headers(
         &self,
-        endpoint: &str,
-        method: &str,
-        data: Option<T>,
-    ) -> Result<U> {
-        // Ensure we have a session
-        let session = self.session_manager.get_session()?.ok_or_else(|| {
-            Error::Session(
-                "No active session. Call perform_attestation_handshake first".to_string(),
-            )
-        })?;
-
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        // Encrypt the request data if provided
-        let encrypted_body = if let Some(data) = data {
-            let json = serde_json::to_string(&data)?;
-            let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
-            Some(EncryptedRequest {
-                encrypted: BASE64.encode(&encrypted),
-            })
-        } else {
-            None
-        };
-
-        // Build headers
+        session: &crate::types::SessionState,
+        auth_mode: AuthHeaderMode,
+        accept_sse: bool,
+    ) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        if accept_sse {
+            headers.insert("accept", HeaderValue::from_static("text/event-stream"));
+        }
+
         headers.insert(
             "x-session-id",
             HeaderValue::from_str(&session.session_id.to_string())
                 .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
         );
 
-        // For OpenAI endpoints: Prefer API key over JWT token if both are present
-        if let Some(api_key) = self.session_manager.get_api_key()? {
+        if let Some(token) = self.resolve_auth_token(auth_mode)? {
             headers.insert(
                 AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", api_key))
-                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
-            );
-        } else if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
+                HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|e| {
+                    Error::Authentication(format!("Invalid authorization credential format: {}", e))
+                })?,
             );
         }
 
-        // Make the request
-        let request_builder = match method {
-            "GET" => self.client.get(&url),
-            "POST" => self.client.post(&url),
-            "PUT" => self.client.put(&url),
-            "DELETE" => self.client.delete(&url),
-            _ => {
-                return Err(Error::Api {
-                    status: 0,
-                    message: format!("Unsupported HTTP method: {}", method),
-                })
+        Ok(headers)
+    }
+
+    fn resolve_auth_token(&self, auth_mode: AuthHeaderMode) -> Result<Option<String>> {
+        match auth_mode {
+            AuthHeaderMode::None => Ok(None),
+            AuthHeaderMode::Jwt => self.session_manager.get_access_token(),
+            AuthHeaderMode::ApiKeyOrJwt => {
+                if let Some(api_key) = self.session_manager.get_api_key()? {
+                    Ok(Some(api_key))
+                } else {
+                    self.session_manager.get_access_token()
+                }
             }
-        };
-
-        let request = request_builder.headers(headers);
-
-        let response = if let Some(body) = encrypted_body {
-            request.json(&body).send().await?
-        } else {
-            request.send().await?
-        };
-
-        let status = response.status();
-        let body = response.bytes().await?;
-
-        if !status.is_success() {
-            let error_msg = String::from_utf8_lossy(&body).to_string();
-            return Err(Error::Api {
-                status: status.as_u16(),
-                message: error_msg,
-            });
         }
+    }
 
-        // Decrypt the response
-        let encrypted_response: EncryptedResponse<U> = serde_json::from_slice(&body)?;
-        let encrypted_data = BASE64
-            .decode(encrypted_response.encrypted.as_bytes())
-            .map_err(|e| Error::Encryption(format!("Failed to decode response: {}", e)))?;
+    fn using_api_key(&self, auth_mode: AuthHeaderMode) -> Result<bool> {
+        match auth_mode {
+            AuthHeaderMode::ApiKeyOrJwt => Ok(self.session_manager.get_api_key()?.is_some()),
+            _ => Ok(false),
+        }
+    }
 
-        let decrypted = crypto::decrypt_data(&session.session_key, &encrypted_data)?;
-        let result: U = serde_json::from_slice(&decrypted)?;
-
-        Ok(result)
+    fn is_attestation_retryable(error: &Error) -> bool {
+        matches!(
+            error,
+            Error::Session(_)
+                | Error::Api { status: 400, .. }
+                | Error::Encryption(_)
+                | Error::Decryption(_)
+        )
     }
 
     // Auth Methods
@@ -831,9 +876,8 @@ impl OpenSecretClient {
 
         let request = RefreshRequest { refresh_token };
 
-        // Use inner call to avoid infinite recursion (encrypted_api_call retries on 401)
         let response: RefreshResponse = self
-            .encrypted_api_call_inner("/refresh", "POST", Some(request))
+            .encrypted_api_call("/refresh", "POST", Some(request))
             .await?;
 
         self.session_manager
@@ -875,20 +919,20 @@ impl OpenSecretClient {
 
     // User Profile API
     pub async fn get_user(&self) -> Result<UserResponse> {
-        self.encrypted_api_call("/protected/user", "GET", None::<()>)
+        self.authenticated_api_call("/protected/user", "GET", None::<()>)
             .await
     }
 
     // API Key Management
     pub async fn create_api_key(&self, name: String) -> Result<ApiKeyCreateResponse> {
         let request = ApiKeyCreateRequest { name };
-        self.encrypted_api_call("/protected/api-keys", "POST", Some(request))
+        self.authenticated_api_call("/protected/api-keys", "POST", Some(request))
             .await
     }
 
     pub async fn list_api_keys(&self) -> Result<Vec<ApiKey>> {
         let response: ApiKeyListResponse = self
-            .encrypted_api_call("/protected/api-keys", "GET", None::<()>)
+            .authenticated_api_call("/protected/api-keys", "GET", None::<()>)
             .await?;
 
         // Sort by created_at descending (newest first)
@@ -902,7 +946,9 @@ impl OpenSecretClient {
         // URL-encode the name to handle special characters
         let encoded_name = utf8_percent_encode(name, NON_ALPHANUMERIC).to_string();
         let url = format!("/protected/api-keys/{}", encoded_name);
-        let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
+        let _: serde_json::Value = self
+            .authenticated_api_call(&url, "DELETE", None::<()>)
+            .await?;
         Ok(())
     }
 
@@ -910,31 +956,33 @@ impl OpenSecretClient {
     pub async fn kv_get(&self, key: &str) -> Result<String> {
         let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
         let url = format!("/protected/kv/{}", encoded_key);
-        self.encrypted_api_call(&url, "GET", None::<()>).await
+        self.authenticated_api_call(&url, "GET", None::<()>).await
     }
 
     pub async fn kv_put(&self, key: &str, value: String) -> Result<String> {
         let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
         let url = format!("/protected/kv/{}", encoded_key);
-        self.encrypted_api_call(&url, "PUT", Some(value)).await
+        self.authenticated_api_call(&url, "PUT", Some(value)).await
     }
 
     pub async fn kv_delete(&self, key: &str) -> Result<()> {
         let encoded_key = utf8_percent_encode(key, NON_ALPHANUMERIC).to_string();
         let url = format!("/protected/kv/{}", encoded_key);
-        let _: serde_json::Value = self.encrypted_api_call(&url, "DELETE", None::<()>).await?;
+        let _: serde_json::Value = self
+            .authenticated_api_call(&url, "DELETE", None::<()>)
+            .await?;
         Ok(())
     }
 
     pub async fn kv_delete_all(&self) -> Result<()> {
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/kv", "DELETE", None::<()>)
+            .authenticated_api_call("/protected/kv", "DELETE", None::<()>)
             .await?;
         Ok(())
     }
 
     pub async fn kv_list(&self) -> Result<Vec<KVListItem>> {
-        self.encrypted_api_call("/protected/kv", "GET", None::<()>)
+        self.authenticated_api_call("/protected/kv", "GET", None::<()>)
             .await
     }
 
@@ -956,7 +1004,7 @@ impl OpenSecretClient {
                 url.push_str(&params.join("&"));
             }
         }
-        self.encrypted_api_call(&url, "GET", None::<()>).await
+        self.authenticated_api_call(&url, "GET", None::<()>).await
     }
 
     pub async fn get_private_key_bytes(
@@ -979,7 +1027,7 @@ impl OpenSecretClient {
                 url.push_str(&params.join("&"));
             }
         }
-        self.encrypted_api_call(&url, "GET", None::<()>).await
+        self.authenticated_api_call(&url, "GET", None::<()>).await
     }
 
     // Message Signing API
@@ -998,7 +1046,7 @@ impl OpenSecretClient {
                 seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
             }),
         };
-        self.encrypted_api_call("/protected/sign_message", "POST", Some(request))
+        self.authenticated_api_call("/protected/sign_message", "POST", Some(request))
             .await
     }
 
@@ -1025,7 +1073,7 @@ impl OpenSecretClient {
                 url.push_str(&format!("&seed_phrase_derivation_path={}", encoded));
             }
         }
-        self.encrypted_api_call(&url, "GET", None::<()>).await
+        self.authenticated_api_call(&url, "GET", None::<()>).await
     }
 
     // Third Party Token API
@@ -1034,7 +1082,7 @@ impl OpenSecretClient {
         audience: Option<String>,
     ) -> Result<ThirdPartyTokenResponse> {
         let request = ThirdPartyTokenRequest { audience };
-        self.encrypted_api_call("/protected/third_party_token", "POST", Some(request))
+        self.authenticated_api_call("/protected/third_party_token", "POST", Some(request))
             .await
     }
 
@@ -1051,7 +1099,7 @@ impl OpenSecretClient {
                 seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
             }),
         };
-        self.encrypted_api_call("/protected/encrypt", "POST", Some(request))
+        self.authenticated_api_call("/protected/encrypt", "POST", Some(request))
             .await
     }
 
@@ -1067,7 +1115,7 @@ impl OpenSecretClient {
                 seed_phrase_derivation_path: opts.seed_phrase_derivation_path,
             }),
         };
-        self.encrypted_api_call("/protected/decrypt", "POST", Some(request))
+        self.authenticated_api_call("/protected/decrypt", "POST", Some(request))
             .await
     }
 
@@ -1084,7 +1132,7 @@ impl OpenSecretClient {
             new_password,
         };
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/change_password", "POST", Some(request))
+            .authenticated_api_call("/protected/change_password", "POST", Some(request))
             .await?;
         Ok(())
     }
@@ -1144,7 +1192,7 @@ impl OpenSecretClient {
             name,
         };
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/convert_guest", "POST", Some(request))
+            .authenticated_api_call("/protected/convert_guest", "POST", Some(request))
             .await?;
         Ok(())
     }
@@ -1162,7 +1210,7 @@ impl OpenSecretClient {
     pub async fn request_new_verification_code(&self) -> Result<()> {
         let request = RequestVerificationCodeRequest {};
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/request_verification", "POST", Some(request))
+            .authenticated_api_call("/protected/request_verification", "POST", Some(request))
             .await?;
         Ok(())
     }
@@ -1171,7 +1219,7 @@ impl OpenSecretClient {
     pub async fn request_account_deletion(&self, hashed_secret: String) -> Result<()> {
         let request = InitiateAccountDeletionRequest { hashed_secret };
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/delete-account/request", "POST", Some(request))
+            .authenticated_api_call("/protected/delete-account/request", "POST", Some(request))
             .await?;
         Ok(())
     }
@@ -1187,7 +1235,7 @@ impl OpenSecretClient {
             plaintext_secret,
         };
         let _: serde_json::Value = self
-            .encrypted_api_call("/protected/delete-account/confirm", "POST", Some(request))
+            .authenticated_api_call("/protected/delete-account/confirm", "POST", Some(request))
             .await?;
         Ok(())
     }
@@ -1196,7 +1244,7 @@ impl OpenSecretClient {
 
     /// Deletes all conversations
     pub async fn delete_conversations(&self) -> Result<ConversationsDeleteResponse> {
-        self.encrypted_api_call("/v1/conversations", "DELETE", None::<()>)
+        self.authenticated_api_call("/v1/conversations", "DELETE", None::<()>)
             .await
     }
 
@@ -1206,7 +1254,7 @@ impl OpenSecretClient {
         ids: Vec<String>,
     ) -> Result<BatchDeleteConversationsResponse> {
         let request = BatchDeleteConversationsRequest { ids };
-        self.encrypted_api_call("/v1/conversations/batch-delete", "POST", Some(request))
+        self.authenticated_api_call("/v1/conversations/batch-delete", "POST", Some(request))
             .await
     }
 
@@ -1260,76 +1308,20 @@ impl OpenSecretClient {
             include_usage: true,
         });
 
-        // Get session for encryption
-        let session = self.session_manager.get_session()?.ok_or_else(|| {
-            Error::Session(
-                "No active session. Call perform_attestation_handshake first".to_string(),
+        let (response, session_key) = self
+            .retry_encrypted_stream_call(
+                "/v1/chat/completions",
+                "POST",
+                Some(modified_request),
+                AuthHeaderMode::ApiKeyOrJwt,
+                true,
             )
-        })?;
-
-        let url = format!("{}/v1/chat/completions", self.base_url);
-
-        // Encrypt the request
-        let json = serde_json::to_string(&modified_request)?;
-        let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
-        let encrypted_request = EncryptedRequest {
-            encrypted: BASE64.encode(&encrypted),
-        };
-
-        // Build headers
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert("accept", HeaderValue::from_static("text/event-stream"));
-        headers.insert(
-            "x-session-id",
-            HeaderValue::from_str(&session.session_id.to_string())
-                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
-        );
-
-        // Add authorization header if we have a token or API key
-        // Prefer API key over JWT token if both are present
-        if let Some(api_key) = self.session_manager.get_api_key()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", api_key))
-                    .map_err(|e| Error::Authentication(format!("Invalid API key format: {}", e)))?,
-            );
-        } else if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
-            );
-        }
-
-        // Make the streaming request
-        let response = self
-            .client
-            .post(&url)
-            .headers(headers)
-            .json(&encrypted_request)
-            .send()
             .await?;
 
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::Api {
-                status,
-                message: text,
-            });
-        }
-
-        // Convert response to stream of bytes
         let stream = response
             .bytes_stream()
             .map(|result| result.map_err(std::io::Error::other));
 
-        // Parse SSE events and decrypt
-        let session_key = session.session_key;
         let event_stream = stream.eventsource().filter_map(move |event| {
             let session_key = session_key;
             async move {
@@ -1391,62 +1383,20 @@ impl OpenSecretClient {
             input: input.to_string(),
         };
 
-        let session = self.session_manager.get_session()?.ok_or_else(|| {
-            Error::Session(
-                "No active session. Call perform_attestation_handshake first".to_string(),
+        let (response, session_key) = self
+            .retry_encrypted_stream_call(
+                &endpoint,
+                "POST",
+                Some(request),
+                AuthHeaderMode::Jwt,
+                true,
             )
-        })?;
-
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        let json = serde_json::to_string(&request)?;
-        let encrypted = crypto::encrypt_data(&session.session_key, json.as_bytes())?;
-        let encrypted_request = EncryptedRequest {
-            encrypted: BASE64.encode(&encrypted),
-        };
-
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert("accept", HeaderValue::from_static("text/event-stream"));
-        headers.insert(
-            "x-session-id",
-            HeaderValue::from_str(&session.session_id.to_string())
-                .map_err(|e| Error::Session(format!("Invalid session ID: {}", e)))?,
-        );
-
-        if let Some(token) = self.session_manager.get_access_token()? {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", token))
-                    .map_err(|e| Error::Authentication(format!("Invalid token format: {}", e)))?,
-            );
-        }
-
-        let response = self
-            .client
-            .post(&url)
-            .headers(headers)
-            .json(&encrypted_request)
-            .send()
             .await?;
-
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::Api {
-                status,
-                message: text,
-            });
-        }
 
         let stream = response
             .bytes_stream()
             .map(|result| result.map_err(std::io::Error::other));
 
-        let session_key = session.session_key;
         let event_stream = stream.eventsource().filter_map(move |event| {
             let session_key = session_key;
             async move {
@@ -1551,13 +1501,13 @@ impl OpenSecretClient {
 
     /// Fetches the current user's main agent.
     pub async fn get_main_agent(&self) -> Result<MainAgentResponse> {
-        self.encrypted_api_call("/v1/agent", "GET", None::<()>)
+        self.authenticated_api_call("/v1/agent", "GET", None::<()>)
             .await
     }
 
     /// Deletes the current user's main agent and resets shared agent state.
     pub async fn delete_main_agent(&self) -> Result<DeletedObjectResponse> {
-        self.encrypted_api_call("/v1/agent", "DELETE", None::<()>)
+        self.authenticated_api_call("/v1/agent", "DELETE", None::<()>)
             .await
     }
 
@@ -1567,12 +1517,13 @@ impl OpenSecretClient {
         params: Option<AgentItemsListParams>,
     ) -> Result<AgentItemsListResponse> {
         let endpoint = build_agent_items_endpoint("/v1/agent/items", params.as_ref());
-        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
     }
 
     /// Fetches a single item from the main agent conversation.
     pub async fn get_main_agent_item(&self, item_id: Uuid) -> Result<ConversationItem> {
-        self.encrypted_api_call(&format!("/v1/agent/items/{}", item_id), "GET", None::<()>)
+        self.authenticated_api_call(&format!("/v1/agent/items/{}", item_id), "GET", None::<()>)
             .await
     }
 
@@ -1590,7 +1541,7 @@ impl OpenSecretClient {
         &self,
         request: CreateSubagentRequest,
     ) -> Result<SubagentResponse> {
-        self.encrypted_api_call("/v1/agent/subagents", "POST", Some(request))
+        self.authenticated_api_call("/v1/agent/subagents", "POST", Some(request))
             .await
     }
 
@@ -1600,12 +1551,13 @@ impl OpenSecretClient {
         params: Option<ListSubagentsParams>,
     ) -> Result<SubagentListResponse> {
         let endpoint = build_subagents_endpoint(params.as_ref());
-        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
     }
 
     /// Fetches a single subagent by UUID.
     pub async fn get_subagent(&self, id: Uuid) -> Result<SubagentResponse> {
-        self.encrypted_api_call(&format!("/v1/agent/subagents/{}", id), "GET", None::<()>)
+        self.authenticated_api_call(&format!("/v1/agent/subagents/{}", id), "GET", None::<()>)
             .await
     }
 
@@ -1629,12 +1581,13 @@ impl OpenSecretClient {
             &format!("/v1/agent/subagents/{}/items", id),
             params.as_ref(),
         );
-        self.encrypted_api_call(&endpoint, "GET", None::<()>).await
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
     }
 
     /// Fetches a single item from a subagent conversation.
     pub async fn get_subagent_item(&self, id: Uuid, item_id: Uuid) -> Result<ConversationItem> {
-        self.encrypted_api_call(
+        self.authenticated_api_call(
             &format!("/v1/agent/subagents/{}/items/{}", id, item_id),
             "GET",
             None::<()>,
@@ -1644,7 +1597,7 @@ impl OpenSecretClient {
 
     /// Deletes a subagent by UUID.
     pub async fn delete_subagent(&self, id: Uuid) -> Result<DeletedObjectResponse> {
-        self.encrypted_api_call(&format!("/v1/agent/subagents/{}", id), "DELETE", None::<()>)
+        self.authenticated_api_call(&format!("/v1/agent/subagents/{}", id), "DELETE", None::<()>)
             .await
     }
 }
@@ -1652,11 +1605,488 @@ impl OpenSecretClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::StreamExt;
+    use serde_cbor::Value as CborValue;
+    use serde_json::json;
+    use std::collections::BTreeMap;
+    use wiremock::{
+        matchers::{header, method, path},
+        Match, Mock, MockServer, Request, Respond, ResponseTemplate,
+    };
+
+    struct MissingHeaderMatcher(&'static str);
+
+    impl Match for MissingHeaderMatcher {
+        fn matches(&self, request: &Request) -> bool {
+            !request.headers.contains_key(self.0)
+        }
+    }
+
+    struct PathPrefixMatcher(&'static str);
+
+    impl Match for PathPrefixMatcher {
+        fn matches(&self, request: &Request) -> bool {
+            request.url.path().starts_with(self.0)
+        }
+    }
+
+    struct AttestationResponder {
+        server_public_key: [u8; 32],
+    }
+
+    impl Respond for AttestationResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let nonce = request.url.path().rsplit('/').next().unwrap_or_default();
+            let attestation_document =
+                build_mock_attestation_document(nonce, &self.server_public_key);
+
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "attestation_document": attestation_document }))
+        }
+    }
+
+    struct KeyExchangeResponder {
+        server_secret_key: [u8; 32],
+        session_key: [u8; 32],
+        session_id: String,
+    }
+
+    impl Respond for KeyExchangeResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let body: KeyExchangeRequest = serde_json::from_slice(request.body.as_ref()).unwrap();
+            let client_public_bytes = BASE64.decode(body.client_public_key.as_bytes()).unwrap();
+            let client_public_key = x25519_dalek::PublicKey::from(
+                <[u8; 32]>::try_from(client_public_bytes.as_slice()).unwrap(),
+            );
+            let server_secret = x25519_dalek::StaticSecret::from(self.server_secret_key);
+            let shared_secret =
+                crypto::perform_static_key_exchange(&server_secret, &client_public_key);
+            let encrypted_session_key = BASE64
+                .encode(crypto::encrypt_data(shared_secret.as_bytes(), &self.session_key).unwrap());
+
+            ResponseTemplate::new(200).set_body_json(json!({
+                "encrypted_session_key": encrypted_session_key,
+                "session_id": self.session_id,
+            }))
+        }
+    }
+
+    fn build_mock_attestation_document(nonce: &str, server_public_key: &[u8; 32]) -> String {
+        let mut payload = BTreeMap::new();
+        payload.insert(
+            CborValue::Text("public_key".to_string()),
+            CborValue::Bytes(server_public_key.to_vec()),
+        );
+        payload.insert(
+            CborValue::Text("nonce".to_string()),
+            CborValue::Bytes(nonce.as_bytes().to_vec()),
+        );
+
+        let payload = serde_cbor::to_vec(&CborValue::Map(payload)).unwrap();
+        let cose_sign1 = CborValue::Array(vec![
+            CborValue::Bytes(vec![]),
+            CborValue::Map(BTreeMap::new()),
+            CborValue::Bytes(payload),
+            CborValue::Bytes(vec![]),
+        ]);
+
+        BASE64.encode(serde_cbor::to_vec(&cose_sign1).unwrap())
+    }
+
+    fn encrypted_response<T: Serialize>(session_key: &[u8; 32], payload: &T) -> serde_json::Value {
+        let plaintext = serde_json::to_vec(payload).unwrap();
+        let encrypted = crypto::encrypt_data(session_key, &plaintext).unwrap();
+        json!({ "encrypted": BASE64.encode(encrypted) })
+    }
+
+    fn encrypted_sse_data<T: Serialize>(session_key: &[u8; 32], payload: &T) -> String {
+        let plaintext = serde_json::to_vec(payload).unwrap();
+        let encrypted = crypto::encrypt_data(session_key, &plaintext).unwrap();
+        format!("data: {}\n\n", BASE64.encode(encrypted))
+    }
 
     #[tokio::test]
     async fn test_client_creation() {
         let client = OpenSecretClient::new("http://localhost:3000").unwrap();
         assert_eq!(client.base_url, "http://localhost:3000");
         assert!(client.use_mock_attestation);
+    }
+
+    #[tokio::test]
+    async fn test_authenticated_calls_refresh_and_retry_seamlessly() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [7u8; 32];
+        let expired_access = "expired_access";
+        let new_access = "new_access";
+        let new_refresh = "new_refresh";
+        let expired_header = format!("Bearer {}", expired_access);
+        let fresh_header = format!("Bearer {}", new_access);
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                expired_access.to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/protected/user"))
+            .and(header("authorization", &expired_header))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(json!({ "message": "jwt expired" })),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/refresh"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "access_token": new_access,
+                    "refresh_token": new_refresh,
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/protected/user"))
+            .and(header("authorization", &fresh_header))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "user": {
+                        "id": Uuid::new_v4(),
+                        "name": null,
+                        "email": "sdk@test.dev",
+                        "email_verified": true,
+                        "login_method": "email",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client.get_user().await.unwrap();
+
+        assert_eq!(response.user.email.as_deref(), Some("sdk@test.dev"));
+        assert_eq!(
+            client.get_access_token().unwrap().as_deref(),
+            Some(new_access)
+        );
+        assert_eq!(
+            client.get_refresh_token().unwrap().as_deref(),
+            Some(new_refresh)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_corrupted_access_token_recovers_via_refresh_on_next_call() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [5u8; 32];
+        let original_access = "valid_access";
+        let original_refresh = "valid_refresh";
+        let corrupted_access = "malformed_access";
+        let refreshed_access = "refreshed_access";
+        let refreshed_refresh = "refreshed_refresh";
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/login"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "id": Uuid::new_v4(),
+                    "email": "sdk@test.dev",
+                    "access_token": original_access,
+                    "refresh_token": original_refresh,
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/protected/user"))
+            .and(header(
+                "authorization",
+                format!("Bearer {}", original_access),
+            ))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "user": {
+                        "id": Uuid::new_v4(),
+                        "name": null,
+                        "email": "sdk@test.dev",
+                        "email_verified": true,
+                        "login_method": "email",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/protected/user"))
+            .and(header(
+                "authorization",
+                format!("Bearer {}", corrupted_access),
+            ))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(json!({ "message": "invalid jwt" })),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/refresh"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "access_token": refreshed_access,
+                    "refresh_token": refreshed_refresh,
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/protected/user"))
+            .and(header(
+                "authorization",
+                format!("Bearer {}", refreshed_access),
+            ))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "user": {
+                        "id": Uuid::new_v4(),
+                        "name": null,
+                        "email": "sdk@test.dev",
+                        "email_verified": true,
+                        "login_method": "email",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        client
+            .login(
+                "sdk@test.dev".to_string(),
+                "password".to_string(),
+                Uuid::new_v4(),
+            )
+            .await
+            .unwrap();
+
+        let initial_user = client.get_user().await.unwrap();
+        assert_eq!(initial_user.user.email.as_deref(), Some("sdk@test.dev"));
+
+        client
+            .session_manager
+            .update_access_token(corrupted_access.to_string())
+            .unwrap();
+
+        let recovered_user = client.get_user().await.unwrap();
+
+        assert_eq!(recovered_user.user.email.as_deref(), Some("sdk@test.dev"));
+        assert_eq!(
+            client.get_access_token().unwrap().as_deref(),
+            Some(refreshed_access)
+        );
+        assert_eq!(
+            client.get_refresh_token().unwrap().as_deref(),
+            Some(refreshed_refresh)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_streaming_completion_preserves_reasoning_content() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [13u8; 32];
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let sse_body = format!(
+            "{}data: [DONE]\n\n",
+            encrypted_sse_data(
+                &session_key,
+                &json!({
+                    "id": "chatcmpl-test",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "kimi-k2-5",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {
+                            "reasoning_content": "2 + 2 = 4"
+                        },
+                        "finish_reason": null
+                    }]
+                })
+            )
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(sse_body),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let request = ChatCompletionRequest {
+            model: "kimi-k2-5".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: serde_json::json!("What is 2+2?"),
+                tool_calls: None,
+                reasoning_content: None,
+            }],
+            temperature: Some(0.0),
+            max_tokens: Some(100),
+            stream: Some(true),
+            stream_options: None,
+            tools: None,
+            tool_choice: None,
+        };
+
+        let mut stream = client.create_chat_completion_stream(request).await.unwrap();
+        let chunk = stream.next().await.unwrap().unwrap();
+
+        assert_eq!(
+            chunk.0["choices"][0]["delta"]["reasoning_content"].as_str(),
+            Some("2 + 2 = 4")
+        );
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_refresh_reestablishes_attestation_without_sending_auth_headers() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let server_secret_key = [11u8; 32];
+        let server_public_key =
+            x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(server_secret_key));
+        let session_key = [9u8; 32];
+        let session_id = Uuid::new_v4().to_string();
+        let refreshed_access = "refreshed_access";
+        let refreshed_refresh = "refreshed_refresh";
+
+        client
+            .session_manager
+            .set_tokens(
+                "expired_access".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("GET"))
+            .and(PathPrefixMatcher("/attestation/"))
+            .respond_with(AttestationResponder {
+                server_public_key: server_public_key.to_bytes(),
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/key_exchange"))
+            .and(MissingHeaderMatcher("authorization"))
+            .respond_with(KeyExchangeResponder {
+                server_secret_key,
+                session_key,
+                session_id: session_id.clone(),
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/refresh"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.clone()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "access_token": refreshed_access,
+                    "refresh_token": refreshed_refresh,
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        client.refresh_token().await.unwrap();
+
+        assert_eq!(
+            client.get_session_id().unwrap(),
+            Some(Uuid::parse_str(&session_id).unwrap())
+        );
+        assert_eq!(
+            client.get_access_token().unwrap().as_deref(),
+            Some(refreshed_access)
+        );
+        assert_eq!(
+            client.get_refresh_token().unwrap().as_deref(),
+            Some(refreshed_refresh)
+        );
     }
 }
