@@ -1605,6 +1605,7 @@ impl OpenSecretClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::StreamExt;
     use serde_cbor::Value as CborValue;
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -1696,6 +1697,12 @@ mod tests {
         let plaintext = serde_json::to_vec(payload).unwrap();
         let encrypted = crypto::encrypt_data(session_key, &plaintext).unwrap();
         json!({ "encrypted": BASE64.encode(encrypted) })
+    }
+
+    fn encrypted_sse_data<T: Serialize>(session_key: &[u8; 32], payload: &T) -> String {
+        let plaintext = serde_json::to_vec(payload).unwrap();
+        let encrypted = crypto::encrypt_data(session_key, &plaintext).unwrap();
+        format!("data: {}\n\n", BASE64.encode(encrypted))
     }
 
     #[tokio::test]
@@ -1931,6 +1938,84 @@ mod tests {
             client.get_refresh_token().unwrap().as_deref(),
             Some(refreshed_refresh)
         );
+    }
+
+    #[tokio::test]
+    async fn test_streaming_completion_preserves_reasoning_content() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [13u8; 32];
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let sse_body = format!(
+            "{}data: [DONE]\n\n",
+            encrypted_sse_data(
+                &session_key,
+                &json!({
+                    "id": "chatcmpl-test",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "kimi-k2-5",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {
+                            "reasoning_content": "2 + 2 = 4"
+                        },
+                        "finish_reason": null
+                    }]
+                })
+            )
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(sse_body),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let request = ChatCompletionRequest {
+            model: "kimi-k2-5".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: serde_json::json!("What is 2+2?"),
+                tool_calls: None,
+                reasoning_content: None,
+            }],
+            temperature: Some(0.0),
+            max_tokens: Some(100),
+            stream: Some(true),
+            stream_options: None,
+            tools: None,
+            tool_choice: None,
+        };
+
+        let mut stream = client.create_chat_completion_stream(request).await.unwrap();
+        let chunk = stream.next().await.unwrap().unwrap();
+
+        assert_eq!(
+            chunk.0["choices"][0]["delta"]["reasoning_content"].as_str(),
+            Some("2 + 2 = 4")
+        );
+        assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
