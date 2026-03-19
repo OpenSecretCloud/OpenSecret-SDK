@@ -1405,6 +1405,77 @@ test("Platform password change requires authentication", async () => {
   }
 });
 
+// ===== PROJECT PUSH SETTINGS TESTS =====
+
+test("Project push settings CRUD operations", async () => {
+  try {
+    const { access_token, refresh_token } = await tryDeveloperLogin();
+    window.localStorage.setItem("access_token", access_token);
+    window.localStorage.setItem("refresh_token", refresh_token);
+
+    const orgName = `Test Push Settings Org ${Date.now()}`;
+    const createdOrg = await platformApi.createOrganization(orgName);
+    expect(createdOrg).toBeDefined();
+
+    try {
+      const projectName = `Test Push Settings Project ${Date.now()}`;
+      const createdProject = await platformApi.createProject(
+        createdOrg.id.toString(),
+        projectName,
+        "A project for testing push settings"
+      );
+      expect(createdProject).toBeDefined();
+
+      try {
+        const initialSettings = await platformApi.getPushSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(initialSettings).toEqual({ encrypted_preview_enabled: false });
+
+        const pushSettings = {
+          encrypted_preview_enabled: true,
+          ios: {
+            enabled: true,
+            bundle_id: `ai.trymaple.push.${Date.now()}`,
+            apns_environment: "dev" as const,
+            team_id: `TEAM${Date.now().toString().slice(-6)}`,
+            key_id: `KEY${Date.now().toString().slice(-6)}`
+          },
+          android: {
+            enabled: true,
+            firebase_project_id: `firebase-project-${Date.now()}`,
+            package_name: `ai.trymaple.push.android.${Date.now()}`
+          }
+        };
+
+        const updatedSettings = await platformApi.updatePushSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString(),
+          pushSettings
+        );
+
+        expect(updatedSettings).toEqual(pushSettings);
+
+        const fetchedSettings = await platformApi.getPushSettings(
+          createdOrg.id.toString(),
+          createdProject.id.toString()
+        );
+
+        expect(fetchedSettings).toEqual(pushSettings);
+      } finally {
+        await platformApi.deleteProject(createdOrg.id.toString(), createdProject.id.toString());
+      }
+    } finally {
+      await platformApi.deleteOrganization(createdOrg.id.toString());
+    }
+  } catch (error: any) {
+    console.error("Test failed:", error.message);
+    throw error;
+  }
+});
+
 // ===== PROJECT SECRET TESTS =====
 
 test("Project secret CRUD operations", async () => {

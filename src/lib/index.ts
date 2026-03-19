@@ -84,7 +84,8 @@ export type {
   DeveloperRole,
   OrganizationDetails,
   ProjectDetails,
-  ProjectSettings
+  ProjectSettings,
+  PushSettings
 } from "./developer";
 export type { AttestationDocument } from "./attestation";
 export type { ParsedAttestationView } from "./attestationForView";

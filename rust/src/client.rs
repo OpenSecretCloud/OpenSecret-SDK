@@ -886,13 +886,16 @@ impl OpenSecretClient {
         Ok(())
     }
 
-    pub async fn logout(&self) -> Result<()> {
+    async fn logout_inner(&self, push_device_id: Option<Uuid>) -> Result<()> {
         let refresh_token = self
             .session_manager
             .get_refresh_token()?
             .ok_or_else(|| Error::Authentication("No refresh token available".to_string()))?;
 
-        let request = LogoutRequest { refresh_token };
+        let request = LogoutRequest {
+            refresh_token,
+            push_device_id,
+        };
 
         let _: serde_json::Value = self
             .encrypted_api_call("/logout", "POST", Some(request))
@@ -902,6 +905,14 @@ impl OpenSecretClient {
         self.session_manager.clear_all()?;
 
         Ok(())
+    }
+
+    pub async fn logout(&self) -> Result<()> {
+        self.logout_inner(None).await
+    }
+
+    pub async fn logout_with_push_device_id(&self, push_device_id: Uuid) -> Result<()> {
+        self.logout_inner(Some(push_device_id)).await
     }
 
     pub fn get_access_token(&self) -> Result<Option<String>> {
@@ -920,6 +931,24 @@ impl OpenSecretClient {
     // User Profile API
     pub async fn get_user(&self) -> Result<UserResponse> {
         self.authenticated_api_call("/protected/user", "GET", None::<()>)
+            .await
+    }
+
+    pub async fn register_push_device(
+        &self,
+        request: RegisterPushDeviceRequest,
+    ) -> Result<PushDevice> {
+        self.authenticated_api_call("/v1/push/devices", "POST", Some(request))
+            .await
+    }
+
+    pub async fn list_push_devices(&self) -> Result<PushDeviceListResponse> {
+        self.authenticated_api_call("/v1/push/devices", "GET", None::<()>)
+            .await
+    }
+
+    pub async fn revoke_push_device(&self, id: Uuid) -> Result<DeletedPushDeviceResponse> {
+        self.authenticated_api_call(&format!("/v1/push/devices/{}", id), "DELETE", None::<()>)
             .await
     }
 
@@ -1605,6 +1634,7 @@ impl OpenSecretClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PushNotificationKeyPair;
     use futures::StreamExt;
     use serde_cbor::Value as CborValue;
     use serde_json::json;
@@ -1705,11 +1735,243 @@ mod tests {
         format!("data: {}\n\n", BASE64.encode(encrypted))
     }
 
+    fn decrypt_request_body<T: serde::de::DeserializeOwned>(
+        request: &Request,
+        session_key: &[u8; 32],
+    ) -> T {
+        let body: EncryptedRequest = serde_json::from_slice(request.body.as_ref()).unwrap();
+        let encrypted = BASE64.decode(body.encrypted.as_bytes()).unwrap();
+        let plaintext = crypto::decrypt_data(session_key, &encrypted).unwrap();
+        serde_json::from_slice(&plaintext).unwrap()
+    }
+
+    struct RegisterPushDeviceResponder {
+        session_key: [u8; 32],
+        expected_request: RegisterPushDeviceRequest,
+        response_device: PushDevice,
+    }
+
+    impl Respond for RegisterPushDeviceResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let body: RegisterPushDeviceRequest = decrypt_request_body(request, &self.session_key);
+            assert_eq!(body, self.expected_request);
+
+            ResponseTemplate::new(200)
+                .set_body_json(encrypted_response(&self.session_key, &self.response_device))
+        }
+    }
+
+    struct LogoutWithPushDeviceResponder {
+        session_key: [u8; 32],
+        expected_push_device_id: Uuid,
+    }
+
+    impl Respond for LogoutWithPushDeviceResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let body: LogoutRequest = decrypt_request_body(request, &self.session_key);
+            assert_eq!(body.push_device_id, Some(self.expected_push_device_id));
+
+            ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &self.session_key,
+                &json!({ "ok": true }),
+            ))
+        }
+    }
+
     #[tokio::test]
     async fn test_client_creation() {
         let client = OpenSecretClient::new("http://localhost:3000").unwrap();
         assert_eq!(client.base_url, "http://localhost:3000");
         assert!(client.use_mock_attestation);
+    }
+
+    #[tokio::test]
+    async fn test_register_push_device_uses_v1_push_endpoint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [21u8; 32];
+        let now = chrono::DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let key_pair = PushNotificationKeyPair::generate();
+        let request = RegisterPushDeviceRequest::new(
+            Uuid::new_v4(),
+            PushPlatform::Ios,
+            PushEnvironment::Prod,
+            "ai.trymaple.ios",
+            "opaque-token",
+            key_pair.public_key_spki_base64().unwrap(),
+        )
+        .supports_encrypted_preview(true)
+        .supports_background_processing(true);
+
+        let response_device = PushDevice {
+            id: Uuid::new_v4(),
+            object: "push.device".to_string(),
+            installation_id: request.installation_id,
+            platform: request.platform,
+            provider: request.provider,
+            environment: request.environment,
+            app_id: request.app_id.clone(),
+            key_algorithm: request.key_algorithm,
+            supports_encrypted_preview: request.supports_encrypted_preview,
+            supports_background_processing: request.supports_background_processing,
+            last_seen_at: now,
+            created_at: now,
+            updated_at: now,
+        };
+
+        Mock::given(method("POST"))
+            .and(path("/v1/push/devices"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(RegisterPushDeviceResponder {
+                session_key,
+                expected_request: request.clone(),
+                response_device: response_device.clone(),
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client.register_push_device(request).await.unwrap();
+
+        assert_eq!(response, response_device);
+    }
+
+    #[tokio::test]
+    async fn test_list_and_revoke_push_devices_use_v1_endpoints() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [22u8; 32];
+        let now = chrono::DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let device_id = Uuid::new_v4();
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let device = PushDevice {
+            id: device_id,
+            object: "push.device".to_string(),
+            installation_id: Uuid::new_v4(),
+            platform: PushPlatform::Android,
+            provider: PushProvider::Fcm,
+            environment: PushEnvironment::Prod,
+            app_id: "ai.trymaple.android".to_string(),
+            key_algorithm: PushKeyAlgorithm::P256EcdhV1,
+            supports_encrypted_preview: false,
+            supports_background_processing: true,
+            last_seen_at: now,
+            created_at: now,
+            updated_at: now,
+        };
+        let list_response = PushDeviceListResponse {
+            object: "list".to_string(),
+            data: vec![device.clone()],
+        };
+        let deleted_response = DeletedPushDeviceResponse {
+            id: device_id,
+            object: "push.device.deleted".to_string(),
+            deleted: true,
+        };
+
+        Mock::given(method("GET"))
+            .and(path("/v1/push/devices"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &list_response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("DELETE"))
+            .and(path(format!("/v1/push/devices/{}", device_id)))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &deleted_response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let listed = client.list_push_devices().await.unwrap();
+        let deleted = client.revoke_push_device(device_id).await.unwrap();
+
+        assert_eq!(listed, list_response);
+        assert_eq!(deleted, deleted_response);
+    }
+
+    #[tokio::test]
+    async fn test_logout_with_push_device_id_sends_cleanup_hint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [23u8; 32];
+        let push_device_id = Uuid::new_v4();
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/logout"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(LogoutWithPushDeviceResponder {
+                session_key,
+                expected_push_device_id: push_device_id,
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        client
+            .logout_with_push_device_id(push_device_id)
+            .await
+            .unwrap();
+
+        assert!(client.get_session_id().unwrap().is_none());
+        assert!(client.get_access_token().unwrap().is_none());
+        assert!(client.get_refresh_token().unwrap().is_none());
     }
 
     #[tokio::test]
