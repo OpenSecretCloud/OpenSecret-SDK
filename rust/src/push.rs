@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 pub const PUSH_NOTIFICATION_KEY_ALGORITHM: &str = "p256_ecdh_v1";
 pub const PUSH_NOTIFICATION_ENVELOPE_ALGORITHM: &str = "p256-hkdf-sha256-aes256gcm";
+const PUSH_NOTIFICATION_PAYLOAD_VERSION: i32 = 1;
 const PUSH_NOTIFICATION_PREVIEW_INFO: &[u8] = b"opensecret-push-preview-v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -106,7 +107,7 @@ impl PushNotificationKeyPair {
         &self,
         envelope: &EncryptedPushPreviewEnvelope,
     ) -> Result<PushNotificationPreviewPayload> {
-        if envelope.enc_v != 1 {
+        if envelope.enc_v != PUSH_NOTIFICATION_PAYLOAD_VERSION {
             return Err(Error::InvalidResponse(format!(
                 "Unsupported push preview version: {}",
                 envelope.enc_v
@@ -155,8 +156,17 @@ impl PushNotificationKeyPair {
             Error::Decryption(format!("Failed to decrypt push preview payload: {e}"))
         })?;
 
-        serde_json::from_slice(&plaintext)
-            .map_err(|e| Error::InvalidResponse(format!("Invalid push preview payload: {e}")))
+        let payload: PushNotificationPreviewPayload = serde_json::from_slice(&plaintext)
+            .map_err(|e| Error::InvalidResponse(format!("Invalid push preview payload: {e}")))?;
+
+        if payload.v != PUSH_NOTIFICATION_PAYLOAD_VERSION {
+            return Err(Error::InvalidResponse(format!(
+                "Unsupported push preview payload version: {}",
+                payload.v
+            )));
+        }
+
+        Ok(payload)
     }
 }
 
@@ -224,7 +234,7 @@ mod tests {
     fn decrypt_preview_envelope_round_trips() {
         let key_pair = PushNotificationKeyPair::generate();
         let payload = PushNotificationPreviewPayload {
-            v: 1,
+            v: PUSH_NOTIFICATION_PAYLOAD_VERSION,
             notification_id: Uuid::new_v4(),
             message_id: Uuid::new_v4(),
             kind: "agent.message".to_string(),
@@ -246,7 +256,7 @@ mod tests {
     fn decrypt_preview_envelope_rejects_unknown_algorithm() {
         let key_pair = PushNotificationKeyPair::generate();
         let payload = PushNotificationPreviewPayload {
-            v: 1,
+            v: PUSH_NOTIFICATION_PAYLOAD_VERSION,
             notification_id: Uuid::new_v4(),
             message_id: Uuid::new_v4(),
             kind: "agent.message".to_string(),
@@ -264,6 +274,30 @@ mod tests {
         let error = key_pair.decrypt_preview_envelope(&envelope).unwrap_err();
         assert!(
             matches!(error, Error::InvalidResponse(message) if message.contains("Unsupported push preview algorithm"))
+        );
+    }
+
+    #[test]
+    fn decrypt_preview_envelope_rejects_unknown_payload_version() {
+        let key_pair = PushNotificationKeyPair::generate();
+        let payload = PushNotificationPreviewPayload {
+            v: 2,
+            notification_id: Uuid::new_v4(),
+            message_id: Uuid::new_v4(),
+            kind: "agent.message".to_string(),
+            title: "New Maple message".to_string(),
+            body: "Open Maple to view your encrypted message".to_string(),
+            deep_link: "opensecret://agent".to_string(),
+            thread_id: "agent:main".to_string(),
+            sent_at: 1_772_800_000,
+        };
+
+        let envelope =
+            encrypt_preview_payload_for_test(&key_pair.public_key_spki_der().unwrap(), &payload);
+
+        let error = key_pair.decrypt_preview_envelope(&envelope).unwrap_err();
+        assert!(
+            matches!(error, Error::InvalidResponse(message) if message.contains("Unsupported push preview payload version"))
         );
     }
 }

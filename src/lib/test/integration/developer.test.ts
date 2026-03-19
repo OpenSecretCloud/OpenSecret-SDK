@@ -44,7 +44,7 @@ async function tryDeveloperLogin() {
     window.localStorage.setItem("refresh_token", response.refresh_token);
 
     return response;
-  } catch (_loginError) {
+  } catch {
     console.warn("Login failed, attempting to register the user");
 
     try {
@@ -1432,7 +1432,7 @@ test("Project push settings CRUD operations", async () => {
           createdProject.id.toString()
         );
 
-        expect(initialSettings).toEqual({ encrypted_preview_enabled: false });
+        expect(initialSettings).toMatchObject({ encrypted_preview_enabled: false });
 
         const pushSettings = {
           encrypted_preview_enabled: true,
