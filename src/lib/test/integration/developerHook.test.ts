@@ -64,6 +64,8 @@ test("Developer signIn method works correctly", async () => {
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
     updateOAuthSettings: () =>
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
+    getPushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
+    updatePushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
     inviteDeveloper: () => Promise.resolve({ code: "code" }),
     listOrganizationMembers: () => Promise.resolve([]),
     updateMemberRole: () => Promise.resolve({ user_id: "", role: "" }),
@@ -130,6 +132,8 @@ test("Developer signUp method works correctly", async () => {
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
     updateOAuthSettings: () =>
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
+    getPushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
+    updatePushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
     inviteDeveloper: () => Promise.resolve({ code: "code" }),
     listOrganizationMembers: () => Promise.resolve([]),
     updateMemberRole: () => Promise.resolve({ user_id: "", role: "" }),
@@ -208,6 +212,8 @@ test("Developer signOut method works correctly", async () => {
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
     updateOAuthSettings: () =>
       Promise.resolve({ google_oauth_enabled: false, github_oauth_enabled: false }),
+    getPushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
+    updatePushSettings: () => Promise.resolve({ encrypted_preview_enabled: false }),
     inviteDeveloper: () => Promise.resolve({ code: "code" }),
     listOrganizationMembers: () => Promise.resolve([]),
     updateMemberRole: () => Promise.resolve({ user_id: "", role: "" }),

@@ -84,9 +84,11 @@ pub struct LoginResponse {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LogoutRequest {
     pub refresh_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_device_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,6 +175,124 @@ pub struct AppUser {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: AppUser,
+}
+
+// Push Notification Types
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PushPlatform {
+    Ios,
+    Android,
+}
+
+impl PushPlatform {
+    pub fn provider(self) -> PushProvider {
+        match self {
+            Self::Ios => PushProvider::Apns,
+            Self::Android => PushProvider::Fcm,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PushProvider {
+    Apns,
+    Fcm,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PushEnvironment {
+    Dev,
+    #[default]
+    Prod,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PushKeyAlgorithm {
+    P256EcdhV1,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RegisterPushDeviceRequest {
+    pub installation_id: Uuid,
+    pub platform: PushPlatform,
+    pub provider: PushProvider,
+    pub environment: PushEnvironment,
+    pub app_id: String,
+    pub push_token: String,
+    pub notification_public_key: String,
+    pub key_algorithm: PushKeyAlgorithm,
+    #[serde(default)]
+    pub supports_encrypted_preview: bool,
+    #[serde(default)]
+    pub supports_background_processing: bool,
+}
+
+impl RegisterPushDeviceRequest {
+    pub fn new(
+        installation_id: Uuid,
+        platform: PushPlatform,
+        environment: PushEnvironment,
+        app_id: impl Into<String>,
+        push_token: impl Into<String>,
+        notification_public_key: impl Into<String>,
+    ) -> Self {
+        Self {
+            installation_id,
+            platform,
+            provider: platform.provider(),
+            environment,
+            app_id: app_id.into(),
+            push_token: push_token.into(),
+            notification_public_key: notification_public_key.into(),
+            key_algorithm: PushKeyAlgorithm::P256EcdhV1,
+            supports_encrypted_preview: false,
+            supports_background_processing: false,
+        }
+    }
+
+    pub fn supports_encrypted_preview(mut self, supports_encrypted_preview: bool) -> Self {
+        self.supports_encrypted_preview = supports_encrypted_preview;
+        self
+    }
+
+    pub fn supports_background_processing(mut self, supports_background_processing: bool) -> Self {
+        self.supports_background_processing = supports_background_processing;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PushDevice {
+    pub id: Uuid,
+    pub object: String,
+    pub installation_id: Uuid,
+    pub platform: PushPlatform,
+    pub provider: PushProvider,
+    pub environment: PushEnvironment,
+    pub app_id: String,
+    pub key_algorithm: PushKeyAlgorithm,
+    pub supports_encrypted_preview: bool,
+    pub supports_background_processing: bool,
+    pub last_seen_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PushDeviceListResponse {
+    pub object: String,
+    pub data: Vec<PushDevice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeletedPushDeviceResponse {
+    pub id: Uuid,
+    pub object: String,
+    pub deleted: bool,
 }
 
 // Key-Value Storage Types

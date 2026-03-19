@@ -18,6 +18,7 @@ import type {
   ProjectSettings,
   EmailSettings,
   OAuthSettings,
+  PushSettings,
   OrganizationMember,
   PlatformOrg,
   PlatformUser,
@@ -30,7 +31,7 @@ export type OrganizationDetails = Organization;
 
 export type ProjectDetails = Project;
 
-export { type ProjectSettings };
+export { type ProjectSettings, type PushSettings };
 
 export type DeveloperResponse = PlatformUser & { organizations: PlatformOrg[] };
 
@@ -362,6 +363,25 @@ export type OpenSecretDeveloperContextType = {
   ) => Promise<OAuthSettings>;
 
   /**
+   * Gets push settings for a project
+   * @param orgId - Organization ID
+   * @param projectId - Project ID
+   */
+  getPushSettings: (orgId: string, projectId: string) => Promise<PushSettings>;
+
+  /**
+   * Updates push configuration
+   * @param orgId - Organization ID
+   * @param projectId - Project ID
+   * @param settings - Push settings
+   */
+  updatePushSettings: (
+    orgId: string,
+    projectId: string,
+    settings: PushSettings
+  ) => Promise<PushSettings>;
+
+  /**
    * Creates an invitation to join an organization
    * @param orgId - Organization ID
    * @param email - Developer's email address
@@ -469,6 +489,8 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
   updateEmailSettings: platformApi.updateEmailSettings,
   getOAuthSettings: platformApi.getOAuthSettings,
   updateOAuthSettings: platformApi.updateOAuthSettings,
+  getPushSettings: platformApi.getPushSettings,
+  updatePushSettings: platformApi.updatePushSettings,
   inviteDeveloper: platformApi.inviteDeveloper,
   listOrganizationMembers: platformApi.listOrganizationMembers,
   listOrganizationInvites: platformApi.listOrganizationInvites,
@@ -663,6 +685,8 @@ export function OpenSecretDeveloper({
     updateEmailSettings: platformApi.updateEmailSettings,
     getOAuthSettings: platformApi.getOAuthSettings,
     updateOAuthSettings: platformApi.updateOAuthSettings,
+    getPushSettings: platformApi.getPushSettings,
+    updatePushSettings: platformApi.updatePushSettings,
     inviteDeveloper: platformApi.inviteDeveloper,
     listOrganizationMembers: platformApi.listOrganizationMembers,
     listOrganizationInvites: platformApi.listOrganizationInvites,

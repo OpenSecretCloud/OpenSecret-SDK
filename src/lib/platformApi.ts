@@ -101,6 +101,28 @@ export type OAuthSettings = {
   apple_oauth_settings?: OAuthProviderSettings;
 };
 
+export type PushEnvironment = "dev" | "prod";
+
+export type IosPushSettings = {
+  enabled: boolean;
+  bundle_id: string;
+  apns_environment: PushEnvironment;
+  team_id: string;
+  key_id: string;
+};
+
+export type AndroidPushSettings = {
+  enabled: boolean;
+  firebase_project_id: string;
+  package_name: string;
+};
+
+export type PushSettings = {
+  encrypted_preview_enabled: boolean;
+  ios?: IosPushSettings;
+  android?: AndroidPushSettings;
+};
+
 export type OrganizationMember = {
   user_id: string;
   role: string;
@@ -375,6 +397,27 @@ export async function updateOAuthSettings(
 ): Promise<OAuthSettings> {
   return authenticatedApiCall<OAuthSettings, OAuthSettings>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/oauth`,
+    "PUT",
+    settings
+  );
+}
+
+// Push Settings
+export async function getPushSettings(orgId: string, projectId: string): Promise<PushSettings> {
+  return authenticatedApiCall<void, PushSettings>(
+    `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/push`,
+    "GET",
+    undefined
+  );
+}
+
+export async function updatePushSettings(
+  orgId: string,
+  projectId: string,
+  settings: PushSettings
+): Promise<PushSettings> {
+  return authenticatedApiCall<PushSettings, PushSettings>(
+    `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/push`,
     "PUT",
     settings
   );
