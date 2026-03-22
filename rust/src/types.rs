@@ -687,6 +687,26 @@ pub struct AgentChatRequest {
     pub input: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct InitMainAgentRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InitMainAgentResponse {
+    pub id: Uuid,
+    pub object: String,
+    pub kind: String,
+    pub conversation_id: Uuid,
+    pub display_name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub messages: Vec<ConversationItem>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSubagentRequest {
     #[serde(skip_serializing_if = "Option::is_none")]

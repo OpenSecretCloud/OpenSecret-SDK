@@ -1534,6 +1534,15 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Explicitly initializes the current user's main agent.
+    pub async fn init_main_agent(
+        &self,
+        request: InitMainAgentRequest,
+    ) -> Result<InitMainAgentResponse> {
+        self.authenticated_api_call("/v1/agent/init", "POST", Some(request))
+            .await
+    }
+
     /// Deletes the current user's main agent and resets shared agent state.
     pub async fn delete_main_agent(&self) -> Result<DeletedObjectResponse> {
         self.authenticated_api_call("/v1/agent", "DELETE", None::<()>)
@@ -2350,5 +2359,72 @@ mod tests {
             client.get_refresh_token().unwrap().as_deref(),
             Some(refreshed_refresh)
         );
+    }
+
+    #[tokio::test]
+    async fn test_init_main_agent_uses_authenticated_encrypted_v1_endpoint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [31u8; 32];
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let request = InitMainAgentRequest {
+            timezone: Some("America/Chicago".to_string()),
+            locale: Some("en-US".to_string()),
+        };
+        let response = InitMainAgentResponse {
+            id: Uuid::new_v4(),
+            object: "agent.main".to_string(),
+            kind: "main".to_string(),
+            conversation_id: Uuid::new_v4(),
+            display_name: "Maple".to_string(),
+            created_at: 1_710_000_000,
+            updated_at: 1_710_000_000,
+            messages: vec![ConversationItem::Message {
+                id: Uuid::new_v4(),
+                status: Some("completed".to_string()),
+                role: "assistant".to_string(),
+                content: vec![ConversationContent::OutputText {
+                    text: "Hey — I'm Maple.".to_string(),
+                }],
+                created_at: Some(1_710_000_000),
+            }],
+        };
+        let expected_request = request.clone();
+        let expected_response = response.clone();
+
+        Mock::given(method("POST"))
+            .and(path("/v1/agent/init"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(move |req: &Request| {
+                let body: InitMainAgentRequest = decrypt_request_body(req, &session_key);
+                assert_eq!(body, expected_request);
+
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &expected_response))
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let initialized = client.init_main_agent(request.clone()).await.unwrap();
+
+        assert_eq!(initialized.id, response.id);
+        assert_eq!(initialized.conversation_id, response.conversation_id);
+        assert_eq!(initialized.display_name, "Maple");
+        assert_eq!(initialized.messages.len(), 1);
     }
 }
