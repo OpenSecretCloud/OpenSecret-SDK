@@ -227,6 +227,12 @@ async fn test_agent_chat_sse() {
                     all_messages.extend(msg.messages);
                     println!("Agent message at step {}: {:?}", msg.step, all_messages);
                 }
+                AgentSseEvent::Reaction(reaction) => {
+                    println!(
+                        "Agent reaction on item {}: {}",
+                        reaction.item_id, reaction.emoji
+                    );
+                }
                 AgentSseEvent::Typing(typing) => {
                     println!("Agent typing at step {}", typing.step);
                 }
@@ -282,6 +288,12 @@ async fn test_subagent_chat_sse() {
                     got_message = true;
                     all_messages.extend(msg.messages);
                     println!("Subagent message at step {}: {:?}", msg.step, all_messages);
+                }
+                AgentSseEvent::Reaction(reaction) => {
+                    println!(
+                        "Subagent reaction on item {}: {}",
+                        reaction.item_id, reaction.emoji
+                    );
                 }
                 AgentSseEvent::Typing(typing) => {
                     println!("Subagent typing at step {}", typing.step);
