@@ -714,6 +714,11 @@ pub struct CreateSubagentRequest {
     pub purpose: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SetMessageReactionRequest {
+    pub emoji: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MainAgentResponse {
     pub id: Uuid,
@@ -795,6 +800,8 @@ pub enum ConversationItem {
         role: String,
         content: Vec<ConversationContent>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        reaction: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         created_at: Option<i64>,
     },
     #[serde(rename = "function_call")]
@@ -857,8 +864,16 @@ pub struct DeletedObjectResponse {
 // Agent SSE event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessageEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<Uuid>,
     pub messages: Vec<String>,
     pub step: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentReactionEvent {
+    pub item_id: Uuid,
+    pub emoji: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -881,6 +896,7 @@ pub struct AgentErrorEvent {
 #[derive(Debug, Clone)]
 pub enum AgentSseEvent {
     Message(AgentMessageEvent),
+    Reaction(AgentReactionEvent),
     Typing(AgentTypingEvent),
     Done(AgentDoneEvent),
     Error(AgentErrorEvent),

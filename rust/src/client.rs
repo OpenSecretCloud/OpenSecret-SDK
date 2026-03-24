@@ -1459,6 +1459,22 @@ impl OpenSecretClient {
                                                 })),
                                             }
                                         }
+                                        "agent.reaction" => {
+                                            match serde_json::from_str::<AgentReactionEvent>(
+                                                &json_str,
+                                            ) {
+                                                Ok(reaction) => {
+                                                    Some(Ok(AgentSseEvent::Reaction(reaction)))
+                                                }
+                                                Err(e) => Some(Err(Error::Api {
+                                                    status: 0,
+                                                    message: format!(
+                                                        "Failed to parse agent reaction: {}",
+                                                        e
+                                                    ),
+                                                })),
+                                            }
+                                        }
                                         "agent.typing" => {
                                             match serde_json::from_str::<AgentTypingEvent>(
                                                 &json_str,
@@ -1565,6 +1581,32 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Sets or replaces the current user's reaction on a main-agent assistant message item.
+    pub async fn set_main_agent_item_reaction(
+        &self,
+        item_id: Uuid,
+        emoji: impl Into<String>,
+    ) -> Result<ConversationItem> {
+        self.authenticated_api_call(
+            &format!("/v1/agent/items/{}/reaction", item_id),
+            "POST",
+            Some(SetMessageReactionRequest {
+                emoji: emoji.into(),
+            }),
+        )
+        .await
+    }
+
+    /// Clears the current user's reaction on a main-agent assistant message item.
+    pub async fn clear_main_agent_item_reaction(&self, item_id: Uuid) -> Result<ConversationItem> {
+        self.authenticated_api_call(
+            &format!("/v1/agent/items/{}/reaction", item_id),
+            "DELETE",
+            None::<()>,
+        )
+        .await
+    }
+
     /// Sends a message to the main agent and returns a stream of SSE events.
     pub async fn agent_chat(
         &self,
@@ -1628,6 +1670,37 @@ impl OpenSecretClient {
         self.authenticated_api_call(
             &format!("/v1/agent/subagents/{}/items/{}", id, item_id),
             "GET",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Sets or replaces the current user's reaction on a subagent assistant message item.
+    pub async fn set_subagent_item_reaction(
+        &self,
+        id: Uuid,
+        item_id: Uuid,
+        emoji: impl Into<String>,
+    ) -> Result<ConversationItem> {
+        self.authenticated_api_call(
+            &format!("/v1/agent/subagents/{}/items/{}/reaction", id, item_id),
+            "POST",
+            Some(SetMessageReactionRequest {
+                emoji: emoji.into(),
+            }),
+        )
+        .await
+    }
+
+    /// Clears the current user's reaction on a subagent assistant message item.
+    pub async fn clear_subagent_item_reaction(
+        &self,
+        id: Uuid,
+        item_id: Uuid,
+    ) -> Result<ConversationItem> {
+        self.authenticated_api_call(
+            &format!("/v1/agent/subagents/{}/items/{}/reaction", id, item_id),
+            "DELETE",
             None::<()>,
         )
         .await
@@ -2399,6 +2472,7 @@ mod tests {
                 content: vec![ConversationContent::OutputText {
                     text: "Hey — I'm Maple.".to_string(),
                 }],
+                reaction: None,
                 created_at: Some(1_710_000_000),
             }],
         };
@@ -2426,5 +2500,229 @@ mod tests {
         assert_eq!(initialized.conversation_id, response.conversation_id);
         assert_eq!(initialized.display_name, "Maple");
         assert_eq!(initialized.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_set_main_agent_item_reaction_uses_authenticated_encrypted_v1_endpoint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [32u8; 32];
+        let item_id = Uuid::new_v4();
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let response = ConversationItem::Message {
+            id: item_id,
+            status: Some("completed".to_string()),
+            role: "assistant".to_string(),
+            content: vec![ConversationContent::OutputText {
+                text: "Nice!".to_string(),
+            }],
+            reaction: Some("🎉".to_string()),
+            created_at: Some(1_710_000_000),
+        };
+        let expected_response = response.clone();
+
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/agent/items/{}/reaction", item_id)))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(move |req: &Request| {
+                let body: SetMessageReactionRequest = decrypt_request_body(req, &session_key);
+                assert_eq!(
+                    body,
+                    SetMessageReactionRequest {
+                        emoji: "🎉".to_string()
+                    }
+                );
+
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &expected_response))
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let item = client
+            .set_main_agent_item_reaction(item_id, "🎉")
+            .await
+            .unwrap();
+
+        match item {
+            ConversationItem::Message { id, reaction, .. } => {
+                assert_eq!(id, item_id);
+                assert_eq!(reaction.as_deref(), Some("🎉"));
+            }
+            other => panic!("Expected message item, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_clear_subagent_item_reaction_uses_authenticated_v1_endpoint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [33u8; 32];
+        let subagent_id = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let response = ConversationItem::Message {
+            id: item_id,
+            status: Some("completed".to_string()),
+            role: "assistant".to_string(),
+            content: vec![ConversationContent::OutputText {
+                text: "Done".to_string(),
+            }],
+            reaction: None,
+            created_at: Some(1_710_000_001),
+        };
+        let expected_response = response.clone();
+
+        Mock::given(method("DELETE"))
+            .and(path(format!(
+                "/v1/agent/subagents/{}/items/{}/reaction",
+                subagent_id, item_id
+            )))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &expected_response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let item = client
+            .clear_subagent_item_reaction(subagent_id, item_id)
+            .await
+            .unwrap();
+
+        match item {
+            ConversationItem::Message { id, reaction, .. } => {
+                assert_eq!(id, item_id);
+                assert_eq!(reaction, None);
+            }
+            other => panic!("Expected message item, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agent_chat_stream_parses_reaction_and_message_ids() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [34u8; 32];
+        let reaction_item_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        let sse_body = format!(
+            "{}{}{}data: [DONE]\n\n",
+            encrypted_sse_data(
+                &session_key,
+                &json!({
+                    "item_id": reaction_item_id,
+                    "emoji": "🫡"
+                })
+            )
+            .replacen("data:", "event: agent.reaction\ndata:", 1),
+            encrypted_sse_data(
+                &session_key,
+                &json!({
+                    "message_id": message_id,
+                    "messages": ["hello there"],
+                    "step": 0
+                })
+            )
+            .replacen("data:", "event: agent.message\ndata:", 1),
+            encrypted_sse_data(
+                &session_key,
+                &json!({
+                    "total_steps": 1,
+                    "total_messages": 1
+                })
+            )
+            .replacen("data:", "event: agent.done\ndata:", 1),
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/agent/chat"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(move |req: &Request| {
+                let body: AgentChatRequest = decrypt_request_body(req, &session_key);
+                assert_eq!(body.input, "hey there");
+
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(sse_body.clone())
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let mut stream = client.agent_chat("hey there").await.unwrap();
+
+        match stream.next().await.unwrap().unwrap() {
+            AgentSseEvent::Reaction(event) => {
+                assert_eq!(event.item_id, reaction_item_id);
+                assert_eq!(event.emoji, "🫡");
+            }
+            other => panic!("Expected reaction event, got {:?}", other),
+        }
+
+        match stream.next().await.unwrap().unwrap() {
+            AgentSseEvent::Message(event) => {
+                assert_eq!(event.message_id, Some(message_id));
+                assert_eq!(event.messages, vec!["hello there".to_string()]);
+                assert_eq!(event.step, 0);
+            }
+            other => panic!("Expected message event, got {:?}", other),
+        }
+
+        match stream.next().await.unwrap().unwrap() {
+            AgentSseEvent::Done(event) => {
+                assert_eq!(event.total_steps, 1);
+                assert_eq!(event.total_messages, 1);
+            }
+            other => panic!("Expected done event, got {:?}", other),
+        }
+
+        assert!(stream.next().await.is_none());
     }
 }
