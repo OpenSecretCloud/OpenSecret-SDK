@@ -2652,7 +2652,12 @@ mod tests {
             .unwrap();
 
         let sse_body = format!(
-            "{}{}{}data: [DONE]\n\n",
+            "{}{}{}{}data: [DONE]\n\n",
+            encrypted_sse_data(&session_key, &json!({})).replacen(
+                "data:",
+                "event: agent.typing\ndata:",
+                1
+            ),
             encrypted_sse_data(
                 &session_key,
                 &json!({
@@ -2665,19 +2670,15 @@ mod tests {
                 &session_key,
                 &json!({
                     "message_id": message_id,
-                    "messages": ["hello there"],
-                    "step": 0
+                    "message": "hello there"
                 })
             )
             .replacen("data:", "event: agent.message\ndata:", 1),
-            encrypted_sse_data(
-                &session_key,
-                &json!({
-                    "total_steps": 1,
-                    "total_messages": 1
-                })
-            )
-            .replacen("data:", "event: agent.done\ndata:", 1),
+            encrypted_sse_data(&session_key, &json!({})).replacen(
+                "data:",
+                "event: agent.done\ndata:",
+                1
+            ),
         );
 
         Mock::given(method("POST"))
@@ -2699,6 +2700,11 @@ mod tests {
         let mut stream = client.agent_chat("hey there").await.unwrap();
 
         match stream.next().await.unwrap().unwrap() {
+            AgentSseEvent::Typing(_) => {}
+            other => panic!("Expected typing event, got {:?}", other),
+        }
+
+        match stream.next().await.unwrap().unwrap() {
             AgentSseEvent::Reaction(event) => {
                 assert_eq!(event.item_id, reaction_item_id);
                 assert_eq!(event.emoji, "🫡");
@@ -2708,18 +2714,14 @@ mod tests {
 
         match stream.next().await.unwrap().unwrap() {
             AgentSseEvent::Message(event) => {
-                assert_eq!(event.message_id, Some(message_id));
-                assert_eq!(event.messages, vec!["hello there".to_string()]);
-                assert_eq!(event.step, 0);
+                assert_eq!(event.message_id, message_id);
+                assert_eq!(event.message, "hello there".to_string());
             }
             other => panic!("Expected message event, got {:?}", other),
         }
 
         match stream.next().await.unwrap().unwrap() {
-            AgentSseEvent::Done(event) => {
-                assert_eq!(event.total_steps, 1);
-                assert_eq!(event.total_messages, 1);
-            }
+            AgentSseEvent::Done(_) => {}
             other => panic!("Expected done event, got {:?}", other),
         }
 
