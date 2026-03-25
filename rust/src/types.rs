@@ -864,10 +864,8 @@ pub struct DeletedObjectResponse {
 // Agent SSE event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessageEvent {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_id: Option<Uuid>,
-    pub messages: Vec<String>,
-    pub step: usize,
+    pub message_id: Uuid,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -877,15 +875,10 @@ pub struct AgentReactionEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentTypingEvent {
-    pub step: usize,
-}
+pub struct AgentTypingEvent {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentDoneEvent {
-    pub total_steps: usize,
-    pub total_messages: usize,
-}
+pub struct AgentDoneEvent {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentErrorEvent {
