@@ -592,7 +592,7 @@ export function OpenSecretDeveloper({
   }
 
   const getAttestationDocument = async () => {
-    const nonce = window.crypto.randomUUID();
+    const nonce = globalThis.crypto.randomUUID();
     const response = await fetch(`${apiUrl}/attestation/${nonce}`);
     if (!response.ok) {
       throw new Error('Failed to fetch attestation document');
