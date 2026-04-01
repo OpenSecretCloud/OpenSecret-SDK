@@ -1,41 +1,30 @@
-interface StorageMock {
-  [key: string]: string;
-}
+import { setStorageProvider, type StorageProvider } from '../storage';
 
-function storageMock(): Storage {
-  const storage: StorageMock = {};
+function createMockStorage(): StorageProvider['persistent'] {
+  const storage: Record<string, string> = {};
 
   return {
-    setItem(key: string, value: string) {
-      storage[key] = value || "";
-    },
     getItem(key: string): string | null {
       return key in storage ? storage[key] : null;
     },
-    removeItem(key: string) {
+    setItem(key: string, value: string): void {
+      storage[key] = value || '';
+    },
+    removeItem(key: string): void {
       delete storage[key];
     },
-    clear() {
-      Object.keys(storage).forEach((key) => delete storage[key]);
-    },
-    get length(): number {
-      return Object.keys(storage).length;
-    },
-    key(i: number): string | null {
-      const keys = Object.keys(storage);
-      return keys[i] || null;
-    },
-    // Required Storage interface properties
-    [Symbol.iterator](): IterableIterator<string> {
-      return Object.keys(storage)[Symbol.iterator]();
-    }
   };
 }
 
-global.localStorage = storageMock();
-global.sessionStorage = storageMock();
+// Configure the SDK storage provider before any other imports
+setStorageProvider({
+  persistent: createMockStorage(),
+  session: createMockStorage(),
+});
+
+// Still needed for other browser APIs that tests may reference
 // @ts-expect-error - window is not defined
 global.window = global;
 
 // Import setup to configure the SDK for tests
-import "./setup";
+import './setup';
