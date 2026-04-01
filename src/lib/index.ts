@@ -37,24 +37,28 @@ export type {
   PublicKeyResponse,
   SignMessageResponse,
   EncryptDataResponse,
-  AppleUser
-} from "./api";
+  AppleUser,
+} from './api';
 
 // Export API key management functions
-export { createApiKey, listApiKeys, deleteApiKey } from "./api";
+export { createApiKey, listApiKeys, deleteApiKey } from './api';
 
 // Export AI customization options
-export { createCustomFetch, type CustomFetchOptions } from "./ai";
+export { createCustomFetch, type CustomFetchOptions } from './ai';
 
 // Re-export Model type from OpenAI for convenience
-export type { Model } from "openai/resources/models.js";
+export type { Model } from 'openai/resources/models.js';
 
 // Export configuration functions
-export { configure, getConfig, isConfigured, resetConfig } from "./config";
-export type { OpenSecretConfig } from "./config";
+export { configure, getConfig, isConfigured, resetConfig } from './config';
+export type { OpenSecretConfig } from './config';
+
+// Export storage abstraction
+export { getStorage } from './storage';
+export type { StorageProvider } from './storage';
 
 // Export API configuration
-export { apiConfig, type ApiContext, type ApiEndpoint } from "./apiConfig";
+export { apiConfig, type ApiContext, type ApiEndpoint } from './apiConfig';
 
 // Export all API functions directly
 export {
@@ -65,7 +69,6 @@ export {
   fetchGuestSignUp as signUpGuest,
   fetchLogout as signOut,
   convertGuestToEmailAccount as convertGuestToUserAccount,
-  
   // User management
   fetchUser,
   refreshToken as refreshAccessToken,
@@ -76,7 +79,6 @@ export {
   confirmPasswordReset,
   requestAccountDeletion,
   confirmAccountDeletion,
-  
   // OAuth
   initiateGitHubAuth,
   handleGitHubCallback,
@@ -85,13 +87,11 @@ export {
   initiateAppleAuth,
   handleAppleCallback,
   handleAppleNativeSignIn,
-  
   // Key-value storage
   fetchGet as get,
   fetchPut as put,
   fetchList as list,
   fetchDelete as del,
-  
   // Cryptographic operations
   fetchPrivateKey as getPrivateKey,
   fetchPrivateKeyBytes as getPrivateKeyBytes,
@@ -99,56 +99,52 @@ export {
   signMessage,
   encryptData,
   decryptData,
-  
   // Third-party tokens
   generateThirdPartyToken,
-  
   // AI
   fetchModels,
-  
   // Document processing
   uploadDocument,
   checkDocumentStatus,
   uploadDocumentWithPolling,
-  
   // Utility
-  getApiUrl
-} from "./api";
+  getApiUrl,
+} from './api';
 
 // Export AI custom fetch
-export { createCustomFetch as createAiCustomFetch } from "./ai";
+export { createCustomFetch as createAiCustomFetch } from './ai';
 
 // Export attestation functions
-export { getAttestation } from "./getAttestation";
-export { authenticate } from "./attestation";
-export { 
+export { getAttestation } from './getAttestation';
+export { authenticate } from './attestation';
+export {
   parseAttestationForView,
   AWS_ROOT_CERT_DER as awsRootCertDer,
-  EXPECTED_ROOT_CERT_HASH as expectedRootCertHash
-} from "./attestationForView";
+  EXPECTED_ROOT_CERT_HASH as expectedRootCertHash,
+} from './attestationForView';
 
 // Export the provider and context
-export { OpenSecretProvider, OpenSecretContext } from "./main";
-export { OpenSecretDeveloper, OpenSecretDeveloperContext } from "./developer";
+export { OpenSecretProvider, OpenSecretContext } from './main';
+export { OpenSecretDeveloper, OpenSecretDeveloperContext } from './developer';
 
 // Export the hooks
-export { useOpenSecret } from "./context";
-export { useOpenSecretDeveloper } from "./developerContext";
+export { useOpenSecret } from './context';
+export { useOpenSecretDeveloper } from './developerContext';
 
 // Export types needed by consumers
-export type { OpenSecretAuthState, OpenSecretContextType } from "./main";
+export type { OpenSecretAuthState, OpenSecretContextType } from './main';
 export type {
   OpenSecretDeveloperAuthState,
   OpenSecretDeveloperContextType,
   DeveloperRole,
   OrganizationDetails,
   ProjectDetails,
-  ProjectSettings
-} from "./developer";
-export type { AttestationDocument } from "./attestation";
-export type { ParsedAttestationView } from "./attestationForView";
-export type { PcrConfig, Pcr0ValidationResult } from "./pcr";
+  ProjectSettings,
+} from './developer';
+export type { AttestationDocument } from './attestation';
+export type { ParsedAttestationView } from './attestationForView';
+export type { PcrConfig, Pcr0ValidationResult } from './pcr';
 
 // Export crypto utilities
 // TODO: these can actually just be used internally by the password reset function
-export { generateSecureSecret, hashSecret } from "./crypto";
+export { generateSecureSecret, hashSecret } from './crypto';
