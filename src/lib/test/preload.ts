@@ -26,5 +26,10 @@ setStorageProvider({
 // @ts-expect-error - window is not defined
 global.window = global;
 
-// Import setup to configure the SDK for tests
-import './setup';
+// Configure SDK for integration tests (skipped gracefully when env vars are missing)
+try {
+  await import('./setup');
+} catch {
+  // setup.ts throws when VITE_OPEN_SECRET_API_URL is not set;
+  // that's expected for unit tests that don't need a running server.
+}
