@@ -1,17 +1,18 @@
-import React, { createContext, useState, useEffect } from "react";
-import * as platformApi from "./platformApi";
-import { setPlatformApiUrl } from "./platformApi";
-import { apiConfig } from "./apiConfig";
-import { getAttestation } from "./getAttestation";
-import { authenticate } from "./attestation";
+import React, { createContext, useState, useEffect } from 'react';
+import * as platformApi from './platformApi';
+import { setPlatformApiUrl } from './platformApi';
+import { apiConfig } from './apiConfig';
+import { getAttestation } from './getAttestation';
+import { getStorage } from './storage';
+import { authenticate } from './attestation';
 import {
   parseAttestationForView,
   AWS_ROOT_CERT_DER,
   EXPECTED_ROOT_CERT_HASH,
-  ParsedAttestationView
-} from "./attestationForView";
-import type { AttestationDocument } from "./attestation";
-import { PcrConfig } from "./pcr";
+  ParsedAttestationView,
+} from './attestationForView';
+import type { AttestationDocument } from './attestation';
+import { PcrConfig } from './pcr';
 import type {
   Organization,
   Project,
@@ -22,10 +23,10 @@ import type {
   OrganizationMember,
   PlatformOrg,
   PlatformUser,
-  OrganizationInvite
-} from "./platformApi";
+  OrganizationInvite,
+} from './platformApi';
 
-export type DeveloperRole = "owner" | "admin" | "developer" | "viewer";
+export type DeveloperRole = 'owner' | 'admin' | 'developer' | 'viewer';
 
 export type OrganizationDetails = Organization;
 
@@ -55,7 +56,10 @@ export type OpenSecretDeveloperContextType = {
    * - Updates the developer state with user information
    * - Throws an error if authentication fails
    */
-  signIn: (email: string, password: string) => Promise<platformApi.PlatformLoginResponse>;
+  signIn: (
+    email: string,
+    password: string,
+  ) => Promise<platformApi.PlatformLoginResponse>;
 
   /**
    * Verifies a platform user's email using the verification code
@@ -151,7 +155,7 @@ export type OpenSecretDeveloperContextType = {
     email: string,
     password: string,
     invite_code: string,
-    name?: string
+    name?: string,
   ) => Promise<platformApi.PlatformLoginResponse>;
 
   /**
@@ -197,7 +201,7 @@ export type OpenSecretDeveloperContextType = {
   parseAttestationForView: (
     document: AttestationDocument,
     cabundle: Uint8Array[],
-    pcrConfig?: PcrConfig
+    pcrConfig?: PcrConfig,
   ) => Promise<ParsedAttestationView>;
 
   /**
@@ -249,7 +253,11 @@ export type OpenSecretDeveloperContextType = {
    * @param description - Optional project description
    * @returns A promise that resolves to the project details including client ID
    */
-  createProject: (orgId: string, name: string, description?: string) => Promise<Project>;
+  createProject: (
+    orgId: string,
+    name: string,
+    description?: string,
+  ) => Promise<Project>;
 
   /**
    * Lists all projects within an organization
@@ -275,7 +283,7 @@ export type OpenSecretDeveloperContextType = {
   updateProject: (
     orgId: string,
     projectId: string,
-    updates: { name?: string; description?: string; status?: string }
+    updates: { name?: string; description?: string; status?: string },
   ) => Promise<Project>;
 
   /**
@@ -306,7 +314,7 @@ export type OpenSecretDeveloperContextType = {
     orgId: string,
     projectId: string,
     keyName: string,
-    secret: string
+    secret: string,
   ) => Promise<ProjectSecret>;
 
   /**
@@ -314,7 +322,10 @@ export type OpenSecretDeveloperContextType = {
    * @param orgId - Organization ID
    * @param projectId - Project ID
    */
-  listProjectSecrets: (orgId: string, projectId: string) => Promise<ProjectSecret[]>;
+  listProjectSecrets: (
+    orgId: string,
+    projectId: string,
+  ) => Promise<ProjectSecret[]>;
 
   /**
    * Deletes a project secret
@@ -322,14 +333,21 @@ export type OpenSecretDeveloperContextType = {
    * @param projectId - Project ID
    * @param keyName - Secret key name
    */
-  deleteProjectSecret: (orgId: string, projectId: string, keyName: string) => Promise<void>;
+  deleteProjectSecret: (
+    orgId: string,
+    projectId: string,
+    keyName: string,
+  ) => Promise<void>;
 
   /**
    * Gets email configuration for a project
    * @param orgId - Organization ID
    * @param projectId - Project ID
    */
-  getEmailSettings: (orgId: string, projectId: string) => Promise<EmailSettings>;
+  getEmailSettings: (
+    orgId: string,
+    projectId: string,
+  ) => Promise<EmailSettings>;
 
   /**
    * Updates email configuration
@@ -340,7 +358,7 @@ export type OpenSecretDeveloperContextType = {
   updateEmailSettings: (
     orgId: string,
     projectId: string,
-    settings: EmailSettings
+    settings: EmailSettings,
   ) => Promise<EmailSettings>;
 
   /**
@@ -348,7 +366,10 @@ export type OpenSecretDeveloperContextType = {
    * @param orgId - Organization ID
    * @param projectId - Project ID
    */
-  getOAuthSettings: (orgId: string, projectId: string) => Promise<OAuthSettings>;
+  getOAuthSettings: (
+    orgId: string,
+    projectId: string,
+  ) => Promise<OAuthSettings>;
 
   /**
    * Updates OAuth configuration
@@ -359,7 +380,7 @@ export type OpenSecretDeveloperContextType = {
   updateOAuthSettings: (
     orgId: string,
     projectId: string,
-    settings: OAuthSettings
+    settings: OAuthSettings,
   ) => Promise<OAuthSettings>;
 
   /**
@@ -368,7 +389,11 @@ export type OpenSecretDeveloperContextType = {
    * @param email - Developer's email address
    * @param role - Role to assign (defaults to "admin")
    */
-  inviteDeveloper: (orgId: string, email: string, role?: string) => Promise<OrganizationInvite>;
+  inviteDeveloper: (
+    orgId: string,
+    email: string,
+    role?: string,
+  ) => Promise<OrganizationInvite>;
 
   /**
    * Lists all members of an organization
@@ -387,14 +412,20 @@ export type OpenSecretDeveloperContextType = {
    * @param orgId - Organization ID
    * @param inviteCode - Invitation UUID code
    */
-  getOrganizationInvite: (orgId: string, inviteCode: string) => Promise<OrganizationInvite>;
+  getOrganizationInvite: (
+    orgId: string,
+    inviteCode: string,
+  ) => Promise<OrganizationInvite>;
 
   /**
    * Deletes an invitation
    * @param orgId - Organization ID
    * @param inviteCode - Invitation UUID code
    */
-  deleteOrganizationInvite: (orgId: string, inviteCode: string) => Promise<{ message: string }>;
+  deleteOrganizationInvite: (
+    orgId: string,
+    inviteCode: string,
+  ) => Promise<{ message: string }>;
 
   /**
    * Updates a member's role
@@ -402,7 +433,11 @@ export type OpenSecretDeveloperContextType = {
    * @param userId - User ID to update
    * @param role - New role to assign
    */
-  updateMemberRole: (orgId: string, userId: string, role: string) => Promise<OrganizationMember>;
+  updateMemberRole: (
+    orgId: string,
+    userId: string,
+    role: string,
+  ) => Promise<OrganizationMember>;
 
   /**
    * Removes a member from the organization
@@ -423,63 +458,68 @@ export type OpenSecretDeveloperContextType = {
   apiUrl: string;
 };
 
-export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperContextType>({
-  auth: {
-    loading: true,
-    developer: undefined
-  },
-  signIn: async () => {
-    throw new Error("signIn called outside of OpenSecretDeveloper provider");
-  },
-  signUp: async () => {
-    throw new Error("signUp called outside of OpenSecretDeveloper provider");
-  },
-  signOut: async () => {
-    throw new Error("signOut called outside of OpenSecretDeveloper provider");
-  },
-  refetchDeveloper: async () => {
-    throw new Error("refetchDeveloper called outside of OpenSecretDeveloper provider");
-  },
-  verifyEmail: platformApi.verifyPlatformEmail,
-  requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
-  requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
-  requestPasswordReset: platformApi.requestPlatformPasswordReset,
-  confirmPasswordReset: platformApi.confirmPlatformPasswordReset,
-  changePassword: platformApi.changePlatformPassword,
-  pcrConfig: {},
-  getAttestation,
-  authenticate,
-  parseAttestationForView,
-  awsRootCertDer: AWS_ROOT_CERT_DER,
-  expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
-  getAttestationDocument: async () => {
-    throw new Error("getAttestationDocument called outside of OpenSecretDeveloper provider");
-  },
-  createOrganization: platformApi.createOrganization,
-  listOrganizations: platformApi.listOrganizations,
-  deleteOrganization: platformApi.deleteOrganization,
-  createProject: platformApi.createProject,
-  listProjects: platformApi.listProjects,
-  getProject: platformApi.getProject,
-  updateProject: platformApi.updateProject,
-  deleteProject: platformApi.deleteProject,
-  createProjectSecret: platformApi.createProjectSecret,
-  listProjectSecrets: platformApi.listProjectSecrets,
-  deleteProjectSecret: platformApi.deleteProjectSecret,
-  getEmailSettings: platformApi.getEmailSettings,
-  updateEmailSettings: platformApi.updateEmailSettings,
-  getOAuthSettings: platformApi.getOAuthSettings,
-  updateOAuthSettings: platformApi.updateOAuthSettings,
-  inviteDeveloper: platformApi.inviteDeveloper,
-  listOrganizationMembers: platformApi.listOrganizationMembers,
-  listOrganizationInvites: platformApi.listOrganizationInvites,
-  getOrganizationInvite: platformApi.getOrganizationInvite,
-  deleteOrganizationInvite: platformApi.deleteOrganizationInvite,
-  updateMemberRole: platformApi.updateMemberRole,
-  removeMember: platformApi.removeMember,
-  acceptInvite: platformApi.acceptInvite,
-  apiUrl: ""
-});
+export const OpenSecretDeveloperContext =
+  createContext<OpenSecretDeveloperContextType>({
+    auth: {
+      loading: true,
+      developer: undefined,
+    },
+    signIn: async () => {
+      throw new Error('signIn called outside of OpenSecretDeveloper provider');
+    },
+    signUp: async () => {
+      throw new Error('signUp called outside of OpenSecretDeveloper provider');
+    },
+    signOut: async () => {
+      throw new Error('signOut called outside of OpenSecretDeveloper provider');
+    },
+    refetchDeveloper: async () => {
+      throw new Error(
+        'refetchDeveloper called outside of OpenSecretDeveloper provider',
+      );
+    },
+    verifyEmail: platformApi.verifyPlatformEmail,
+    requestNewVerificationCode: platformApi.requestNewPlatformVerificationCode,
+    requestNewVerificationEmail: platformApi.requestNewPlatformVerificationCode,
+    requestPasswordReset: platformApi.requestPlatformPasswordReset,
+    confirmPasswordReset: platformApi.confirmPlatformPasswordReset,
+    changePassword: platformApi.changePlatformPassword,
+    pcrConfig: {},
+    getAttestation,
+    authenticate,
+    parseAttestationForView,
+    awsRootCertDer: AWS_ROOT_CERT_DER,
+    expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
+    getAttestationDocument: async () => {
+      throw new Error(
+        'getAttestationDocument called outside of OpenSecretDeveloper provider',
+      );
+    },
+    createOrganization: platformApi.createOrganization,
+    listOrganizations: platformApi.listOrganizations,
+    deleteOrganization: platformApi.deleteOrganization,
+    createProject: platformApi.createProject,
+    listProjects: platformApi.listProjects,
+    getProject: platformApi.getProject,
+    updateProject: platformApi.updateProject,
+    deleteProject: platformApi.deleteProject,
+    createProjectSecret: platformApi.createProjectSecret,
+    listProjectSecrets: platformApi.listProjectSecrets,
+    deleteProjectSecret: platformApi.deleteProjectSecret,
+    getEmailSettings: platformApi.getEmailSettings,
+    updateEmailSettings: platformApi.updateEmailSettings,
+    getOAuthSettings: platformApi.getOAuthSettings,
+    updateOAuthSettings: platformApi.updateOAuthSettings,
+    inviteDeveloper: platformApi.inviteDeveloper,
+    listOrganizationMembers: platformApi.listOrganizationMembers,
+    listOrganizationInvites: platformApi.listOrganizationInvites,
+    getOrganizationInvite: platformApi.getOrganizationInvite,
+    deleteOrganizationInvite: platformApi.deleteOrganizationInvite,
+    updateMemberRole: platformApi.updateMemberRole,
+    removeMember: platformApi.removeMember,
+    acceptInvite: platformApi.acceptInvite,
+    apiUrl: '',
+  });
 
 /**
  * Provider component for OpenSecret developer operations.
@@ -501,7 +541,7 @@ export const OpenSecretDeveloperContext = createContext<OpenSecretDeveloperConte
 export function OpenSecretDeveloper({
   children,
   apiUrl,
-  pcrConfig = {}
+  pcrConfig = {},
 }: {
   children: React.ReactNode;
   apiUrl: string;
@@ -509,13 +549,13 @@ export function OpenSecretDeveloper({
 }) {
   const [auth, setAuth] = useState<OpenSecretDeveloperAuthState>({
     loading: true,
-    developer: undefined
+    developer: undefined,
   });
 
   useEffect(() => {
-    if (!apiUrl || apiUrl.trim() === "") {
+    if (!apiUrl || apiUrl.trim() === '') {
       throw new Error(
-        "OpenSecretDeveloper requires a non-empty apiUrl. Please provide a valid API endpoint URL."
+        'OpenSecretDeveloper requires a non-empty apiUrl. Please provide a valid API endpoint URL.',
       );
     }
     setPlatformApiUrl(apiUrl);
@@ -523,12 +563,12 @@ export function OpenSecretDeveloper({
   }, [apiUrl]);
 
   async function fetchDeveloper() {
-    const access_token = window.localStorage.getItem("access_token");
-    const refresh_token = window.localStorage.getItem("refresh_token");
+    const access_token = getStorage().persistent.getItem('access_token');
+    const refresh_token = getStorage().persistent.getItem('refresh_token');
     if (!access_token || !refresh_token) {
       setAuth({
         loading: false,
-        developer: undefined
+        developer: undefined,
       });
       return;
     }
@@ -539,14 +579,14 @@ export function OpenSecretDeveloper({
         loading: false,
         developer: {
           ...response.user,
-          organizations: response.organizations
-        }
+          organizations: response.organizations,
+        },
       });
     } catch (error) {
-      console.error("Failed to fetch developer:", error);
+      console.error('Failed to fetch developer:', error);
       setAuth({
         loading: false,
-        developer: undefined
+        developer: undefined,
       });
     }
   }
@@ -555,16 +595,20 @@ export function OpenSecretDeveloper({
     const nonce = window.crypto.randomUUID();
     const response = await fetch(`${apiUrl}/attestation/${nonce}`);
     if (!response.ok) {
-      throw new Error("Failed to fetch attestation document");
+      throw new Error('Failed to fetch attestation document');
     }
 
     const data = await response.json();
     const verifiedDocument = await authenticate(
       data.attestation_document,
       AWS_ROOT_CERT_DER,
-      nonce
+      nonce,
     );
-    return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
+    return parseAttestationForView(
+      verifiedDocument,
+      verifiedDocument.cabundle,
+      pcrConfig,
+    );
   };
 
   useEffect(() => {
@@ -573,31 +617,35 @@ export function OpenSecretDeveloper({
 
   async function signIn(email: string, password: string) {
     try {
-      const { access_token, refresh_token } = await platformApi.platformLogin(email, password);
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
+      const { access_token, refresh_token } = await platformApi.platformLogin(
+        email,
+        password,
+      );
+      getStorage().persistent.setItem('access_token', access_token);
+      getStorage().persistent.setItem('refresh_token', refresh_token);
       await fetchDeveloper();
-      return { access_token, refresh_token, id: "", email };
+      return { access_token, refresh_token, id: '', email };
     } catch (error) {
-      console.error("Login error:", error);
+      console.error('Login error:', error);
       throw error;
     }
   }
 
-  async function signUp(email: string, password: string, invite_code: string, name?: string) {
+  async function signUp(
+    email: string,
+    password: string,
+    invite_code: string,
+    name?: string,
+  ) {
     try {
-      const { access_token, refresh_token } = await platformApi.platformRegister(
-        email,
-        password,
-        invite_code,
-        name
-      );
-      window.localStorage.setItem("access_token", access_token);
-      window.localStorage.setItem("refresh_token", refresh_token);
+      const { access_token, refresh_token } =
+        await platformApi.platformRegister(email, password, invite_code, name);
+      getStorage().persistent.setItem('access_token', access_token);
+      getStorage().persistent.setItem('refresh_token', refresh_token);
       await fetchDeveloper();
-      return { access_token, refresh_token, id: "", email, name };
+      return { access_token, refresh_token, id: '', email, name };
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error('Registration error:', error);
       throw error;
     }
   }
@@ -608,19 +656,19 @@ export function OpenSecretDeveloper({
     signUp,
     refetchDeveloper: fetchDeveloper,
     signOut: async () => {
-      const refresh_token = window.localStorage.getItem("refresh_token");
+      const refresh_token = getStorage().persistent.getItem('refresh_token');
       if (refresh_token) {
         try {
           await platformApi.platformLogout(refresh_token);
         } catch (error) {
-          console.error("Error during logout:", error);
+          console.error('Error during logout:', error);
         }
       }
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      getStorage().persistent.removeItem('access_token');
+      getStorage().persistent.removeItem('refresh_token');
       setAuth({
         loading: false,
-        developer: undefined
+        developer: undefined,
       });
     },
     verifyEmail: platformApi.verifyPlatformEmail,
@@ -659,7 +707,7 @@ export function OpenSecretDeveloper({
     updateMemberRole: platformApi.updateMemberRole,
     removeMember: platformApi.removeMember,
     acceptInvite: platformApi.acceptInvite,
-    apiUrl
+    apiUrl,
   };
 
   return (

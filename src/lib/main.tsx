@@ -1,19 +1,24 @@
-import React, { createContext, useState, useEffect } from "react";
-import * as api from "./api";
-import { createCustomFetch } from "./ai";
-import { getAttestation } from "./getAttestation";
-import type { Model } from "openai/resources/models.js";
-import { authenticate } from "./attestation";
+import React, { createContext, useState, useEffect } from 'react';
+import * as api from './api';
+import { createCustomFetch } from './ai';
+import { getAttestation } from './getAttestation';
+import { getStorage } from './storage';
+import type { Model } from 'openai/resources/models.js';
+import { authenticate } from './attestation';
 import {
   parseAttestationForView,
   AWS_ROOT_CERT_DER,
   EXPECTED_ROOT_CERT_HASH,
-  ParsedAttestationView
-} from "./attestationForView";
-import type { AttestationDocument } from "./attestation";
-import type { LoginResponse, ThirdPartyTokenResponse, DocumentResponse } from "./api";
-import { PcrConfig } from "./pcr";
-import { configure } from "./config";
+  ParsedAttestationView,
+} from './attestationForView';
+import type { AttestationDocument } from './attestation';
+import type {
+  LoginResponse,
+  ThirdPartyTokenResponse,
+  DocumentResponse,
+} from './api';
+import { PcrConfig } from './pcr';
+import { configure } from './config';
 
 export type OpenSecretAuthState = {
   loading: boolean;
@@ -71,7 +76,12 @@ export type OpenSecretContextType = {
    * - Updates the auth state with new user information
    * - Throws an error if account creation fails
    */
-  signUp: (email: string, password: string, inviteCode: string, name?: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    inviteCode: string,
+    name?: string,
+  ) => Promise<void>;
 
   /**
    * Authenticates a guest user with user id and password
@@ -123,7 +133,7 @@ export type OpenSecretContextType = {
   convertGuestToUserAccount: (
     email: string,
     password: string,
-    name?: string | null
+    name?: string | null,
   ) => Promise<void>;
 
   /**
@@ -214,7 +224,7 @@ export type OpenSecretContextType = {
     email: string,
     alphanumericCode: string,
     plaintextSecret: string,
-    newPassword: string
+    newPassword: string,
   ) => Promise<void>;
   /**
    * Initiates the account deletion process for logged-in users
@@ -243,14 +253,32 @@ export type OpenSecretContextType = {
    * 3. Permanently deletes the user account and all associated data
    * 4. After successful deletion, the client should clear all local storage and tokens
    */
-  confirmAccountDeletion: (confirmationCode: string, plaintextSecret: string) => Promise<void>;
+  confirmAccountDeletion: (
+    confirmationCode: string,
+    plaintextSecret: string,
+  ) => Promise<void>;
   initiateGitHubAuth: (inviteCode: string) => Promise<api.GithubAuthResponse>;
-  handleGitHubCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
+  handleGitHubCallback: (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => Promise<void>;
   initiateGoogleAuth: (inviteCode: string) => Promise<api.GoogleAuthResponse>;
-  handleGoogleCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
+  handleGoogleCallback: (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => Promise<void>;
   initiateAppleAuth: (inviteCode: string) => Promise<api.AppleAuthResponse>;
-  handleAppleCallback: (code: string, state: string, inviteCode: string) => Promise<void>;
-  handleAppleNativeSignIn: (appleUser: api.AppleUser, inviteCode?: string) => Promise<void>;
+  handleAppleCallback: (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => Promise<void>;
+  handleAppleNativeSignIn: (
+    appleUser: api.AppleUser,
+    inviteCode?: string,
+  ) => Promise<void>;
 
   /**
    * Retrieves the user's private key mnemonic phrase
@@ -365,7 +393,10 @@ export type OpenSecretContextType = {
    * });
    * ```
    */
-  aiCustomFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  aiCustomFetch: (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response>;
 
   /**
    * Returns the current OpenSecret enclave API URL being used
@@ -394,7 +425,7 @@ export type OpenSecretContextType = {
   parseAttestationForView: (
     document: AttestationDocument,
     cabundle: Uint8Array[],
-    pcrConfig?: PcrConfig
+    pcrConfig?: PcrConfig,
   ) => Promise<ParsedAttestationView>;
 
   /**
@@ -435,7 +466,9 @@ export type OpenSecretContextType = {
    * - Requires an active authentication session
    * - Token can be used to authenticate with the specified service
    */
-  generateThirdPartyToken: (audience?: string) => Promise<ThirdPartyTokenResponse>;
+  generateThirdPartyToken: (
+    audience?: string,
+  ) => Promise<ThirdPartyTokenResponse>;
 
   /**
    * Encrypts arbitrary string data using the user's private key
@@ -547,7 +580,9 @@ export type OpenSecretContextType = {
    * console.log(result.task_id); // Task ID to check status
    * ```
    */
-  uploadDocument: (file: File | Blob) => Promise<api.DocumentUploadInitResponse>;
+  uploadDocument: (
+    file: File | Blob,
+  ) => Promise<api.DocumentUploadInitResponse>;
 
   /**
    * Checks the status of a document processing task
@@ -612,7 +647,7 @@ export type OpenSecretContextType = {
       pollInterval?: number;
       maxAttempts?: number;
       onProgress?: (status: string, progress?: number) => void;
-    }
+    },
   ) => Promise<DocumentResponse>;
 
   /**
@@ -716,7 +751,9 @@ export type OpenSecretContextType = {
    * });
    * ```
    */
-  fetchResponsesList: (params?: api.ResponsesListParams) => Promise<api.ResponsesListResponse>;
+  fetchResponsesList: (
+    params?: api.ResponsesListParams,
+  ) => Promise<api.ResponsesListResponse>;
 
   /**
    * Retrieves a single response by ID
@@ -854,19 +891,19 @@ export type OpenSecretContextType = {
 export const OpenSecretContext = createContext<OpenSecretContextType>({
   auth: {
     loading: true,
-    user: undefined
+    user: undefined,
   },
-  clientId: "",
+  clientId: '',
   apiKey: undefined,
   setApiKey: () => {},
   signIn: async () => {},
   signUp: async () => {},
   signInGuest: async () => {},
   signUpGuest: async (): Promise<LoginResponse> => ({
-    id: "",
+    id: '',
     email: undefined,
-    access_token: "",
-    refresh_token: ""
+    access_token: '',
+    refresh_token: '',
   }),
   convertGuestToUserAccount: async () => {},
   signOut: async () => {},
@@ -885,11 +922,11 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   confirmPasswordReset: async () => {},
   requestAccountDeletion: async () => {},
   confirmAccountDeletion: async () => {},
-  initiateGitHubAuth: async () => ({ auth_url: "", csrf_token: "" }),
+  initiateGitHubAuth: async () => ({ auth_url: '', csrf_token: '' }),
   handleGitHubCallback: async () => {},
-  initiateGoogleAuth: async () => ({ auth_url: "", csrf_token: "" }),
+  initiateGoogleAuth: async () => ({ auth_url: '', csrf_token: '' }),
   handleGoogleCallback: async () => {},
-  initiateAppleAuth: async () => ({ auth_url: "", state: "" }),
+  initiateAppleAuth: async () => ({ auth_url: '', state: '' }),
   handleAppleCallback: async () => {},
   handleAppleNativeSignIn: async () => {},
   getPrivateKey: api.fetchPrivateKey,
@@ -897,7 +934,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   getPublicKey: api.fetchPublicKey,
   signMessage: api.signMessage,
   aiCustomFetch: async () => new Response(),
-  apiUrl: "",
+  apiUrl: '',
   pcrConfig: {},
   getAttestation,
   authenticate,
@@ -905,9 +942,11 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   awsRootCertDer: AWS_ROOT_CERT_DER,
   expectedRootCertHash: EXPECTED_ROOT_CERT_HASH,
   getAttestationDocument: async () => {
-    throw new Error("getAttestationDocument called outside of OpenSecretProvider");
+    throw new Error(
+      'getAttestationDocument called outside of OpenSecretProvider',
+    );
   },
-  generateThirdPartyToken: async () => ({ token: "" }),
+  generateThirdPartyToken: async () => ({ token: '' }),
   encryptData: api.encryptData,
   decryptData: api.decryptData,
   fetchModels: api.fetchModels,
@@ -931,27 +970,27 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   getInstruction: api.getInstruction,
   updateInstruction: api.updateInstruction,
   deleteInstruction: api.deleteInstruction,
-  setDefaultInstruction: api.setDefaultInstruction
+  setDefaultInstruction: api.setDefaultInstruction,
 });
 
 /**
  * Provider component for OpenSecret authentication and key-value storage.
- * 
+ *
  * @deprecated The OpenSecretProvider is deprecated. Instead, use the `configure` function
  * and import API functions directly. This provider will be removed in a future version.
- * 
+ *
  * Migration guide:
  * ```tsx
  * // Old approach (deprecated)
  * <OpenSecretProvider apiUrl="..." clientId="...">
  *   <App />
  * </OpenSecretProvider>
- * 
+ *
  * // New approach
  * import { configure, signIn, get, put } from '@opensecret/react';
- * 
+ *
  * configure({ apiUrl: '...', clientId: '...' });
- * 
+ *
  * // Use functions directly
  * await signIn(email, password);
  * const value = await get('key');
@@ -984,7 +1023,7 @@ export function OpenSecretProvider({
   children,
   apiUrl,
   clientId,
-  pcrConfig = {}
+  pcrConfig = {},
 }: {
   children: React.ReactNode;
   apiUrl: string;
@@ -993,10 +1032,11 @@ export function OpenSecretProvider({
 }) {
   const [auth, setAuth] = useState<OpenSecretAuthState>({
     loading: true,
-    user: undefined
+    user: undefined,
   });
   const [apiKey, setApiKeyState] = useState<string | undefined>();
-  const [aiCustomFetch, setAiCustomFetch] = useState<OpenSecretContextType["aiCustomFetch"]>();
+  const [aiCustomFetch, setAiCustomFetch] =
+    useState<OpenSecretContextType['aiCustomFetch']>();
 
   // Validates UUID-with-dashes (v1–v5) and trims input; set undefined to clear
   const setApiKey = (key: string | undefined) => {
@@ -1008,7 +1048,9 @@ export function OpenSecretProvider({
     const uuidWithDashes =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidWithDashes.test(trimmed)) {
-      console.warn("setApiKey: provided key does not look like a UUID; clearing apiKey");
+      console.warn(
+        'setApiKey: provided key does not look like a UUID; clearing apiKey',
+      );
       setApiKeyState(undefined);
       return;
     }
@@ -1016,17 +1058,17 @@ export function OpenSecretProvider({
   };
 
   useEffect(() => {
-    if (!apiUrl || apiUrl.trim() === "") {
+    if (!apiUrl || apiUrl.trim() === '') {
       throw new Error(
-        "OpenSecretProvider requires a non-empty apiUrl. Please provide a valid API endpoint URL."
+        'OpenSecretProvider requires a non-empty apiUrl. Please provide a valid API endpoint URL.',
       );
     }
-    if (!clientId || clientId.trim() === "") {
+    if (!clientId || clientId.trim() === '') {
       throw new Error(
-        "OpenSecretProvider requires a non-empty clientId. Please provide a valid project UUID."
+        'OpenSecretProvider requires a non-empty clientId. Please provide a valid project UUID.',
       );
     }
-    
+
     // Configure the SDK with the provided values
     configure({ apiUrl, clientId });
   }, [apiUrl, clientId]);
@@ -1035,19 +1077,21 @@ export function OpenSecretProvider({
   useEffect(() => {
     if (apiUrl) {
       // Pass API key if available, otherwise falls back to JWT
-      setAiCustomFetch(() => createCustomFetch(apiKey ? { apiKey } : undefined));
+      setAiCustomFetch(() =>
+        createCustomFetch(apiKey ? { apiKey } : undefined),
+      );
     } else {
       setAiCustomFetch(undefined);
     }
   }, [apiUrl, apiKey]);
 
   async function fetchUser() {
-    const access_token = window.localStorage.getItem("access_token");
-    const refresh_token = window.localStorage.getItem("refresh_token");
+    const access_token = getStorage().persistent.getItem('access_token');
+    const refresh_token = getStorage().persistent.getItem('refresh_token');
     if (!access_token || !refresh_token) {
       setAuth({
         loading: false,
-        user: undefined
+        user: undefined,
       });
       return;
     }
@@ -1056,13 +1100,13 @@ export function OpenSecretProvider({
       const user = await api.fetchUser();
       setAuth({
         loading: false,
-        user
+        user,
       });
     } catch (error) {
-      console.error("Failed to fetch user:", error);
+      console.error('Failed to fetch user:', error);
       setAuth({
         loading: false,
-        user: undefined
+        user: undefined,
       });
     }
   }
@@ -1072,7 +1116,7 @@ export function OpenSecretProvider({
   }, []);
 
   async function signIn(email: string, password: string) {
-    console.log("Signing in");
+    console.log('Signing in');
     try {
       await api.fetchLogin(email, password);
       setApiKey(undefined);
@@ -1083,14 +1127,14 @@ export function OpenSecretProvider({
     }
   }
 
-  async function signUp(email: string, password: string, inviteCode: string, name?: string) {
+  async function signUp(
+    email: string,
+    password: string,
+    inviteCode: string,
+    name?: string,
+  ) {
     try {
-      await api.fetchSignUp(
-        email,
-        password,
-        inviteCode,
-        name || null
-      );
+      await api.fetchSignUp(email, password, inviteCode, name || null);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
@@ -1100,7 +1144,7 @@ export function OpenSecretProvider({
   }
 
   async function signInGuest(id: string, password: string) {
-    console.log("Signing in Guest");
+    console.log('Signing in Guest');
     try {
       await api.fetchGuestLogin(id, password);
       setApiKey(undefined);
@@ -1113,10 +1157,7 @@ export function OpenSecretProvider({
 
   async function signUpGuest(password: string, inviteCode: string) {
     try {
-      const response = await api.fetchGuestSignUp(
-        password,
-        inviteCode
-      );
+      const response = await api.fetchGuestSignUp(password, inviteCode);
       setApiKey(undefined);
       await fetchUser();
       return response;
@@ -1126,7 +1167,11 @@ export function OpenSecretProvider({
     }
   }
 
-  async function convertGuestToUserAccount(email: string, password: string, name?: string | null) {
+  async function convertGuestToUserAccount(
+    email: string,
+    password: string,
+    name?: string | null,
+  ) {
     try {
       await api.convertGuestToEmailAccount(email, password, name);
       await fetchUser();
@@ -1141,7 +1186,7 @@ export function OpenSecretProvider({
     setApiKey(undefined);
     setAuth({
       loading: false,
-      user: undefined
+      user: undefined,
     });
   }
 
@@ -1149,22 +1194,22 @@ export function OpenSecretProvider({
     try {
       return await api.initiateGitHubAuth(inviteCode);
     } catch (error) {
-      console.error("Failed to initiate GitHub auth:", error);
+      console.error('Failed to initiate GitHub auth:', error);
       throw error;
     }
   };
 
-  const handleGitHubCallback = async (code: string, state: string, inviteCode: string) => {
+  const handleGitHubCallback = async (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => {
     try {
-      await api.handleGitHubCallback(
-        code,
-        state,
-        inviteCode
-      );
+      await api.handleGitHubCallback(code, state, inviteCode);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
-      console.error("GitHub callback error:", error);
+      console.error('GitHub callback error:', error);
       throw error;
     }
   };
@@ -1173,22 +1218,22 @@ export function OpenSecretProvider({
     try {
       return await api.initiateGoogleAuth(inviteCode);
     } catch (error) {
-      console.error("Failed to initiate Google auth:", error);
+      console.error('Failed to initiate Google auth:', error);
       throw error;
     }
   };
 
-  const handleGoogleCallback = async (code: string, state: string, inviteCode: string) => {
+  const handleGoogleCallback = async (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => {
     try {
-      await api.handleGoogleCallback(
-        code,
-        state,
-        inviteCode
-      );
+      await api.handleGoogleCallback(code, state, inviteCode);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
-      console.error("Google callback error:", error);
+      console.error('Google callback error:', error);
       throw error;
     }
   };
@@ -1197,36 +1242,36 @@ export function OpenSecretProvider({
     try {
       return await api.initiateAppleAuth(inviteCode);
     } catch (error) {
-      console.error("Failed to initiate Apple auth:", error);
+      console.error('Failed to initiate Apple auth:', error);
       throw error;
     }
   };
 
-  const handleAppleCallback = async (code: string, state: string, inviteCode: string) => {
+  const handleAppleCallback = async (
+    code: string,
+    state: string,
+    inviteCode: string,
+  ) => {
     try {
-      await api.handleAppleCallback(
-        code,
-        state,
-        inviteCode
-      );
+      await api.handleAppleCallback(code, state, inviteCode);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
-      console.error("Apple callback error:", error);
+      console.error('Apple callback error:', error);
       throw error;
     }
   };
 
-  const handleAppleNativeSignIn = async (appleUser: api.AppleUser, inviteCode?: string) => {
+  const handleAppleNativeSignIn = async (
+    appleUser: api.AppleUser,
+    inviteCode?: string,
+  ) => {
     try {
-      await api.handleAppleNativeSignIn(
-        appleUser,
-        inviteCode
-      );
+      await api.handleAppleNativeSignIn(appleUser, inviteCode);
       setApiKey(undefined);
       await fetchUser();
     } catch (error) {
-      console.error("Apple native sign-in error:", error);
+      console.error('Apple native sign-in error:', error);
       throw error;
     }
   };
@@ -1235,16 +1280,20 @@ export function OpenSecretProvider({
     const nonce = window.crypto.randomUUID();
     const response = await fetch(`${apiUrl}/attestation/${nonce}`);
     if (!response.ok) {
-      throw new Error("Failed to fetch attestation document");
+      throw new Error('Failed to fetch attestation document');
     }
 
     const data = await response.json();
     const verifiedDocument = await authenticate(
       data.attestation_document,
       AWS_ROOT_CERT_DER,
-      nonce
+      nonce,
     );
-    return parseAttestationForView(verifiedDocument, verifiedDocument.cabundle, pcrConfig);
+    return parseAttestationForView(
+      verifiedDocument,
+      verifiedDocument.cabundle,
+      pcrConfig,
+    );
   };
 
   const value: OpenSecretContextType = {
@@ -1317,8 +1366,12 @@ export function OpenSecretProvider({
     getInstruction: api.getInstruction,
     updateInstruction: api.updateInstruction,
     deleteInstruction: api.deleteInstruction,
-    setDefaultInstruction: api.setDefaultInstruction
+    setDefaultInstruction: api.setDefaultInstruction,
   };
 
-  return <OpenSecretContext.Provider value={value}>{children}</OpenSecretContext.Provider>;
+  return (
+    <OpenSecretContext.Provider value={value}>
+      {children}
+    </OpenSecretContext.Provider>
+  );
 }
