@@ -1,8 +1,9 @@
-import { encryptMessage, decryptMessage } from "./encryption";
-import { getAttestation } from "./getAttestation";
-import { refreshToken } from "./api";
-import { platformRefreshToken } from "./platformApi";
-import { apiConfig } from "./apiConfig";
+import { encryptMessage, decryptMessage } from './encryption';
+import { getAttestation } from './getAttestation';
+import { refreshToken } from './api';
+import { platformRefreshToken } from './platformApi';
+import { apiConfig } from './apiConfig';
+import { getStorage } from './storage';
 
 interface EncryptedResponse {
   encrypted: string;
@@ -18,28 +19,30 @@ export async function authenticatedApiCall<T, U>(
   url: string,
   method: string,
   data: T,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<U> {
-  const tryAuthenticatedRequest = async (forceRefresh: boolean = false): Promise<U> => {
+  const tryAuthenticatedRequest = async (
+    forceRefresh: boolean = false,
+  ): Promise<U> => {
     try {
       if (forceRefresh) {
-        console.log("Refreshing access token");
+        console.log('Refreshing access token');
 
         // Use the apiConfig to determine which refresh function to use
         const refreshFn = apiConfig.getRefreshFunction(url);
         console.log(`Using ${refreshFn}`);
 
-        if (refreshFn === "platformRefreshToken") {
+        if (refreshFn === 'platformRefreshToken') {
           await platformRefreshToken();
         } else {
           await refreshToken();
         }
       }
 
-      // Always get the latest token from localStorage
-      const accessToken = window.localStorage.getItem("access_token");
+      // Always get the latest token from storage
+      const accessToken = getStorage().persistent.getItem('access_token');
       if (!accessToken) {
-        throw new Error("No access token available");
+        throw new Error('No access token available');
       }
 
       const response = await internalEncryptedApiCall<T, U>(
@@ -47,7 +50,7 @@ export async function authenticatedApiCall<T, U>(
         method,
         data,
         accessToken,
-        errorMessage
+        errorMessage,
       );
 
       // Attempt to refresh token once if we get a 401
@@ -63,7 +66,7 @@ export async function authenticatedApiCall<T, U>(
 
       // Throw an error if no data was received
       if (!response.data) {
-        throw new Error("No data received from the server");
+        throw new Error('No data received from the server');
       }
 
       return response.data;
@@ -82,7 +85,7 @@ export async function openAiAuthenticatedApiCall<T, U>(
   method: string,
   data: T,
   errorMessage?: string,
-  apiKey?: string
+  apiKey?: string,
 ): Promise<U> {
   // If no API key provided, use regular authenticated call
   if (!apiKey) {
@@ -90,7 +93,13 @@ export async function openAiAuthenticatedApiCall<T, U>(
   }
 
   // For API key auth, call internal encrypted API directly (no refresh logic)
-  const response = await internalEncryptedApiCall<T, U>(url, method, data, apiKey, errorMessage);
+  const response = await internalEncryptedApiCall<T, U>(
+    url,
+    method,
+    data,
+    apiKey,
+    errorMessage,
+  );
 
   if (response.error) {
     throw new Error(response.error);
@@ -109,15 +118,19 @@ async function internalEncryptedApiCall<T, U>(
   method: string,
   data: T,
   accessToken?: string,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<ApiResponse<U>> {
   // Use apiConfig to determine the context and get the appropriate API URL
   const endpoint = apiConfig.resolveEndpoint(url);
-  const explicitApiUrl = endpoint.context === "platform" ? apiConfig.platformApiUrl : undefined;
+  const explicitApiUrl =
+    endpoint.context === 'platform' ? apiConfig.platformApiUrl : undefined;
 
   let { sessionKey, sessionId } = await getAttestation(false, explicitApiUrl);
 
-  const makeRequest = async (token: string | undefined, forceNewAttestation: boolean = false) => {
+  const makeRequest = async (
+    token: string | undefined,
+    forceNewAttestation: boolean = false,
+  ) => {
     if (forceNewAttestation || !sessionKey || !sessionId) {
       const newAttestation = await getAttestation(true, explicitApiUrl);
       sessionKey = newAttestation.sessionKey;
@@ -125,49 +138,60 @@ async function internalEncryptedApiCall<T, U>(
     }
 
     if (!sessionKey || !sessionId) {
-      throw new Error("Failed to make encrypted API call, no attestation available.");
+      throw new Error(
+        'Failed to make encrypted API call, no attestation available.',
+      );
     }
 
     const jsonData = data ? JSON.stringify(data) : undefined;
-    const encryptedData = jsonData ? encryptMessage(sessionKey, jsonData) : undefined;
+    const encryptedData = jsonData
+      ? encryptMessage(sessionKey, jsonData)
+      : undefined;
 
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "x-session-id": sessionId
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
     };
 
     // Only add Authorization header if a token is provided
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch(url, {
       method,
       headers,
-      body: encryptedData ? JSON.stringify({ encrypted: encryptedData }) : undefined
+      body: encryptedData
+        ? JSON.stringify({ encrypted: encryptedData })
+        : undefined,
     });
 
     const result: ApiResponse<U> = {
-      status: response.status
+      status: response.status,
     };
 
     if (!response.ok) {
       try {
         const errorBody = await response.json();
         result.error =
-          errorBody.message || errorMessage || `HTTP error! Status: ${response.status}`;
+          errorBody.message ||
+          errorMessage ||
+          `HTTP error! Status: ${response.status}`;
       } catch {
         result.error = errorMessage || `HTTP error! Status: ${response.status}`;
       }
     } else {
       try {
         const encryptedResponse: EncryptedResponse = await response.json();
-        const decryptedResponse = decryptMessage(sessionKey, encryptedResponse.encrypted);
+        const decryptedResponse = decryptMessage(
+          sessionKey,
+          encryptedResponse.encrypted,
+        );
         result.data = JSON.parse(decryptedResponse);
       } catch (error) {
-        console.error("Error decrypting or parsing response:", error);
+        console.error('Error decrypting or parsing response:', error);
         result.status = 500;
-        result.error = "Failed to decrypt or parse the response";
+        result.error = 'Failed to decrypt or parse the response';
       }
     }
 
@@ -176,15 +200,20 @@ async function internalEncryptedApiCall<T, U>(
 
   const tryEncryptedRequest = async (
     token: string | undefined,
-    forceNewAttestation: boolean = false
+    forceNewAttestation: boolean = false,
   ): Promise<ApiResponse<U>> => {
     try {
       const response = await makeRequest(token, forceNewAttestation);
 
       // Retry with new attestation if we get a 400 or encryption error, but only once
-      if (response.status === 400 || response.error?.includes("Encryption error")) {
+      if (
+        response.status === 400 ||
+        response.error?.includes('Encryption error')
+      ) {
         if (!forceNewAttestation) {
-          console.log("Encryption error or Bad Request, attempting to renew attestation");
+          console.log(
+            'Encryption error or Bad Request, attempting to renew attestation',
+          );
           return tryEncryptedRequest(token, true);
         }
       }
@@ -193,7 +222,8 @@ async function internalEncryptedApiCall<T, U>(
     } catch (error) {
       return {
         status: 500,
-        error: error instanceof Error ? error.message : "Unknown error occurred"
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   };
@@ -206,14 +236,14 @@ export async function encryptedApiCall<T, U>(
   method: string,
   data: T,
   accessToken?: string,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<U> {
   const response = await internalEncryptedApiCall<T, U>(
     url,
     method,
     data,
     accessToken,
-    errorMessage
+    errorMessage,
   );
 
   // Throw an error if the response contains an error message
@@ -223,7 +253,7 @@ export async function encryptedApiCall<T, U>(
 
   // Throw an error if no data was received
   if (!response.data) {
-    throw new Error("No data received from the server");
+    throw new Error('No data received from the server');
   }
 
   return response.data;

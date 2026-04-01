@@ -1,7 +1,12 @@
-import { encode } from "@stablelib/base64";
-import { authenticatedApiCall, encryptedApiCall, openAiAuthenticatedApiCall } from "./encryptedApi";
-import type { Model } from "openai/resources/models.js";
-import { getConfig } from "./config";
+import { encode } from '@stablelib/base64';
+import {
+  authenticatedApiCall,
+  encryptedApiCall,
+  openAiAuthenticatedApiCall,
+} from './encryptedApi';
+import type { Model } from 'openai/resources/models.js';
+import { getConfig } from './config';
+import { getStorage } from './storage';
 
 export function getApiUrl(): string {
   return getConfig().apiUrl;
@@ -40,37 +45,35 @@ export type KVListItem = {
 
 export async function fetchLogin(
   email: string,
-  password: string
+  password: string,
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  const response = await encryptedApiCall<{ email: string; password: string; client_id: string }, LoginResponse>(
-    `${getApiUrl()}/login`,
-    "POST",
-    { email, password, client_id: clientId }
-  );
-  
+  const response = await encryptedApiCall<
+    { email: string; password: string; client_id: string },
+    LoginResponse
+  >(`${getApiUrl()}/login`, 'POST', { email, password, client_id: clientId });
+
   // Store tokens automatically
-  window.localStorage.setItem("access_token", response.access_token);
-  window.localStorage.setItem("refresh_token", response.refresh_token);
-  
+  getStorage().persistent.setItem('access_token', response.access_token);
+  getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
   return response;
 }
 
 export async function fetchGuestLogin(
   id: string,
-  password: string
+  password: string,
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
-  const response = await encryptedApiCall<{ id: string; password: string; client_id: string }, LoginResponse>(
-    `${getApiUrl()}/login`,
-    "POST",
-    { id, password, client_id: clientId }
-  );
-  
+  const response = await encryptedApiCall<
+    { id: string; password: string; client_id: string },
+    LoginResponse
+  >(`${getApiUrl()}/login`, 'POST', { id, password, client_id: clientId });
+
   // Store tokens automatically
-  window.localStorage.setItem("access_token", response.access_token);
-  window.localStorage.setItem("refresh_token", response.refresh_token);
-  
+  getStorage().persistent.setItem('access_token', response.access_token);
+  getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
   return response;
 }
 
@@ -78,7 +81,7 @@ export async function fetchSignUp(
   email: string,
   password: string,
   inviteCode: string,
-  name?: string | null
+  name?: string | null,
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
   const response = await encryptedApiCall<
@@ -90,62 +93,65 @@ export async function fetchSignUp(
       client_id: string;
     },
     LoginResponse
-  >(`${getApiUrl()}/register`, "POST", {
+  >(`${getApiUrl()}/register`, 'POST', {
     email,
     password,
     inviteCode: inviteCode.toLowerCase(),
     client_id: clientId,
-    name
+    name,
   });
-  
+
   // Store tokens automatically
-  window.localStorage.setItem("access_token", response.access_token);
-  window.localStorage.setItem("refresh_token", response.refresh_token);
-  
+  getStorage().persistent.setItem('access_token', response.access_token);
+  getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
   return response;
 }
 
 export async function fetchGuestSignUp(
   password: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
   const response = await encryptedApiCall<
     { password: string; inviteCode: string; client_id: string },
     LoginResponse
-  >(`${getApiUrl()}/register`, "POST", {
+  >(`${getApiUrl()}/register`, 'POST', {
     password,
     inviteCode: inviteCode.toLowerCase(),
-    client_id: clientId
+    client_id: clientId,
   });
-  
+
   // Store tokens automatically
-  window.localStorage.setItem("access_token", response.access_token);
-  window.localStorage.setItem("refresh_token", response.refresh_token);
-  
+  getStorage().persistent.setItem('access_token', response.access_token);
+  getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
   return response;
 }
 
 export async function refreshToken(): Promise<RefreshResponse> {
-  const refresh_token = window.localStorage.getItem("refresh_token");
-  if (!refresh_token) throw new Error("No refresh token available");
+  const refresh_token = getStorage().persistent.getItem('refresh_token');
+  if (!refresh_token) throw new Error('No refresh token available');
 
   const refreshData = { refresh_token };
 
   try {
-    const response = await encryptedApiCall<typeof refreshData, RefreshResponse>(
+    const response = await encryptedApiCall<
+      typeof refreshData,
+      RefreshResponse
+    >(
       `${getApiUrl()}/refresh`,
-      "POST",
+      'POST',
       refreshData,
       undefined,
-      "Failed to refresh token"
+      'Failed to refresh token',
     );
 
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
     return response;
   } catch (error) {
-    console.error("Error refreshing token:", error);
+    console.error('Error refreshing token:', error);
     throw error;
   }
 }
@@ -153,36 +159,36 @@ export async function refreshToken(): Promise<RefreshResponse> {
 export async function fetchUser(): Promise<UserResponse> {
   return authenticatedApiCall<void, UserResponse>(
     `${getApiUrl()}/protected/user`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to fetch user"
+    'Failed to fetch user',
   );
 }
 
 export async function fetchPut(key: string, value: string): Promise<string> {
   return authenticatedApiCall<string, string>(
     `${getApiUrl()}/protected/kv/${key}`,
-    "PUT",
+    'PUT',
     value,
-    "Failed to put key-value pair"
+    'Failed to put key-value pair',
   );
 }
 
 export async function fetchDelete(key: string): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${getApiUrl()}/protected/kv/${key}`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete key-value pair"
+    'Failed to delete key-value pair',
   );
 }
 
 export async function fetchDeleteAllKV(): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${getApiUrl()}/protected/kv`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete all key-value pairs"
+    'Failed to delete all key-value pairs',
   );
 }
 
@@ -190,9 +196,9 @@ export async function fetchGet(key: string): Promise<string | undefined> {
   try {
     const data = await authenticatedApiCall<void, string>(
       `${getApiUrl()}/protected/kv/${key}`,
-      "GET",
+      'GET',
       undefined,
-      "Failed to get key-value pair"
+      'Failed to get key-value pair',
     );
     return data;
   } catch (error) {
@@ -204,52 +210,56 @@ export async function fetchGet(key: string): Promise<string | undefined> {
 export async function fetchList(): Promise<KVListItem[]> {
   return authenticatedApiCall<void, KVListItem[]>(
     `${getApiUrl()}/protected/kv`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list key-value pairs"
+    'Failed to list key-value pairs',
   );
 }
 
 export async function fetchLogout(): Promise<void> {
-  const refresh_token = window.localStorage.getItem("refresh_token");
-  
+  const refresh_token = getStorage().persistent.getItem('refresh_token');
+
   if (refresh_token) {
     try {
       const refreshData = { refresh_token };
-      await encryptedApiCall<typeof refreshData, void>(`${getApiUrl()}/logout`, "POST", refreshData);
+      await encryptedApiCall<typeof refreshData, void>(
+        `${getApiUrl()}/logout`,
+        'POST',
+        refreshData,
+      );
     } catch (error) {
-      console.error("Error during logout API call:", error);
+      console.error('Error during logout API call:', error);
     }
   }
-  
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-  sessionStorage.removeItem("sessionKey");
-  sessionStorage.removeItem("sessionId");
+
+  getStorage().persistent.removeItem('access_token');
+  getStorage().persistent.removeItem('refresh_token');
+  getStorage().session.removeItem('sessionKey');
+  getStorage().session.removeItem('sessionId');
 }
 
 export async function verifyEmail(code: string): Promise<void> {
   return encryptedApiCall<void, void>(
     `${getApiUrl()}/verify-email/${code}`,
-    "GET",
+    'GET',
     undefined,
     undefined,
-    "Failed to verify email"
+    'Failed to verify email',
   );
 }
 
 export async function requestNewVerificationCode(): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${getApiUrl()}/protected/request_verification`,
-    "POST",
+    'POST',
     undefined,
-    "Failed to request new verification code"
+    'Failed to request new verification code',
   );
 }
 
 export async function fetchAttestationDocument(
   nonce: string,
-  explicitApiUrl?: string
+  explicitApiUrl?: string,
 ): Promise<string> {
   const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/attestation/${nonce}`);
@@ -263,19 +273,19 @@ export async function fetchAttestationDocument(
 export async function keyExchange(
   clientPublicKey: string,
   nonce: string,
-  explicitApiUrl?: string
+  explicitApiUrl?: string,
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
   const url = explicitApiUrl || getApiUrl();
   const response = await fetch(`${url}/key_exchange`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ client_public_key: clientPublicKey, nonce })
+    body: JSON.stringify({ client_public_key: clientPublicKey, nonce }),
   });
 
   if (!response.ok) {
-    throw new Error("Key exchange failed");
+    throw new Error('Key exchange failed');
   }
 
   return response.json();
@@ -283,20 +293,20 @@ export async function keyExchange(
 
 export async function requestPasswordReset(
   email: string,
-  hashedSecret: string
+  hashedSecret: string,
 ): Promise<void> {
   const { clientId } = getConfig();
   const resetData = {
     email,
     hashed_secret: hashedSecret,
-    client_id: clientId
+    client_id: clientId,
   };
   return encryptedApiCall<typeof resetData, void>(
     `${getApiUrl()}/password-reset/request`,
-    "POST",
+    'POST',
     resetData,
     undefined,
-    "Failed to request password reset"
+    'Failed to request password reset',
   );
 }
 
@@ -304,7 +314,7 @@ export async function confirmPasswordReset(
   email: string,
   alphanumericCode: string,
   plaintextSecret: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<void> {
   const { clientId } = getConfig();
   const confirmData = {
@@ -312,46 +322,54 @@ export async function confirmPasswordReset(
     alphanumeric_code: alphanumericCode,
     plaintext_secret: plaintextSecret,
     new_password: newPassword,
-    client_id: clientId
+    client_id: clientId,
   };
   return encryptedApiCall<typeof confirmData, void>(
     `${getApiUrl()}/password-reset/confirm`,
-    "POST",
+    'POST',
     confirmData,
     undefined,
-    "Failed to confirm password reset"
+    'Failed to confirm password reset',
   );
 }
 
-export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
   const changePasswordData = {
     current_password: currentPassword,
-    new_password: newPassword
+    new_password: newPassword,
   };
   return authenticatedApiCall<typeof changePasswordData, void>(
     `${getApiUrl()}/protected/change_password`,
-    "POST",
+    'POST',
     changePasswordData,
-    "Failed to change password"
+    'Failed to change password',
   );
 }
 
 export async function initiateGitHubAuth(
-  inviteCode?: string
+  inviteCode?: string,
 ): Promise<GithubAuthResponse> {
   const { clientId } = getConfig();
   try {
-    return await encryptedApiCall<{ invite_code?: string; client_id: string }, GithubAuthResponse>(
+    return await encryptedApiCall<
+      { invite_code?: string; client_id: string },
+      GithubAuthResponse
+    >(
       `${getApiUrl()}/auth/github`,
-      "POST",
-      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
+      'POST',
+      inviteCode
+        ? { invite_code: inviteCode, client_id: clientId }
+        : { client_id: clientId },
       undefined,
-      "Failed to initiate GitHub auth"
+      'Failed to initiate GitHub auth',
     );
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please check and try again.");
+      if (error.message.includes('Invalid invite code')) {
+        throw new Error('Invalid invite code. Please check and try again.');
       }
     }
     throw error;
@@ -361,41 +379,45 @@ export async function initiateGitHubAuth(
 export async function handleGitHubCallback(
   code: string,
   state: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${getApiUrl()}/auth/github/callback`,
-      "POST",
+      'POST',
       callbackData,
       undefined,
-      "GitHub callback failed"
+      'GitHub callback failed',
     );
-    
+
     // Store tokens automatically
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
-    
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
     return response;
   } catch (error) {
-    console.error("Detailed GitHub callback error:", error);
+    console.error('Detailed GitHub callback error:', error);
     if (error instanceof Error) {
       if (
-        error.message.includes("User exists") ||
-        error.message.includes("Email already registered")
+        error.message.includes('User exists') ||
+        error.message.includes('Email already registered')
       ) {
         throw new Error(
-          "An account with this email already exists. Please sign in using your existing account."
+          'An account with this email already exists. Please sign in using your existing account.',
         );
-      } else if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
-      } else if (error.message.includes("User not found")) {
+      } else if (error.message.includes('Invalid invite code')) {
         throw new Error(
-          "User not found. Please sign up first before attempting to log in with GitHub."
+          'Invalid invite code. Please try signing up with a valid invite code.',
+        );
+      } else if (error.message.includes('User not found')) {
+        throw new Error(
+          'User not found. Please sign up first before attempting to log in with GitHub.',
         );
       } else {
-        throw new Error("Failed to authenticate with GitHub. Please try again.");
+        throw new Error(
+          'Failed to authenticate with GitHub. Please try again.',
+        );
       }
     }
     throw error;
@@ -423,21 +445,26 @@ export type AppleAuthResponse = {
 };
 
 export async function initiateGoogleAuth(
-  inviteCode?: string
+  inviteCode?: string,
 ): Promise<GoogleAuthResponse> {
   const { clientId } = getConfig();
   try {
-    return await encryptedApiCall<{ invite_code?: string; client_id: string }, GoogleAuthResponse>(
+    return await encryptedApiCall<
+      { invite_code?: string; client_id: string },
+      GoogleAuthResponse
+    >(
       `${getApiUrl()}/auth/google`,
-      "POST",
-      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
+      'POST',
+      inviteCode
+        ? { invite_code: inviteCode, client_id: clientId }
+        : { client_id: clientId },
       undefined,
-      "Failed to initiate Google auth"
+      'Failed to initiate Google auth',
     );
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please check and try again.");
+      if (error.message.includes('Invalid invite code')) {
+        throw new Error('Invalid invite code. Please check and try again.');
       }
     }
     throw error;
@@ -447,41 +474,45 @@ export async function initiateGoogleAuth(
 export async function handleGoogleCallback(
   code: string,
   state: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${getApiUrl()}/auth/google/callback`,
-      "POST",
+      'POST',
       callbackData,
       undefined,
-      "Google callback failed"
+      'Google callback failed',
     );
-    
+
     // Store tokens automatically
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
-    
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
     return response;
   } catch (error) {
-    console.error("Detailed Google callback error:", error);
+    console.error('Detailed Google callback error:', error);
     if (error instanceof Error) {
       if (
-        error.message.includes("User exists") ||
-        error.message.includes("Email already registered")
+        error.message.includes('User exists') ||
+        error.message.includes('Email already registered')
       ) {
         throw new Error(
-          "An account with this email already exists. Please sign in using your existing account."
+          'An account with this email already exists. Please sign in using your existing account.',
         );
-      } else if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
-      } else if (error.message.includes("User not found")) {
+      } else if (error.message.includes('Invalid invite code')) {
         throw new Error(
-          "User not found. Please sign up first before attempting to log in with Google."
+          'Invalid invite code. Please try signing up with a valid invite code.',
+        );
+      } else if (error.message.includes('User not found')) {
+        throw new Error(
+          'User not found. Please sign up first before attempting to log in with Google.',
         );
       } else {
-        throw new Error("Failed to authenticate with Google. Please try again.");
+        throw new Error(
+          'Failed to authenticate with Google. Please try again.',
+        );
       }
     }
     throw error;
@@ -503,21 +534,26 @@ export async function handleGoogleCallback(
  * The handleAppleCallback function should be used to complete the authentication process.
  */
 export async function initiateAppleAuth(
-  inviteCode?: string
+  inviteCode?: string,
 ): Promise<AppleAuthResponse> {
   const { clientId } = getConfig();
   try {
-    return await encryptedApiCall<{ invite_code?: string; client_id: string }, AppleAuthResponse>(
+    return await encryptedApiCall<
+      { invite_code?: string; client_id: string },
+      AppleAuthResponse
+    >(
       `${getApiUrl()}/auth/apple`,
-      "POST",
-      inviteCode ? { invite_code: inviteCode, client_id: clientId } : { client_id: clientId },
+      'POST',
+      inviteCode
+        ? { invite_code: inviteCode, client_id: clientId }
+        : { client_id: clientId },
       undefined,
-      "Failed to initiate Apple auth"
+      'Failed to initiate Apple auth',
     );
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please check and try again.");
+      if (error.message.includes('Invalid invite code')) {
+        throw new Error('Invalid invite code. Please check and try again.');
       }
     }
     throw error;
@@ -542,41 +578,43 @@ export async function initiateAppleAuth(
 export async function handleAppleCallback(
   code: string,
   state: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<LoginResponse> {
   const callbackData = { code, state, invite_code: inviteCode };
   try {
     const response = await encryptedApiCall<typeof callbackData, LoginResponse>(
       `${getApiUrl()}/auth/apple/callback`,
-      "POST",
+      'POST',
       callbackData,
       undefined,
-      "Apple callback failed"
+      'Apple callback failed',
     );
-    
+
     // Store tokens automatically
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
-    
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
     return response;
   } catch (error) {
-    console.error("Detailed Apple callback error:", error);
+    console.error('Detailed Apple callback error:', error);
     if (error instanceof Error) {
       if (
-        error.message.includes("User exists") ||
-        error.message.includes("Email already registered")
+        error.message.includes('User exists') ||
+        error.message.includes('Email already registered')
       ) {
         throw new Error(
-          "An account with this email already exists. Please sign in using your existing account."
+          'An account with this email already exists. Please sign in using your existing account.',
         );
-      } else if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
-      } else if (error.message.includes("User not found")) {
+      } else if (error.message.includes('Invalid invite code')) {
         throw new Error(
-          "User not found. Please sign up first before attempting to log in with Apple."
+          'Invalid invite code. Please try signing up with a valid invite code.',
+        );
+      } else if (error.message.includes('User not found')) {
+        throw new Error(
+          'User not found. Please sign up first before attempting to log in with Apple.',
         );
       } else {
-        throw new Error("Failed to authenticate with Apple. Please try again.");
+        throw new Error('Failed to authenticate with Apple. Please try again.');
       }
     }
     throw error;
@@ -626,50 +664,54 @@ export type AppleUser = {
  */
 export async function handleAppleNativeSignIn(
   appleUser: AppleUser,
-  inviteCode?: string
+  inviteCode?: string,
 ): Promise<LoginResponse> {
   const { clientId } = getConfig();
   // Combine the Apple user data with our app's client ID
   const signInData = {
     ...appleUser,
     client_id: clientId,
-    ...(inviteCode ? { invite_code: inviteCode } : {})
+    ...(inviteCode ? { invite_code: inviteCode } : {}),
   };
 
   try {
     const response = await encryptedApiCall<typeof signInData, LoginResponse>(
       `${getApiUrl()}/auth/apple/native`,
-      "POST",
+      'POST',
       signInData,
       undefined,
-      "Apple Sign-In failed"
+      'Apple Sign-In failed',
     );
-    
+
     // Store tokens automatically
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
-    
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
+
     return response;
   } catch (error) {
-    console.error("Detailed Apple Sign-In error:", error);
+    console.error('Detailed Apple Sign-In error:', error);
     if (error instanceof Error) {
       if (
-        error.message.includes("User exists") ||
-        error.message.includes("Email already registered")
+        error.message.includes('User exists') ||
+        error.message.includes('Email already registered')
       ) {
         throw new Error(
-          "An account with this email already exists. Please sign in using your existing account."
+          'An account with this email already exists. Please sign in using your existing account.',
         );
-      } else if (error.message.includes("Invalid invite code")) {
-        throw new Error("Invalid invite code. Please try signing up with a valid invite code.");
-      } else if (error.message.includes("User not found")) {
+      } else if (error.message.includes('Invalid invite code')) {
         throw new Error(
-          "User not found. Please sign up first before attempting to log in with Apple."
+          'Invalid invite code. Please try signing up with a valid invite code.',
         );
-      } else if (error.message.includes("No email found")) {
-        throw new Error("Unable to retrieve email from Apple. Please try another sign-in method.");
+      } else if (error.message.includes('User not found')) {
+        throw new Error(
+          'User not found. Please sign up first before attempting to log in with Apple.',
+        );
+      } else if (error.message.includes('No email found')) {
+        throw new Error(
+          'Unable to retrieve email from Apple. Please try another sign-in method.',
+        );
       } else {
-        throw new Error("Failed to authenticate with Apple. Please try again.");
+        throw new Error('Failed to authenticate with Apple. Please try again.');
       }
     }
     throw error;
@@ -716,7 +758,9 @@ export type KeyOptions = {
  * - Common BIP-85 path format: m/83696968'/39'/0'/[entropy in bits]'/[index]'
  *   where entropy is typically 12' for 12-word mnemonics
  */
-export async function fetchPrivateKey(key_options?: KeyOptions): Promise<PrivateKeyResponse> {
+export async function fetchPrivateKey(
+  key_options?: KeyOptions,
+): Promise<PrivateKeyResponse> {
   // Build URL with query parameters
   let url = `${getApiUrl()}/protected/private_key`;
   const queryParams = [];
@@ -724,27 +768,27 @@ export async function fetchPrivateKey(key_options?: KeyOptions): Promise<Private
   // Add seed phrase derivation path if present
   if (key_options?.seed_phrase_derivation_path) {
     queryParams.push(
-      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`
+      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`,
     );
   }
 
   // Add private key derivation path if present
   if (key_options?.private_key_derivation_path) {
     queryParams.push(
-      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`
+      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`,
     );
   }
 
   // Append query parameters if any exist
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, PrivateKeyResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to fetch private key"
+    'Failed to fetch private key',
   );
 }
 
@@ -783,7 +827,7 @@ export async function fetchPrivateKey(key_options?: KeyOptions): Promise<Private
  *    - This allows for more complex derivation schemes
  */
 export async function fetchPrivateKeyBytes(
-  key_options?: KeyOptions
+  key_options?: KeyOptions,
 ): Promise<PrivateKeyBytesResponse> {
   // Build URL with query parameters
   let url = `${getApiUrl()}/protected/private_key_bytes`;
@@ -792,27 +836,27 @@ export async function fetchPrivateKeyBytes(
   // Add seed phrase derivation path if present
   if (key_options?.seed_phrase_derivation_path) {
     queryParams.push(
-      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`
+      `seed_phrase_derivation_path=${encodeURIComponent(key_options.seed_phrase_derivation_path)}`,
     );
   }
 
   // Add private key derivation path if present
   if (key_options?.private_key_derivation_path) {
     queryParams.push(
-      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`
+      `private_key_derivation_path=${encodeURIComponent(key_options.private_key_derivation_path)}`,
     );
   }
 
   // Append query parameters if any exist
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, PrivateKeyBytesResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to fetch private key bytes"
+    'Failed to fetch private key bytes',
   );
 }
 
@@ -823,7 +867,7 @@ export type SignMessageResponse = {
   message_hash: string;
 };
 
-type SigningAlgorithm = "schnorr" | "ecdsa";
+type SigningAlgorithm = 'schnorr' | 'ecdsa';
 
 export type SignMessageRequest = {
   /** Base64-encoded message to sign */
@@ -874,21 +918,21 @@ export type SignMessageRequest = {
 export async function signMessage(
   message_bytes: Uint8Array,
   algorithm: SigningAlgorithm,
-  key_options?: KeyOptions
+  key_options?: KeyOptions,
 ): Promise<SignMessageResponse> {
   const message_base64 = encode(message_bytes);
 
   const requestData = {
     message_base64,
     algorithm,
-    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options }),
   };
 
   return authenticatedApiCall<typeof requestData, SignMessageResponse>(
     `${getApiUrl()}/protected/sign_message`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to sign message"
+    'Failed to sign message',
   );
 }
 
@@ -928,7 +972,7 @@ export type PublicKeyResponse = {
  */
 export async function fetchPublicKey(
   algorithm: SigningAlgorithm,
-  key_options?: KeyOptions
+  key_options?: KeyOptions,
 ): Promise<PublicKeyResponse> {
   // Build URL with query parameters
   let url = `${getApiUrl()}/protected/public_key?algorithm=${algorithm}`;
@@ -945,28 +989,28 @@ export async function fetchPublicKey(
 
   return authenticatedApiCall<void, PublicKeyResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to fetch public key"
+    'Failed to fetch public key',
   );
 }
 
 export async function convertGuestToEmailAccount(
   email: string,
   password: string,
-  name?: string | null
+  name?: string | null,
 ): Promise<void> {
   const conversionData = {
     email,
     password,
-    ...(name !== undefined && { name })
+    ...(name !== undefined && { name }),
   };
 
   return authenticatedApiCall<typeof conversionData, void>(
     `${getApiUrl()}/protected/convert_guest`,
-    "POST",
+    'POST',
     conversionData,
-    "Failed to convert guest account"
+    'Failed to convert guest account',
   );
 }
 
@@ -987,12 +1031,14 @@ export type ThirdPartyTokenResponse = {
  * - If audience is provided, it can be any valid URL
  * - If audience is omitted, a token with no audience restriction will be generated
  */
-export async function generateThirdPartyToken(audience?: string): Promise<ThirdPartyTokenResponse> {
+export async function generateThirdPartyToken(
+  audience?: string,
+): Promise<ThirdPartyTokenResponse> {
   return authenticatedApiCall<ThirdPartyTokenRequest, ThirdPartyTokenResponse>(
     `${getApiUrl()}/protected/third_party_token`,
-    "POST",
+    'POST',
     audience ? { audience } : {},
-    "Failed to generate third party token"
+    'Failed to generate third party token',
   );
 }
 
@@ -1043,18 +1089,18 @@ export type EncryptDataResponse = {
  */
 export async function encryptData(
   data: string,
-  key_options?: KeyOptions
+  key_options?: KeyOptions,
 ): Promise<EncryptDataResponse> {
   const requestData = {
     data,
-    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options }),
   };
 
   return authenticatedApiCall<typeof requestData, EncryptDataResponse>(
     `${getApiUrl()}/protected/encrypt`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to encrypt data"
+    'Failed to encrypt data',
   );
 }
 
@@ -1102,18 +1148,18 @@ export type DecryptDataRequest = {
  */
 export async function decryptData(
   encryptedData: string,
-  key_options?: KeyOptions
+  key_options?: KeyOptions,
 ): Promise<string> {
   const requestData = {
     encrypted_data: encryptedData,
-    ...(key_options && Object.keys(key_options).length > 0 && { key_options })
+    ...(key_options && Object.keys(key_options).length > 0 && { key_options }),
   };
 
   return authenticatedApiCall<typeof requestData, string>(
     `${getApiUrl()}/protected/decrypt`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to decrypt data"
+    'Failed to decrypt data',
   );
 }
 
@@ -1129,15 +1175,17 @@ export async function decryptData(
  * 3. The email contains a confirmation code that will be needed for confirmation
  * 4. The client must store the plaintext secret for confirmation
  */
-export async function requestAccountDeletion(hashedSecret: string): Promise<void> {
+export async function requestAccountDeletion(
+  hashedSecret: string,
+): Promise<void> {
   const deleteData = {
-    hashed_secret: hashedSecret
+    hashed_secret: hashedSecret,
   };
   return authenticatedApiCall<typeof deleteData, void>(
     `${getApiUrl()}/protected/delete-account/request`,
-    "POST",
+    'POST',
     deleteData,
-    "Failed to request account deletion"
+    'Failed to request account deletion',
   );
 }
 
@@ -1156,22 +1204,22 @@ export async function requestAccountDeletion(hashedSecret: string): Promise<void
  */
 export async function confirmAccountDeletion(
   confirmationCode: string,
-  plaintextSecret: string
+  plaintextSecret: string,
 ): Promise<void> {
   const confirmData = {
     confirmation_code: confirmationCode,
-    plaintext_secret: plaintextSecret
+    plaintext_secret: plaintextSecret,
   };
   return authenticatedApiCall<typeof confirmData, void>(
     `${getApiUrl()}/protected/delete-account/confirm`,
-    "POST",
+    'POST',
     confirmData,
-    "Failed to confirm account deletion"
+    'Failed to confirm account deletion',
   );
 }
 
 type ModelsListResponse = {
-  object: "list";
+  object: 'list';
   data: Model[];
 };
 
@@ -1188,24 +1236,26 @@ export async function fetchModels(apiKey?: string): Promise<Model[]> {
   try {
     const response = await openAiAuthenticatedApiCall<void, ModelsListResponse>(
       `${getApiUrl()}/v1/models`,
-      "GET",
+      'GET',
       undefined,
-      "Failed to fetch models",
-      apiKey
+      'Failed to fetch models',
+      apiKey,
     );
 
     // Validate response structure
-    if (!response || typeof response !== "object") {
-      throw new Error("Invalid response from models endpoint");
+    if (!response || typeof response !== 'object') {
+      throw new Error('Invalid response from models endpoint');
     }
 
-    if (response.object !== "list" || !Array.isArray(response.data)) {
-      throw new Error("Models response missing expected 'object' or 'data' fields");
+    if (response.object !== 'list' || !Array.isArray(response.data)) {
+      throw new Error(
+        "Models response missing expected 'object' or 'data' fields",
+      );
     }
 
     return response.data;
   } catch (error) {
-    console.error("Error fetching models:", error);
+    console.error('Error fetching models:', error);
     throw error;
   }
 }
@@ -1280,12 +1330,14 @@ function delay(ms: number): Promise<void> {
  * // Save this key securely - it won't be shown again!
  * ```
  */
-export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> {
+export async function createApiKey(
+  name: string,
+): Promise<ApiKeyCreateResponse> {
   return authenticatedApiCall<{ name: string }, ApiKeyCreateResponse>(
     `${getApiUrl()}/protected/api-keys`,
-    "POST",
+    'POST',
     { name },
-    "Failed to create API key"
+    'Failed to create API key',
   );
 }
 
@@ -1310,15 +1362,21 @@ export async function createApiKey(name: string): Promise<ApiKeyCreateResponse> 
  * ```
  */
 export async function listApiKeys(): Promise<{ keys: ApiKeyListResponse }> {
-  const response = await authenticatedApiCall<void, { keys: ApiKeyListResponse }>(
+  const response = await authenticatedApiCall<
+    void,
+    { keys: ApiKeyListResponse }
+  >(
     `${getApiUrl()}/protected/api-keys`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list API keys"
+    'Failed to list API keys',
   );
 
   // Sort by created_at descending (newest first)
-  response.keys.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  response.keys.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
   return response;
 }
@@ -1349,9 +1407,9 @@ export async function deleteApiKey(name: string): Promise<void> {
   const encodedName = encodeURIComponent(name);
   return authenticatedApiCall<void, void>(
     `${getApiUrl()}/protected/api-keys/${encodedName}`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete API key"
+    'Failed to delete API key',
   );
 }
 
@@ -1382,10 +1440,14 @@ export async function deleteApiKey(name: string): Promise<void> {
  * console.log(result.task_id); // Task ID to check status
  * ```
  */
-export async function uploadDocument(file: File | Blob): Promise<DocumentUploadInitResponse> {
+export async function uploadDocument(
+  file: File | Blob,
+): Promise<DocumentUploadInitResponse> {
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    throw new Error(
+      `File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+    );
   }
 
   // Convert file to base64
@@ -1394,18 +1456,21 @@ export async function uploadDocument(file: File | Blob): Promise<DocumentUploadI
   const base64Data = encode(bytes);
 
   // Get filename
-  const filename = file instanceof File ? file.name : "document";
+  const filename = file instanceof File ? file.name : 'document';
 
   const requestData: DocumentUploadRequest = {
     filename,
-    content_base64: base64Data
+    content_base64: base64Data,
   };
 
-  return authenticatedApiCall<DocumentUploadRequest, DocumentUploadInitResponse>(
+  return authenticatedApiCall<
+    DocumentUploadRequest,
+    DocumentUploadInitResponse
+  >(
     `${getApiUrl()}/v1/documents/upload`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to upload document"
+    'Failed to upload document',
   );
 }
 
@@ -1434,16 +1499,18 @@ export async function uploadDocument(file: File | Blob): Promise<DocumentUploadI
  * }
  * ```
  */
-export async function checkDocumentStatus(taskId: string): Promise<DocumentStatusResponse> {
+export async function checkDocumentStatus(
+  taskId: string,
+): Promise<DocumentStatusResponse> {
   const requestData: DocumentStatusRequest = {
-    task_id: taskId
+    task_id: taskId,
   };
 
   return authenticatedApiCall<DocumentStatusRequest, DocumentStatusResponse>(
     `${getApiUrl()}/v1/documents/status`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to check document status"
+    'Failed to check document status',
   );
 }
 
@@ -1484,7 +1551,7 @@ export async function uploadDocumentWithPolling(
     pollInterval?: number; // milliseconds, default 2000
     maxAttempts?: number; // default 150 (5 minutes with 2s interval)
     onProgress?: (status: string, progress?: number) => void;
-  }
+  },
 ): Promise<DocumentResponse> {
   const { pollInterval = 2000, maxAttempts = 150, onProgress } = options || {};
 
@@ -1501,17 +1568,19 @@ export async function uploadDocumentWithPolling(
     }
 
     switch (statusResponse.status) {
-      case "success":
+      case 'success':
         if (!statusResponse.document) {
-          throw new Error("Document processing succeeded but no document returned");
+          throw new Error(
+            'Document processing succeeded but no document returned',
+          );
         }
         return statusResponse.document;
 
-      case "failure":
-        throw new Error(statusResponse.error || "Document processing failed");
+      case 'failure':
+        throw new Error(statusResponse.error || 'Document processing failed');
 
-      case "pending":
-      case "started":
+      case 'pending':
+      case 'started':
         // Continue polling
         await delay(pollInterval);
         attempts++;
@@ -1522,7 +1591,7 @@ export async function uploadDocumentWithPolling(
     }
   }
 
-  throw new Error("Document processing timed out");
+  throw new Error('Document processing timed out');
 }
 
 export type WhisperTranscriptionRequest = {
@@ -1579,7 +1648,7 @@ export async function transcribeAudio(
   language?: string,
   prompt?: string,
   temperature?: number,
-  apiKey?: string
+  apiKey?: string,
 ): Promise<WhisperTranscriptionResponse> {
   // Convert file to base64
   const arrayBuffer = await file.arrayBuffer();
@@ -1587,34 +1656,37 @@ export async function transcribeAudio(
   const base64Data = encode(bytes);
 
   // Get filename and content type
-  const filename = file instanceof File ? file.name : "audio";
-  const contentType = file.type || "audio/mpeg";
+  const filename = file instanceof File ? file.name : 'audio';
+  const contentType = file.type || 'audio/mpeg';
 
   const requestData: WhisperTranscriptionRequest = {
     file: base64Data,
     filename,
     content_type: contentType,
-    model: model || "whisper-large-v3",
+    model: model || 'whisper-large-v3',
     ...(language && { language }),
     ...(prompt && { prompt }),
-    ...(temperature !== undefined && { temperature })
+    ...(temperature !== undefined && { temperature }),
   };
 
   // Use openAiAuthenticatedApiCall to support both JWT and API key auth
-  return openAiAuthenticatedApiCall<WhisperTranscriptionRequest, WhisperTranscriptionResponse>(
+  return openAiAuthenticatedApiCall<
+    WhisperTranscriptionRequest,
+    WhisperTranscriptionResponse
+  >(
     `${getApiUrl()}/v1/audio/transcriptions`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to transcribe audio",
-    apiKey
+    'Failed to transcribe audio',
+    apiKey,
   );
 }
 
 export type ResponsesRetrieveResponse = {
   id: string;
-  object: "response";
+  object: 'response';
   created_at: number;
-  status: "queued" | "in_progress" | "completed" | "failed" | "cancelled";
+  status: 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
   model: string;
   usage?: {
     input_tokens: number;
@@ -1632,14 +1704,14 @@ export type ResponsesRetrieveResponse = {
 
 export type ThreadListItem = {
   id: string;
-  object: "thread";
+  object: 'thread';
   created_at: number;
   updated_at: number;
   title: string;
 };
 
 export type ResponsesListResponse = {
-  object: "list";
+  object: 'list';
   data: ThreadListItem[];
   has_more: boolean;
   first_id?: string;
@@ -1655,11 +1727,11 @@ export type ResponsesListParams = {
 
 export type ConversationItem = {
   id: string;
-  type: "message";
-  status: "completed" | "in_progress" | "incomplete";
-  role: "user" | "assistant" | "system";
+  type: 'message';
+  status: 'completed' | 'in_progress' | 'incomplete';
+  role: 'user' | 'assistant' | 'system';
   content: Array<{
-    type: "text" | "input_text" | "input_audio" | "item";
+    type: 'text' | 'input_text' | 'input_audio' | 'item';
     text?: string;
     audio?: string;
     transcript?: string;
@@ -1669,7 +1741,7 @@ export type ConversationItem = {
 
 export type Conversation = {
   id: string;
-  object: "conversation";
+  object: 'conversation';
   created_at: number;
   metadata?: Record<string, any>;
 };
@@ -1683,7 +1755,7 @@ export type ConversationUpdateRequest = {
 };
 
 export type ConversationItemsResponse = {
-  object: "list";
+  object: 'list';
   data: ConversationItem[];
   first_id?: string;
   last_id?: string;
@@ -1691,7 +1763,7 @@ export type ConversationItemsResponse = {
 };
 
 export type ConversationsListResponse = {
-  object: "list";
+  object: 'list';
   data: Conversation[];
   first_id?: string;
   last_id?: string;
@@ -1700,12 +1772,12 @@ export type ConversationsListResponse = {
 
 export type ConversationDeleteResponse = {
   id: string;
-  object: "conversation.deleted";
+  object: 'conversation.deleted';
   deleted: boolean;
 };
 
 export type ConversationsDeleteResponse = {
-  object: "list.deleted";
+  object: 'list.deleted';
   deleted: boolean;
 };
 
@@ -1715,13 +1787,13 @@ export type BatchDeleteConversationsRequest = {
 
 export type BatchDeleteItemResult = {
   id: string;
-  object: "conversation.deleted";
+  object: 'conversation.deleted';
   deleted: boolean;
-  error?: "not_found" | "delete_failed";
+  error?: 'not_found' | 'delete_failed';
 };
 
 export type BatchDeleteConversationsResponse = {
-  object: "list";
+  object: 'list';
   data: BatchDeleteItemResult[];
 };
 
@@ -1764,7 +1836,7 @@ export type BatchDeleteConversationsResponse = {
  * ```
  */
 export async function fetchResponsesList(
-  params?: ResponsesListParams
+  params?: ResponsesListParams,
 ): Promise<ResponsesListResponse> {
   let url = `${getApiUrl()}/v1/responses`;
   const queryParams = [];
@@ -1783,14 +1855,14 @@ export async function fetchResponsesList(
   }
 
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, ResponsesListResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list responses"
+    'Failed to list responses',
   );
 }
 
@@ -1814,20 +1886,22 @@ export async function fetchResponsesList(
  * console.log(response.usage);  // Token usage statistics
  * ```
  */
-export async function fetchResponse(responseId: string): Promise<ResponsesRetrieveResponse> {
+export async function fetchResponse(
+  responseId: string,
+): Promise<ResponsesRetrieveResponse> {
   return authenticatedApiCall<void, ResponsesRetrieveResponse>(
     `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to retrieve response"
+    'Failed to retrieve response',
   );
 }
 
 export type ResponsesCancelResponse = {
   id: string;
-  object: "response";
+  object: 'response';
   created_at: number;
-  status: "cancelled";
+  status: 'cancelled';
   model: string;
 };
 
@@ -1855,18 +1929,20 @@ export type ResponsesCancelResponse = {
  * }
  * ```
  */
-export async function cancelResponse(responseId: string): Promise<ResponsesCancelResponse> {
+export async function cancelResponse(
+  responseId: string,
+): Promise<ResponsesCancelResponse> {
   return authenticatedApiCall<void, ResponsesCancelResponse>(
     `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}/cancel`,
-    "POST",
+    'POST',
     undefined,
-    "Failed to cancel response"
+    'Failed to cancel response',
   );
 }
 
 export type ResponsesDeleteResponse = {
   id: string;
-  object: "response.deleted";
+  object: 'response.deleted';
   deleted: boolean;
 };
 
@@ -1902,14 +1978,16 @@ export type ResponsesCreateRequest = {
  *
  * @deprecated Use openai.conversations.create() instead
  */
-export async function createConversation(metadata?: Record<string, any>): Promise<Conversation> {
+export async function createConversation(
+  metadata?: Record<string, any>,
+): Promise<Conversation> {
   const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
 
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
     `${getApiUrl()}/v1/conversations`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to create conversation"
+    'Failed to create conversation',
   );
 }
 
@@ -1929,12 +2007,14 @@ export async function createConversation(metadata?: Record<string, any>): Promis
  * console.log(conversation.metadata);
  * ```
  */
-export async function getConversation(conversationId: string): Promise<Conversation> {
+export async function getConversation(
+  conversationId: string,
+): Promise<Conversation> {
   return authenticatedApiCall<void, Conversation>(
     `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to retrieve conversation"
+    'Failed to retrieve conversation',
   );
 }
 
@@ -1958,15 +2038,15 @@ export async function getConversation(conversationId: string): Promise<Conversat
  */
 export async function updateConversation(
   conversationId: string,
-  metadata: Record<string, any>
+  metadata: Record<string, any>,
 ): Promise<Conversation> {
   const requestData: ConversationUpdateRequest = { metadata };
 
   return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
     `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
-    "POST",
+    'POST',
     requestData,
-    "Failed to update conversation"
+    'Failed to update conversation',
   );
 }
 
@@ -1993,13 +2073,13 @@ export async function updateConversation(
  * ```
  */
 export async function deleteConversation(
-  conversationId: string
+  conversationId: string,
 ): Promise<ConversationDeleteResponse> {
   return authenticatedApiCall<void, ConversationDeleteResponse>(
     `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete conversation"
+    'Failed to delete conversation',
   );
 }
 
@@ -2025,9 +2105,9 @@ export async function deleteConversation(
 export async function deleteConversations(): Promise<ConversationsDeleteResponse> {
   return authenticatedApiCall<void, ConversationsDeleteResponse>(
     `${getApiUrl()}/v1/conversations`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete conversations"
+    'Failed to delete conversations',
   );
 }
 
@@ -2059,13 +2139,16 @@ export async function deleteConversations(): Promise<ConversationsDeleteResponse
  * ```
  */
 export async function batchDeleteConversations(
-  ids: string[]
+  ids: string[],
 ): Promise<BatchDeleteConversationsResponse> {
-  return authenticatedApiCall<BatchDeleteConversationsRequest, BatchDeleteConversationsResponse>(
+  return authenticatedApiCall<
+    BatchDeleteConversationsRequest,
+    BatchDeleteConversationsResponse
+  >(
     `${getApiUrl()}/v1/conversations/batch-delete`,
-    "POST",
+    'POST',
     { ids },
-    "Failed to batch delete conversations"
+    'Failed to batch delete conversations',
   );
 }
 
@@ -2093,13 +2176,16 @@ export async function batchDeleteConversations(
  */
 export async function addConversationItems(
   conversationId: string,
-  items: Partial<ConversationItem>[]
+  items: Partial<ConversationItem>[],
 ): Promise<Conversation> {
-  return authenticatedApiCall<{ items: Partial<ConversationItem>[] }, Conversation>(
+  return authenticatedApiCall<
+    { items: Partial<ConversationItem>[] },
+    Conversation
+  >(
     `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`,
-    "POST",
+    'POST',
     { items },
-    "Failed to add conversation items"
+    'Failed to add conversation items',
   );
 }
 
@@ -2130,7 +2216,7 @@ export async function listConversationItems(
     limit?: number;
     after?: string;
     before?: string;
-  }
+  },
 ): Promise<ConversationItemsResponse> {
   let url = `${getApiUrl()}/v1/conversations/${encodeURIComponent(conversationId)}/items`;
   const queryParams = [];
@@ -2146,14 +2232,14 @@ export async function listConversationItems(
   }
 
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, ConversationItemsResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list conversation items"
+    'Failed to list conversation items',
   );
 }
 
@@ -2197,14 +2283,14 @@ export async function listConversations(params?: {
   }
 
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, ConversationsListResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list conversations"
+    'Failed to list conversations',
   );
 }
 
@@ -2238,12 +2324,14 @@ export async function listConversations(params?: {
  * });
  * ```
  */
-export async function createResponse(request: ResponsesCreateRequest): Promise<any> {
+export async function createResponse(
+  request: ResponsesCreateRequest,
+): Promise<any> {
   return authenticatedApiCall<ResponsesCreateRequest, any>(
     `${getApiUrl()}/v1/responses`,
-    "POST",
+    'POST',
     request,
-    "Failed to create response"
+    'Failed to create response',
   );
 }
 
@@ -2268,18 +2356,20 @@ export async function createResponse(request: ResponsesCreateRequest): Promise<a
  * }
  * ```
  */
-export async function deleteResponse(responseId: string): Promise<ResponsesDeleteResponse> {
+export async function deleteResponse(
+  responseId: string,
+): Promise<ResponsesDeleteResponse> {
   return authenticatedApiCall<void, ResponsesDeleteResponse>(
     `${getApiUrl()}/v1/responses/${encodeURIComponent(responseId)}`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete response"
+    'Failed to delete response',
   );
 }
 
 export type Instruction = {
   id: string;
-  object: "instruction";
+  object: 'instruction';
   name: string;
   prompt: string;
   prompt_tokens: number;
@@ -2308,7 +2398,7 @@ export type InstructionListParams = {
 };
 
 export type InstructionListResponse = {
-  object: "list";
+  object: 'list';
   data: Instruction[];
   has_more: boolean;
   first_id: string | null;
@@ -2317,7 +2407,7 @@ export type InstructionListResponse = {
 
 export type InstructionDeleteResponse = {
   id: string;
-  object: "instruction.deleted";
+  object: 'instruction.deleted';
   deleted: true;
 };
 
@@ -2343,12 +2433,14 @@ export type InstructionDeleteResponse = {
  * });
  * ```
  */
-export async function createInstruction(request: InstructionCreateRequest): Promise<Instruction> {
+export async function createInstruction(
+  request: InstructionCreateRequest,
+): Promise<Instruction> {
   return authenticatedApiCall<InstructionCreateRequest, Instruction>(
     `${getApiUrl()}/v1/instructions`,
-    "POST",
+    'POST',
     request,
-    "Failed to create instruction"
+    'Failed to create instruction',
   );
 }
 
@@ -2381,7 +2473,7 @@ export async function createInstruction(request: InstructionCreateRequest): Prom
  * ```
  */
 export async function listInstructions(
-  params?: InstructionListParams
+  params?: InstructionListParams,
 ): Promise<InstructionListResponse> {
   let url = `${getApiUrl()}/v1/instructions`;
   const queryParams = [];
@@ -2400,14 +2492,14 @@ export async function listInstructions(
   }
 
   if (queryParams.length > 0) {
-    url += `?${queryParams.join("&")}`;
+    url += `?${queryParams.join('&')}`;
   }
 
   return authenticatedApiCall<void, InstructionListResponse>(
     url,
-    "GET",
+    'GET',
     undefined,
-    "Failed to list instructions"
+    'Failed to list instructions',
   );
 }
 
@@ -2425,12 +2517,14 @@ export async function listInstructions(
  * console.log(instruction.name, instruction.prompt);
  * ```
  */
-export async function getInstruction(instructionId: string): Promise<Instruction> {
+export async function getInstruction(
+  instructionId: string,
+): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
     `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
-    "GET",
+    'GET',
     undefined,
-    "Failed to retrieve instruction"
+    'Failed to retrieve instruction',
   );
 }
 
@@ -2459,13 +2553,13 @@ export async function getInstruction(instructionId: string): Promise<Instruction
  */
 export async function updateInstruction(
   instructionId: string,
-  request: InstructionUpdateRequest
+  request: InstructionUpdateRequest,
 ): Promise<Instruction> {
   return authenticatedApiCall<InstructionUpdateRequest, Instruction>(
     `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
-    "POST",
+    'POST',
     request,
-    "Failed to update instruction"
+    'Failed to update instruction',
   );
 }
 
@@ -2489,12 +2583,14 @@ export async function updateInstruction(
  * }
  * ```
  */
-export async function deleteInstruction(instructionId: string): Promise<InstructionDeleteResponse> {
+export async function deleteInstruction(
+  instructionId: string,
+): Promise<InstructionDeleteResponse> {
   return authenticatedApiCall<void, InstructionDeleteResponse>(
     `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}`,
-    "DELETE",
+    'DELETE',
     undefined,
-    "Failed to delete instruction"
+    'Failed to delete instruction',
   );
 }
 
@@ -2516,11 +2612,13 @@ export async function deleteInstruction(instructionId: string): Promise<Instruct
  * console.log(instruction.is_default); // Always true
  * ```
  */
-export async function setDefaultInstruction(instructionId: string): Promise<Instruction> {
+export async function setDefaultInstruction(
+  instructionId: string,
+): Promise<Instruction> {
   return authenticatedApiCall<void, Instruction>(
     `${getApiUrl()}/v1/instructions/${encodeURIComponent(instructionId)}/set-default`,
-    "POST",
+    'POST',
     undefined,
-    "Failed to set default instruction"
+    'Failed to set default instruction',
   );
 }

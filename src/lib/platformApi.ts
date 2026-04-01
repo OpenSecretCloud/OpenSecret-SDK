@@ -1,4 +1,5 @@
-import { encryptedApiCall, authenticatedApiCall } from "./encryptedApi";
+import { encryptedApiCall, authenticatedApiCall } from './encryptedApi';
+import { getStorage } from './storage';
 
 // Platform Auth Types
 export type PlatformLoginResponse = {
@@ -107,7 +108,7 @@ export type OrganizationMember = {
   name?: string;
 };
 
-let platformApiUrl = "";
+let platformApiUrl = '';
 
 export function setPlatformApiUrl(url: string) {
   platformApiUrl = url;
@@ -120,14 +121,17 @@ export function getPlatformApiUrl(): string {
 // Platform Authentication
 export async function platformLogin(
   email: string,
-  password: string
+  password: string,
 ): Promise<PlatformLoginResponse> {
-  return encryptedApiCall<{ email: string; password: string }, PlatformLoginResponse>(
+  return encryptedApiCall<
+    { email: string; password: string },
+    PlatformLoginResponse
+  >(
     `${platformApiUrl}/platform/login`,
-    "POST",
+    'POST',
     { email, password },
     undefined,
-    "Failed to login"
+    'Failed to login',
   );
 }
 
@@ -143,27 +147,27 @@ export async function platformRegister(
   email: string,
   password: string,
   invite_code: string,
-  name?: string
+  name?: string,
 ): Promise<PlatformLoginResponse> {
   return encryptedApiCall<
     { email: string; password: string; invite_code: string; name?: string },
     PlatformLoginResponse
   >(
     `${platformApiUrl}/platform/register`,
-    "POST",
+    'POST',
     { email, password, invite_code, name },
     undefined,
-    "Failed to register"
+    'Failed to register',
   );
 }
 
 export async function platformLogout(refresh_token: string): Promise<void> {
   return encryptedApiCall<{ refresh_token: string }, void>(
     `${platformApiUrl}/platform/logout`,
-    "POST",
+    'POST',
     { refresh_token },
     undefined,
-    "Failed to logout"
+    'Failed to logout',
   );
 }
 
@@ -182,25 +186,28 @@ export async function platformLogout(refresh_token: string): Promise<void> {
  * It returns new access and refresh tokens if validation succeeds.
  */
 export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
-  const refresh_token = window.localStorage.getItem("refresh_token");
-  if (!refresh_token) throw new Error("No refresh token available");
+  const refresh_token = getStorage().persistent.getItem('refresh_token');
+  if (!refresh_token) throw new Error('No refresh token available');
 
   const refreshData = { refresh_token };
 
   try {
-    const response = await encryptedApiCall<typeof refreshData, PlatformRefreshResponse>(
+    const response = await encryptedApiCall<
+      typeof refreshData,
+      PlatformRefreshResponse
+    >(
       `${platformApiUrl}/platform/refresh`,
-      "POST",
+      'POST',
       refreshData,
       undefined,
-      "Failed to refresh platform token"
+      'Failed to refresh platform token',
     );
 
-    window.localStorage.setItem("access_token", response.access_token);
-    window.localStorage.setItem("refresh_token", response.refresh_token);
+    getStorage().persistent.setItem('access_token', response.access_token);
+    getStorage().persistent.setItem('refresh_token', response.refresh_token);
     return response;
   } catch (error) {
-    console.error("Error refreshing platform token:", error);
+    console.error('Error refreshing platform token:', error);
     throw error;
   }
 }
@@ -209,24 +216,24 @@ export async function platformRefreshToken(): Promise<PlatformRefreshResponse> {
 export async function createOrganization(name: string): Promise<Organization> {
   return authenticatedApiCall<{ name: string }, Organization>(
     `${platformApiUrl}/platform/orgs`,
-    "POST",
-    { name }
+    'POST',
+    { name },
   );
 }
 
 export async function listOrganizations(): Promise<Organization[]> {
   return authenticatedApiCall<void, Organization[]>(
     `${platformApiUrl}/platform/orgs`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function deleteOrganization(orgId: string): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${platformApiUrl}/platform/orgs/${orgId}`,
-    "DELETE",
-    undefined
+    'DELETE',
+    undefined,
   );
 }
 
@@ -234,48 +241,54 @@ export async function deleteOrganization(orgId: string): Promise<void> {
 export async function createProject(
   orgId: string,
   name: string,
-  description?: string
+  description?: string,
 ): Promise<Project> {
   return authenticatedApiCall<{ name: string; description?: string }, Project>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects`,
-    "POST",
-    { name, description }
+    'POST',
+    { name, description },
   );
 }
 
 export async function listProjects(orgId: string): Promise<Project[]> {
   return authenticatedApiCall<void, Project[]>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
-export async function getProject(orgId: string, projectId: string): Promise<Project> {
+export async function getProject(
+  orgId: string,
+  projectId: string,
+): Promise<Project> {
   return authenticatedApiCall<void, Project>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function updateProject(
   orgId: string,
   projectId: string,
-  updates: { name?: string; description?: string; status?: string }
+  updates: { name?: string; description?: string; status?: string },
 ): Promise<Project> {
   return authenticatedApiCall<typeof updates, Project>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}`,
-    "PATCH",
-    updates
+    'PATCH',
+    updates,
   );
 }
 
-export async function deleteProject(orgId: string, projectId: string): Promise<void> {
+export async function deleteProject(
+  orgId: string,
+  projectId: string,
+): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}`,
-    "DELETE",
-    undefined
+    'DELETE',
+    undefined,
   );
 }
 
@@ -299,84 +312,93 @@ export async function createProjectSecret(
   orgId: string,
   projectId: string,
   keyName: string,
-  secret: string
+  secret: string,
 ): Promise<ProjectSecret> {
   // Validate that the secret is base64 encoded
   if (!isValidBase64(secret)) {
     throw new Error(
-      "Secret must be base64 encoded. Use @stablelib/base64's encode function to encode your data."
+      "Secret must be base64 encoded. Use @stablelib/base64's encode function to encode your data.",
     );
   }
 
-  return authenticatedApiCall<{ key_name: string; secret: string }, ProjectSecret>(
+  return authenticatedApiCall<
+    { key_name: string; secret: string },
+    ProjectSecret
+  >(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets`,
-    "POST",
-    { key_name: keyName, secret }
+    'POST',
+    { key_name: keyName, secret },
   );
 }
 
 export async function listProjectSecrets(
   orgId: string,
-  projectId: string
+  projectId: string,
 ): Promise<ProjectSecret[]> {
   return authenticatedApiCall<void, ProjectSecret[]>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function deleteProjectSecret(
   orgId: string,
   projectId: string,
-  keyName: string
+  keyName: string,
 ): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/secrets/${keyName}`,
-    "DELETE",
-    undefined
+    'DELETE',
+    undefined,
   );
 }
 
 // Email Settings
-export async function getEmailSettings(orgId: string, projectId: string): Promise<EmailSettings> {
+export async function getEmailSettings(
+  orgId: string,
+  projectId: string,
+): Promise<EmailSettings> {
   return authenticatedApiCall<void, EmailSettings>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/email`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function updateEmailSettings(
   orgId: string,
   projectId: string,
-  settings: EmailSettings
+  settings: EmailSettings,
 ): Promise<EmailSettings> {
   return authenticatedApiCall<EmailSettings, EmailSettings>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/email`,
-    "PUT",
-    settings
+    'PUT',
+    settings,
   );
 }
 
 // OAuth Settings
-export async function getOAuthSettings(orgId: string, projectId: string): Promise<OAuthSettings> {
+export async function getOAuthSettings(
+  orgId: string,
+  projectId: string,
+): Promise<OAuthSettings> {
   return authenticatedApiCall<void, OAuthSettings>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/oauth`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function updateOAuthSettings(
   orgId: string,
   projectId: string,
-  settings: OAuthSettings
+  settings: OAuthSettings,
 ): Promise<OAuthSettings> {
   return authenticatedApiCall<OAuthSettings, OAuthSettings>(
     `${platformApiUrl}/platform/orgs/${orgId}/projects/${projectId}/settings/oauth`,
-    "PUT",
-    settings
+    'PUT',
+    settings,
   );
 }
 
@@ -384,89 +406,102 @@ export async function updateOAuthSettings(
 export async function inviteDeveloper(
   orgId: string,
   email: string,
-  role?: string
+  role?: string,
 ): Promise<OrganizationInvite> {
   // Add validation for empty emails
-  if (!email || email.trim() === "") {
-    throw new Error("Email is required");
+  if (!email || email.trim() === '') {
+    throw new Error('Email is required');
   }
 
-  return authenticatedApiCall<{ email: string; role?: string }, OrganizationInvite>(
-    `${platformApiUrl}/platform/orgs/${orgId}/invites`,
-    "POST",
-    { email, role }
-  );
+  return authenticatedApiCall<
+    { email: string; role?: string },
+    OrganizationInvite
+  >(`${platformApiUrl}/platform/orgs/${orgId}/invites`, 'POST', {
+    email,
+    role,
+  });
 }
 
-export async function listOrganizationInvites(orgId: string): Promise<OrganizationInvite[]> {
+export async function listOrganizationInvites(
+  orgId: string,
+): Promise<OrganizationInvite[]> {
   return authenticatedApiCall<void, OrganizationInvite[]>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function getOrganizationInvite(
   orgId: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<OrganizationInvite> {
   return authenticatedApiCall<void, OrganizationInvite>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites/${inviteCode}`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function deleteOrganizationInvite(
   orgId: string,
-  inviteCode: string
+  inviteCode: string,
 ): Promise<{ message: string }> {
   return authenticatedApiCall<void, { message: string }>(
     `${platformApiUrl}/platform/orgs/${orgId}/invites/${inviteCode}`,
-    "DELETE",
-    undefined
+    'DELETE',
+    undefined,
   );
 }
 
-export async function listOrganizationMembers(orgId: string): Promise<OrganizationMember[]> {
+export async function listOrganizationMembers(
+  orgId: string,
+): Promise<OrganizationMember[]> {
   return authenticatedApiCall<void, OrganizationMember[]>(
     `${platformApiUrl}/platform/orgs/${orgId}/memberships`,
-    "GET",
-    undefined
+    'GET',
+    undefined,
   );
 }
 
 export async function updateMemberRole(
   orgId: string,
   userId: string,
-  role: string
+  role: string,
 ): Promise<OrganizationMember> {
   return authenticatedApiCall<{ role: string }, OrganizationMember>(
     `${platformApiUrl}/platform/orgs/${orgId}/memberships/${userId}`,
-    "PATCH",
-    { role }
+    'PATCH',
+    { role },
   );
 }
 
-export async function removeMember(orgId: string, userId: string): Promise<void> {
+export async function removeMember(
+  orgId: string,
+  userId: string,
+): Promise<void> {
   return authenticatedApiCall<void, void>(
     `${platformApiUrl}/platform/orgs/${orgId}/memberships/${userId}`,
-    "DELETE",
-    undefined
+    'DELETE',
+    undefined,
   );
 }
 
 export async function acceptInvite(code: string): Promise<{ message: string }> {
   return authenticatedApiCall<void, { message: string }>(
     `${platformApiUrl}/platform/accept_invite/${code}`,
-    "POST",
-    undefined
+    'POST',
+    undefined,
   );
 }
 
 // Platform User
 export async function platformMe(): Promise<MeResponse> {
-  return authenticatedApiCall<void, MeResponse>(`${platformApiUrl}/platform/me`, "GET", undefined);
+  return authenticatedApiCall<void, MeResponse>(
+    `${platformApiUrl}/platform/me`,
+    'GET',
+    undefined,
+  );
 }
 
 /**
@@ -478,10 +513,10 @@ export async function platformMe(): Promise<MeResponse> {
 export async function verifyPlatformEmail(code: string): Promise<void> {
   return encryptedApiCall<void, void>(
     `${platformApiUrl}/platform/verify-email/${code}`,
-    "GET",
+    'GET',
     undefined,
     undefined,
-    "Failed to verify email"
+    'Failed to verify email',
   );
 }
 
@@ -490,12 +525,14 @@ export async function verifyPlatformEmail(code: string): Promise<void> {
  * @returns A promise that resolves to a success message
  * @throws {Error} If the user is already verified or request fails
  */
-export async function requestNewPlatformVerificationCode(): Promise<{ message: string }> {
+export async function requestNewPlatformVerificationCode(): Promise<{
+  message: string;
+}> {
   return authenticatedApiCall<void, { message: string }>(
     `${platformApiUrl}/platform/request_verification`,
-    "POST",
+    'POST',
     undefined,
-    "Failed to request new verification code"
+    'Failed to request new verification code',
   );
 }
 
@@ -515,18 +552,18 @@ export async function requestNewPlatformVerificationCode(): Promise<{ message: s
  */
 export async function requestPlatformPasswordReset(
   email: string,
-  hashedSecret: string
+  hashedSecret: string,
 ): Promise<void> {
   const resetData = {
     email,
-    hashed_secret: hashedSecret
+    hashed_secret: hashedSecret,
   };
   return encryptedApiCall<typeof resetData, void>(
     `${platformApiUrl}/platform/password-reset/request`,
-    "POST",
+    'POST',
     resetData,
     undefined,
-    "Failed to request platform password reset"
+    'Failed to request platform password reset',
   );
 }
 
@@ -550,20 +587,20 @@ export async function confirmPlatformPasswordReset(
   email: string,
   alphanumericCode: string,
   plaintextSecret: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<{ message: string }> {
   const confirmData = {
     email,
     alphanumeric_code: alphanumericCode,
     plaintext_secret: plaintextSecret,
-    new_password: newPassword
+    new_password: newPassword,
   };
   return encryptedApiCall<typeof confirmData, { message: string }>(
     `${platformApiUrl}/platform/password-reset/confirm`,
-    "POST",
+    'POST',
     confirmData,
     undefined,
-    "Failed to confirm platform password reset"
+    'Failed to confirm platform password reset',
   );
 }
 
@@ -582,16 +619,16 @@ export async function confirmPlatformPasswordReset(
  */
 export async function changePlatformPassword(
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<{ message: string }> {
   const changePasswordData = {
     current_password: currentPassword,
-    new_password: newPassword
+    new_password: newPassword,
   };
   return authenticatedApiCall<typeof changePasswordData, { message: string }>(
     `${platformApiUrl}/platform/change-password`,
-    "POST",
+    'POST',
     changePasswordData,
-    "Failed to change platform password"
+    'Failed to change platform password',
   );
 }
