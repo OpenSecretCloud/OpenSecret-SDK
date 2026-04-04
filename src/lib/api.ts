@@ -1616,14 +1616,31 @@ export type Conversation = {
   object: "conversation";
   created_at: number;
   metadata?: Record<string, unknown>;
+  project_id?: string | null;
+  pinned: boolean;
+  updated_at: number;
+};
+
+export type ConversationCreateOptions = {
+  project_id?: string;
+  pinned?: boolean;
 };
 
 export type ConversationCreateRequest = {
   metadata?: Record<string, unknown>;
+  project_id?: string;
+  pinned?: boolean;
+};
+
+export type ConversationUpdateOptions = {
+  project_id?: string | null;
+  pinned?: boolean;
 };
 
 export type ConversationUpdateRequest = {
   metadata?: Record<string, unknown>;
+  project_id?: string | null;
+  pinned?: boolean;
 };
 
 export type ConversationItemsResponse = {
@@ -1667,6 +1684,81 @@ export type BatchDeleteItemResult = {
 export type BatchDeleteConversationsResponse = {
   object: "list";
   data: BatchDeleteItemResult[];
+};
+
+export type BatchUpdateConversationProjectRequest = {
+  ids: string[];
+  project_id: string | null;
+};
+
+export type BatchUpdateConversationProjectItemResult = {
+  id: string;
+  object: "conversation";
+  updated: boolean;
+  project_id?: string | null;
+  error?: "not_found" | "update_failed";
+};
+
+export type BatchUpdateConversationProjectResponse = {
+  object: "list";
+  data: BatchUpdateConversationProjectItemResult[];
+};
+
+export type ConversationsListParams = {
+  limit?: number;
+  after?: string;
+  before?: string;
+  order?: "asc" | "desc";
+  project_id?: string;
+  has_project?: boolean;
+  pinned?: boolean;
+};
+
+export type ConversationProject = {
+  id: string;
+  object: "conversation.project";
+  name: string;
+  instructions: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type ConversationProjectListItem = {
+  id: string;
+  object: "conversation.project";
+  name: string;
+  has_instructions: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export type ConversationProjectsListResponse = {
+  object: "list";
+  data: ConversationProjectListItem[];
+  first_id?: string;
+  last_id?: string;
+  has_more: boolean;
+};
+
+export type ConversationProjectCreateRequest = {
+  name: string;
+};
+
+export type ConversationProjectUpdateRequest = {
+  name?: string;
+  instructions?: string | null;
+};
+
+export type ConversationProjectListParams = {
+  limit?: number;
+  after?: string;
+  order?: "asc" | "desc";
+};
+
+export type ConversationProjectDeleteResponse = {
+  id: string;
+  object: "conversation.project.deleted";
+  deleted: boolean;
 };
 
 /**
@@ -1847,9 +1939,14 @@ export type ResponsesCreateRequest = {
  * @deprecated Use openai.conversations.create() instead
  */
 export async function createConversation(
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  options?: ConversationCreateOptions
 ): Promise<Conversation> {
-  const requestData: ConversationCreateRequest = metadata ? { metadata } : {};
+  const requestData: ConversationCreateRequest = {
+    ...(metadata !== undefined && { metadata }),
+    ...(options?.project_id !== undefined && { project_id: options.project_id }),
+    ...(options?.pinned !== undefined && { pinned: options.pinned })
+  };
 
   return authenticatedApiCall<ConversationCreateRequest, Conversation>(
     `${apiUrl}/v1/conversations`,
@@ -1904,9 +2001,30 @@ export async function getConversation(conversationId: string): Promise<Conversat
  */
 export async function updateConversation(
   conversationId: string,
-  metadata: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  options?: ConversationUpdateOptions
 ): Promise<Conversation> {
-  const requestData: ConversationUpdateRequest = { metadata };
+  const requestData: ConversationUpdateRequest = {};
+
+  if (metadata !== undefined) {
+    requestData.metadata = metadata;
+  }
+
+  if (options && Object.prototype.hasOwnProperty.call(options, "project_id")) {
+    requestData.project_id = options.project_id;
+  }
+
+  if (options?.pinned !== undefined) {
+    requestData.pinned = options.pinned;
+  }
+
+  if (
+    requestData.metadata === undefined &&
+    requestData.project_id === undefined &&
+    requestData.pinned === undefined
+  ) {
+    throw new Error("At least one conversation field must be provided");
+  }
 
   return authenticatedApiCall<ConversationUpdateRequest, Conversation>(
     `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}`,
@@ -2015,6 +2133,24 @@ export async function batchDeleteConversations(
   );
 }
 
+export async function batchUpdateConversationProject(
+  ids: string[],
+  projectId: string | null
+): Promise<BatchUpdateConversationProjectResponse> {
+  return authenticatedApiCall<
+    BatchUpdateConversationProjectRequest,
+    BatchUpdateConversationProjectResponse
+  >(
+    `${apiUrl}/v1/conversations/batch-update-project`,
+    "POST",
+    {
+      ids,
+      project_id: projectId
+    },
+    "Failed to batch update conversation project"
+  );
+}
+
 /**
  * @deprecated Use openai.conversations.create() with items parameter instead
  * Adds items to a conversation
@@ -2104,6 +2240,24 @@ export async function listConversationItems(
 }
 
 /**
+ * Retrieves a single item from a conversation
+ * @param conversationId - The UUID of the conversation
+ * @param itemId - The UUID of the item to retrieve
+ * @returns A promise resolving to the conversation item
+ */
+export async function getConversationItem(
+  conversationId: string,
+  itemId: string
+): Promise<ConversationItem> {
+  return authenticatedApiCall<void, ConversationItem>(
+    `${apiUrl}/v1/conversations/${encodeURIComponent(conversationId)}/items/${encodeURIComponent(itemId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve conversation item"
+  );
+}
+
+/**
  * Lists all conversations with pagination (non-standard endpoint)
  * @param params - Optional pagination parameters
  * @returns A promise resolving to a paginated list of conversations
@@ -2124,11 +2278,9 @@ export async function listConversationItems(
  * }
  * ```
  */
-export async function listConversations(params?: {
-  limit?: number;
-  after?: string;
-  before?: string;
-}): Promise<ConversationsListResponse> {
+export async function listConversations(
+  params?: ConversationsListParams
+): Promise<ConversationsListResponse> {
   let url = `${apiUrl}/v1/conversations`;
   const queryParams = [];
 
@@ -2141,6 +2293,18 @@ export async function listConversations(params?: {
   if (params?.before) {
     queryParams.push(`before=${encodeURIComponent(params.before)}`);
   }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+  if (params?.project_id) {
+    queryParams.push(`project_id=${encodeURIComponent(params.project_id)}`);
+  }
+  if (params?.has_project !== undefined) {
+    queryParams.push(`has_project=${params.has_project}`);
+  }
+  if (params?.pinned !== undefined) {
+    queryParams.push(`pinned=${params.pinned}`);
+  }
 
   if (queryParams.length > 0) {
     url += `?${queryParams.join("&")}`;
@@ -2151,6 +2315,81 @@ export async function listConversations(params?: {
     "GET",
     undefined,
     "Failed to list conversations"
+  );
+}
+
+export async function createConversationProject(
+  request: ConversationProjectCreateRequest
+): Promise<ConversationProject> {
+  return authenticatedApiCall<ConversationProjectCreateRequest, ConversationProject>(
+    `${apiUrl}/v1/conversation-projects`,
+    "POST",
+    request,
+    "Failed to create conversation project"
+  );
+}
+
+export async function listConversationProjects(
+  params?: ConversationProjectListParams
+): Promise<ConversationProjectsListResponse> {
+  let url = `${apiUrl}/v1/conversation-projects`;
+  const queryParams = [];
+
+  if (params?.limit !== undefined) {
+    queryParams.push(`limit=${params.limit}`);
+  }
+  if (params?.after) {
+    queryParams.push(`after=${encodeURIComponent(params.after)}`);
+  }
+  if (params?.order) {
+    queryParams.push(`order=${encodeURIComponent(params.order)}`);
+  }
+
+  if (queryParams.length > 0) {
+    url += `?${queryParams.join("&")}`;
+  }
+
+  return authenticatedApiCall<void, ConversationProjectsListResponse>(
+    url,
+    "GET",
+    undefined,
+    "Failed to list conversation projects"
+  );
+}
+
+export async function getConversationProject(projectId: string): Promise<ConversationProject> {
+  return authenticatedApiCall<void, ConversationProject>(
+    `${apiUrl}/v1/conversation-projects/${encodeURIComponent(projectId)}`,
+    "GET",
+    undefined,
+    "Failed to retrieve conversation project"
+  );
+}
+
+export async function updateConversationProject(
+  projectId: string,
+  request: ConversationProjectUpdateRequest
+): Promise<ConversationProject> {
+  if (request.name === undefined && request.instructions === undefined) {
+    throw new Error("At least one conversation project field must be provided");
+  }
+
+  return authenticatedApiCall<ConversationProjectUpdateRequest, ConversationProject>(
+    `${apiUrl}/v1/conversation-projects/${encodeURIComponent(projectId)}`,
+    "POST",
+    request,
+    "Failed to update conversation project"
+  );
+}
+
+export async function deleteConversationProject(
+  projectId: string
+): Promise<ConversationProjectDeleteResponse> {
+  return authenticatedApiCall<void, ConversationProjectDeleteResponse>(
+    `${apiUrl}/v1/conversation-projects/${encodeURIComponent(projectId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete conversation project"
   );
 }
 
@@ -2251,7 +2490,6 @@ export type InstructionUpdateRequest = {
 export type InstructionListParams = {
   limit?: number;
   after?: string;
-  before?: string;
   order?: string;
 };
 
@@ -2314,7 +2552,6 @@ export async function createInstruction(request: InstructionCreateRequest): Prom
  * Query Parameters:
  * - limit: Number of results per page (1-100, default: 20)
  * - after: UUID cursor for forward pagination
- * - before: UUID cursor for backward pagination
  * - order: Sort order ("asc" or "desc", default: "desc")
  *
  * @example
@@ -2339,9 +2576,6 @@ export async function listInstructions(
   }
   if (params?.after) {
     queryParams.push(`after=${encodeURIComponent(params.after)}`);
-  }
-  if (params?.before) {
-    queryParams.push(`before=${encodeURIComponent(params.before)}`);
   }
   if (params?.order) {
     queryParams.push(`order=${encodeURIComponent(params.order)}`);
