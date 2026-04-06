@@ -532,7 +532,7 @@ pub struct Conversation {
     pub project_id: Option<Uuid>,
     pub pinned: bool,
     pub created_at: i64,
-    pub updated_at: i64,
+    pub last_activity_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

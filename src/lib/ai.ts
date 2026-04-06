@@ -176,7 +176,7 @@ export function createCustomFetch(
                 statusText: response.statusText
               });
             }
-          } catch (jsonError) {
+          } catch {
             // Not JSON, continue with regular text response
           }
           // Return a new Response with the decrypted data
@@ -186,7 +186,7 @@ export function createCustomFetch(
             statusText: response.statusText
           });
         }
-      } catch (e) {
+      } catch {
         // If it's not JSON or doesn't have encrypted field, return original response
         console.log("Response is not encrypted JSON, returning as-is");
       }

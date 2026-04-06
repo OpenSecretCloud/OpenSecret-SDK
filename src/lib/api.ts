@@ -1618,7 +1618,7 @@ export type Conversation = {
   metadata?: Record<string, unknown>;
   project_id?: string | null;
   pinned: boolean;
-  updated_at: number;
+  last_activity_at: number;
 };
 
 export type ConversationCreateOptions = {
@@ -2268,7 +2268,7 @@ export async function getConversationItem(
  * @description
  * This is a custom extension not part of the standard OpenAI Conversations API.
  * This function fetches a paginated list of the user's conversations.
- * Conversations are sorted by created_at (most recent first).
+ * Conversations are sorted by last_activity_at (most recent activity first).
  *
  * @example
  * ```typescript
