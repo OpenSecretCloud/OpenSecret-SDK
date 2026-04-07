@@ -617,20 +617,8 @@ pub struct BatchUpdateConversationProjectRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BatchUpdateConversationProjectItemResult {
-    pub id: Uuid,
-    pub object: String,
-    pub updated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchUpdateConversationProjectResponse {
-    pub object: String,
-    pub data: Vec<BatchUpdateConversationProjectItemResult>,
+    pub success: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

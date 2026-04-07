@@ -33,7 +33,6 @@ export type {
   BatchDeleteItemResult,
   BatchDeleteConversationsResponse,
   BatchUpdateConversationProjectRequest,
-  BatchUpdateConversationProjectItemResult,
   BatchUpdateConversationProjectResponse,
   ConversationProject,
   ConversationProjectListItem,

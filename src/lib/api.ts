@@ -1691,17 +1691,8 @@ export type BatchUpdateConversationProjectRequest = {
   project_id: string | null;
 };
 
-export type BatchUpdateConversationProjectItemResult = {
-  id: string;
-  object: "conversation";
-  updated: boolean;
-  project_id?: string | null;
-  error?: "not_found" | "update_failed";
-};
-
 export type BatchUpdateConversationProjectResponse = {
-  object: "list";
-  data: BatchUpdateConversationProjectItemResult[];
+  success: boolean;
 };
 
 export type ConversationsListParams = {
