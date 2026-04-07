@@ -1710,7 +1710,6 @@ export type ConversationsListParams = {
   before?: string;
   order?: "asc" | "desc";
   project_id?: string;
-  has_project?: boolean;
   pinned?: boolean;
 };
 
@@ -1727,7 +1726,6 @@ export type ConversationProjectListItem = {
   id: string;
   object: "conversation.project";
   name: string;
-  has_instructions: boolean;
   created_at: number;
   updated_at: number;
 };
@@ -2298,9 +2296,6 @@ export async function listConversations(
   }
   if (params?.project_id) {
     queryParams.push(`project_id=${encodeURIComponent(params.project_id)}`);
-  }
-  if (params?.has_project !== undefined) {
-    queryParams.push(`has_project=${params.has_project}`);
   }
   if (params?.pinned !== undefined) {
     queryParams.push(`pinned=${params.pinned}`);

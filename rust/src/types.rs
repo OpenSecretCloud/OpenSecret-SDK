@@ -572,8 +572,6 @@ pub struct ConversationsListParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub has_project: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned: Option<bool>,
 }
 
@@ -651,7 +649,6 @@ pub struct ConversationProjectListItem {
     pub id: Uuid,
     pub object: String,
     pub name: String,
-    pub has_instructions: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
