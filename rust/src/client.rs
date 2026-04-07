@@ -102,6 +102,9 @@ fn build_conversations_endpoint(params: Option<&ConversationsListParams>) -> Str
         if let Some(project_id) = params.project_id {
             append_query_param(&mut query, "project_id", project_id);
         }
+        if let Some(unassigned_project) = params.unassigned_project {
+            append_query_param(&mut query, "unassigned_project", unassigned_project);
+        }
         if let Some(pinned) = params.pinned {
             append_query_param(&mut query, "pinned", pinned);
         }
@@ -2088,13 +2091,28 @@ mod tests {
             after: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()),
             order: Some("asc".to_string()),
             project_id: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap()),
+            unassigned_project: Some(false),
             pinned: Some(false),
         }));
 
         assert_eq!(
             endpoint,
-            "/v1/conversations?limit=25&after=550e8400%2De29b%2D41d4%2Da716%2D446655440000&order=asc&project_id=550e8400%2De29b%2D41d4%2Da716%2D446655440001&pinned=false"
+            "/v1/conversations?limit=25&after=550e8400%2De29b%2D41d4%2Da716%2D446655440000&order=asc&project_id=550e8400%2De29b%2D41d4%2Da716%2D446655440001&unassigned_project=false&pinned=false"
         );
+    }
+
+    #[test]
+    fn test_build_conversations_endpoint_supports_unassigned_project_filter() {
+        let endpoint = build_conversations_endpoint(Some(&ConversationsListParams {
+            limit: None,
+            after: None,
+            order: None,
+            project_id: None,
+            unassigned_project: Some(true),
+            pinned: None,
+        }));
+
+        assert_eq!(endpoint, "/v1/conversations?unassigned_project=true");
     }
 
     #[test]

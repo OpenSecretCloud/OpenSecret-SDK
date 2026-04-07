@@ -1701,6 +1701,7 @@ export type ConversationsListParams = {
   before?: string;
   order?: "asc" | "desc";
   project_id?: string;
+  unassigned_project?: boolean;
   pinned?: boolean;
 };
 
@@ -2287,6 +2288,9 @@ export async function listConversations(
   }
   if (params?.project_id) {
     queryParams.push(`project_id=${encodeURIComponent(params.project_id)}`);
+  }
+  if (params?.unassigned_project !== undefined) {
+    queryParams.push(`unassigned_project=${params.unassigned_project}`);
   }
   if (params?.pinned !== undefined) {
     queryParams.push(`pinned=${params.pinned}`);
