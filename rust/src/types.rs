@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -96,6 +96,58 @@ pub struct EncryptedResponse<T> {
     pub encrypted: String,
     #[serde(skip)]
     _phantom: std::marker::PhantomData<T>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum NullableField<T> {
+    #[default]
+    Missing,
+    Null,
+    Value(T),
+}
+
+impl<T> NullableField<T> {
+    pub fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing)
+    }
+
+    pub fn null() -> Self {
+        Self::Null
+    }
+
+    pub fn value(value: T) -> Self {
+        Self::Value(value)
+    }
+}
+
+impl<T> Serialize for NullableField<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Missing | Self::Null => serializer.serialize_none(),
+            Self::Value(value) => value.serialize(serializer),
+        }
+    }
+}
+
+impl<'de, T> Deserialize<'de> for NullableField<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match Option::<T>::deserialize(deserializer)? {
+            Some(value) => Self::Value(value),
+            None => Self::Null,
+        })
+    }
 }
 
 // OAuth Types
@@ -471,6 +523,70 @@ pub struct ApiKeyCreateResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conversation {
+    pub id: Uuid,
+    pub object: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<Uuid>,
+    pub pinned: bool,
+    pub created_at: i64,
+    pub last_activity_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConversationCreateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConversationUpdateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub project_id: NullableField<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
+}
+
+impl ConversationUpdateRequest {
+    pub fn is_empty(&self) -> bool {
+        self.metadata.is_none() && self.project_id.is_missing() && self.pinned.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConversationsListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unassigned_project: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationsListResponse {
+    pub object: String,
+    pub data: Vec<Conversation>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationsDeleteResponse {
     pub object: String,
     pub deleted: bool,
@@ -494,6 +610,75 @@ pub struct BatchDeleteItemResult {
 pub struct BatchDeleteConversationsResponse {
     pub object: String,
     pub data: Vec<BatchDeleteItemResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchUpdateConversationProjectRequest {
+    pub ids: Vec<Uuid>,
+    pub project_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchUpdateConversationProjectResponse {
+    pub success: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationProject {
+    pub id: Uuid,
+    pub object: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationProjectListItem {
+    pub id: Uuid,
+    pub object: String,
+    pub name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationProjectsListResponse {
+    pub object: String,
+    pub data: Vec<ConversationProjectListItem>,
+    pub first_id: Option<Uuid>,
+    pub last_id: Option<Uuid>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationProjectCreateRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConversationProjectUpdateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub instructions: NullableField<String>,
+}
+
+impl ConversationProjectUpdateRequest {
+    pub fn is_empty(&self) -> bool {
+        self.name.is_none() && self.instructions.is_missing()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConversationProjectListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
 }
 
 // AI/OpenAI API Types
@@ -845,6 +1030,8 @@ pub struct AgentItemsListResponse {
     pub has_more: bool,
 }
 
+pub type ConversationItemsResponse = AgentItemsListResponse;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentListResponse {
     pub object: String,
@@ -893,4 +1080,56 @@ pub enum AgentSseEvent {
     Typing(AgentTypingEvent),
     Done(AgentDoneEvent),
     Error(AgentErrorEvent),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn nullable_field_request_serialization_distinguishes_missing_and_null() {
+        let conversation_update = ConversationUpdateRequest::default();
+        assert!(conversation_update.is_empty());
+        assert_eq!(
+            serde_json::to_value(&conversation_update).unwrap(),
+            json!({})
+        );
+
+        let conversation_update = ConversationUpdateRequest {
+            project_id: NullableField::null(),
+            ..Default::default()
+        };
+        assert!(!conversation_update.is_empty());
+        assert_eq!(
+            serde_json::to_value(&conversation_update).unwrap(),
+            json!({ "project_id": null })
+        );
+
+        let project_update = ConversationProjectUpdateRequest {
+            instructions: NullableField::null(),
+            ..Default::default()
+        };
+        assert!(!project_update.is_empty());
+        assert_eq!(
+            serde_json::to_value(&project_update).unwrap(),
+            json!({ "instructions": null })
+        );
+    }
+
+    #[test]
+    fn batch_update_project_request_serializes_none_as_explicit_null() {
+        let request = BatchUpdateConversationProjectRequest {
+            ids: vec![Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()],
+            project_id: None,
+        };
+
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            json!({
+                "ids": ["550e8400-e29b-41d4-a716-446655440000"],
+                "project_id": null
+            })
+        );
+    }
 }

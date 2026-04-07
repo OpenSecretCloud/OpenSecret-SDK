@@ -20,15 +20,27 @@ export type {
   ResponsesCreateRequest,
   Conversation,
   ConversationItem,
+  ConversationCreateOptions,
   ConversationCreateRequest,
+  ConversationUpdateOptions,
   ConversationUpdateRequest,
   ConversationItemsResponse,
   ConversationsListResponse,
+  ConversationsListParams,
   ConversationDeleteResponse,
   ConversationsDeleteResponse,
   BatchDeleteConversationsRequest,
   BatchDeleteItemResult,
   BatchDeleteConversationsResponse,
+  BatchUpdateConversationProjectRequest,
+  BatchUpdateConversationProjectResponse,
+  ConversationProject,
+  ConversationProjectListItem,
+  ConversationProjectsListResponse,
+  ConversationProjectCreateRequest,
+  ConversationProjectUpdateRequest,
+  ConversationProjectListParams,
+  ConversationProjectDeleteResponse,
   AgentCreatedBy,
   MainAgentResponse,
   CreateSubagentRequest,
@@ -44,6 +56,25 @@ export type {
 
 // Export API key management functions
 export { createApiKey, listApiKeys, deleteApiKey } from "./api";
+
+// Export conversation and conversation-project API functions
+export {
+  createConversation,
+  getConversation,
+  updateConversation,
+  deleteConversation,
+  listConversationItems,
+  getConversationItem,
+  listConversations,
+  deleteConversations,
+  batchDeleteConversations,
+  batchUpdateConversationProject,
+  createConversationProject,
+  listConversationProjects,
+  getConversationProject,
+  updateConversationProject,
+  deleteConversationProject
+} from "./api";
 
 // Export Agent API functions
 export {

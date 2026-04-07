@@ -85,6 +85,63 @@ fn build_subagents_endpoint(params: Option<&ListSubagentsParams>) -> String {
     endpoint
 }
 
+fn build_conversations_endpoint(params: Option<&ConversationsListParams>) -> String {
+    let mut endpoint = "/v1/conversations".to_string();
+    let mut query = Vec::new();
+
+    if let Some(params) = params {
+        if let Some(limit) = params.limit {
+            append_query_param(&mut query, "limit", limit);
+        }
+        if let Some(after) = params.after {
+            append_query_param(&mut query, "after", after);
+        }
+        if let Some(order) = &params.order {
+            append_query_param(&mut query, "order", order);
+        }
+        if let Some(project_id) = params.project_id {
+            append_query_param(&mut query, "project_id", project_id);
+        }
+        if let Some(unassigned_project) = params.unassigned_project {
+            append_query_param(&mut query, "unassigned_project", unassigned_project);
+        }
+        if let Some(pinned) = params.pinned {
+            append_query_param(&mut query, "pinned", pinned);
+        }
+    }
+
+    if !query.is_empty() {
+        endpoint.push('?');
+        endpoint.push_str(&query.join("&"));
+    }
+
+    endpoint
+}
+
+fn build_conversation_projects_endpoint(params: Option<&ConversationProjectListParams>) -> String {
+    let mut endpoint = "/v1/conversation-projects".to_string();
+    let mut query = Vec::new();
+
+    if let Some(params) = params {
+        if let Some(limit) = params.limit {
+            append_query_param(&mut query, "limit", limit);
+        }
+        if let Some(after) = params.after {
+            append_query_param(&mut query, "after", after);
+        }
+        if let Some(order) = &params.order {
+            append_query_param(&mut query, "order", order);
+        }
+    }
+
+    if !query.is_empty() {
+        endpoint.push('?');
+        endpoint.push_str(&query.join("&"));
+    }
+
+    endpoint
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AuthHeaderMode {
     None,
@@ -1271,6 +1328,96 @@ impl OpenSecretClient {
 
     // AI/OpenAI API Methods
 
+    /// Creates a new conversation.
+    pub async fn create_conversation(
+        &self,
+        request: ConversationCreateRequest,
+    ) -> Result<Conversation> {
+        self.authenticated_api_call("/v1/conversations", "POST", Some(request))
+            .await
+    }
+
+    /// Lists conversations with optional filters and pagination.
+    pub async fn list_conversations(
+        &self,
+        params: Option<ConversationsListParams>,
+    ) -> Result<ConversationsListResponse> {
+        let endpoint = build_conversations_endpoint(params.as_ref());
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
+    }
+
+    /// Fetches a single conversation by UUID.
+    pub async fn get_conversation(&self, conversation_id: Uuid) -> Result<Conversation> {
+        self.authenticated_api_call(
+            &format!("/v1/conversations/{}", conversation_id),
+            "GET",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Partially updates a conversation.
+    pub async fn update_conversation(
+        &self,
+        conversation_id: Uuid,
+        request: ConversationUpdateRequest,
+    ) -> Result<Conversation> {
+        if request.is_empty() {
+            return Err(Error::Configuration(
+                "Conversation update request must include at least one field".to_string(),
+            ));
+        }
+
+        self.authenticated_api_call(
+            &format!("/v1/conversations/{}", conversation_id),
+            "POST",
+            Some(request),
+        )
+        .await
+    }
+
+    /// Deletes a single conversation by UUID.
+    pub async fn delete_conversation(
+        &self,
+        conversation_id: Uuid,
+    ) -> Result<DeletedObjectResponse> {
+        self.authenticated_api_call(
+            &format!("/v1/conversations/{}", conversation_id),
+            "DELETE",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Lists items in a conversation.
+    pub async fn list_conversation_items(
+        &self,
+        conversation_id: Uuid,
+        params: Option<AgentItemsListParams>,
+    ) -> Result<ConversationItemsResponse> {
+        let endpoint = build_agent_items_endpoint(
+            &format!("/v1/conversations/{}/items", conversation_id),
+            params.as_ref(),
+        );
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
+    }
+
+    /// Fetches a single item from a conversation.
+    pub async fn get_conversation_item(
+        &self,
+        conversation_id: Uuid,
+        item_id: Uuid,
+    ) -> Result<ConversationItem> {
+        self.authenticated_api_call(
+            &format!("/v1/conversations/{}/items/{}", conversation_id, item_id),
+            "GET",
+            None::<()>,
+        )
+        .await
+    }
+
     /// Deletes all conversations
     pub async fn delete_conversations(&self) -> Result<ConversationsDeleteResponse> {
         self.authenticated_api_call("/v1/conversations", "DELETE", None::<()>)
@@ -1285,6 +1432,83 @@ impl OpenSecretClient {
         let request = BatchDeleteConversationsRequest { ids };
         self.authenticated_api_call("/v1/conversations/batch-delete", "POST", Some(request))
             .await
+    }
+
+    /// Batch updates conversation project assignments. Use `None` to clear the project.
+    pub async fn batch_update_conversation_project(
+        &self,
+        ids: Vec<Uuid>,
+        project_id: Option<Uuid>,
+    ) -> Result<BatchUpdateConversationProjectResponse> {
+        let request = BatchUpdateConversationProjectRequest { ids, project_id };
+        self.authenticated_api_call(
+            "/v1/conversations/batch-update-project",
+            "POST",
+            Some(request),
+        )
+        .await
+    }
+
+    /// Creates a new conversation project.
+    pub async fn create_conversation_project(
+        &self,
+        request: ConversationProjectCreateRequest,
+    ) -> Result<ConversationProject> {
+        self.authenticated_api_call("/v1/conversation-projects", "POST", Some(request))
+            .await
+    }
+
+    /// Lists conversation projects with pagination.
+    pub async fn list_conversation_projects(
+        &self,
+        params: Option<ConversationProjectListParams>,
+    ) -> Result<ConversationProjectsListResponse> {
+        let endpoint = build_conversation_projects_endpoint(params.as_ref());
+        self.authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await
+    }
+
+    /// Fetches a single conversation project by UUID.
+    pub async fn get_conversation_project(&self, project_id: Uuid) -> Result<ConversationProject> {
+        self.authenticated_api_call(
+            &format!("/v1/conversation-projects/{}", project_id),
+            "GET",
+            None::<()>,
+        )
+        .await
+    }
+
+    /// Updates a conversation project and/or its project instructions.
+    pub async fn update_conversation_project(
+        &self,
+        project_id: Uuid,
+        request: ConversationProjectUpdateRequest,
+    ) -> Result<ConversationProject> {
+        if request.is_empty() {
+            return Err(Error::Configuration(
+                "Conversation project update request must include at least one field".to_string(),
+            ));
+        }
+
+        self.authenticated_api_call(
+            &format!("/v1/conversation-projects/{}", project_id),
+            "POST",
+            Some(request),
+        )
+        .await
+    }
+
+    /// Deletes a conversation project by UUID.
+    pub async fn delete_conversation_project(
+        &self,
+        project_id: Uuid,
+    ) -> Result<DeletedObjectResponse> {
+        self.authenticated_api_call(
+            &format!("/v1/conversation-projects/{}", project_id),
+            "DELETE",
+            None::<()>,
+        )
+        .await
     }
 
     /// Fetches available AI models
@@ -1858,6 +2082,84 @@ mod tests {
                 &json!({ "ok": true }),
             ))
         }
+    }
+
+    #[test]
+    fn test_build_conversations_endpoint_includes_filters() {
+        let endpoint = build_conversations_endpoint(Some(&ConversationsListParams {
+            limit: Some(25),
+            after: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()),
+            order: Some("asc".to_string()),
+            project_id: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap()),
+            unassigned_project: Some(false),
+            pinned: Some(false),
+        }));
+
+        assert_eq!(
+            endpoint,
+            "/v1/conversations?limit=25&after=550e8400%2De29b%2D41d4%2Da716%2D446655440000&order=asc&project_id=550e8400%2De29b%2D41d4%2Da716%2D446655440001&unassigned_project=false&pinned=false"
+        );
+    }
+
+    #[test]
+    fn test_build_conversations_endpoint_supports_unassigned_project_filter() {
+        let endpoint = build_conversations_endpoint(Some(&ConversationsListParams {
+            limit: None,
+            after: None,
+            order: None,
+            project_id: None,
+            unassigned_project: Some(true),
+            pinned: None,
+        }));
+
+        assert_eq!(endpoint, "/v1/conversations?unassigned_project=true");
+    }
+
+    #[test]
+    fn test_build_conversation_projects_endpoint_includes_pagination() {
+        let endpoint = build_conversation_projects_endpoint(Some(&ConversationProjectListParams {
+            limit: Some(10),
+            after: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()),
+            order: Some("desc".to_string()),
+        }));
+
+        assert_eq!(
+            endpoint,
+            "/v1/conversation-projects?limit=10&after=550e8400%2De29b%2D41d4%2Da716%2D446655440000&order=desc"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_conversation_rejects_empty_request_locally() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+
+        let error = client
+            .update_conversation(Uuid::new_v4(), ConversationUpdateRequest::default())
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, Error::Configuration(message) if message.contains("at least one field"))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_conversation_project_rejects_empty_request_locally() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+
+        let error = client
+            .update_conversation_project(
+                Uuid::new_v4(),
+                ConversationProjectUpdateRequest::default(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, Error::Configuration(message) if message.contains("at least one field"))
+        );
     }
 
     #[tokio::test]

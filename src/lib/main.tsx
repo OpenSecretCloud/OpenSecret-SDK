@@ -743,7 +743,37 @@ export type OpenSecretContextType = {
    * @param request - The request parameters for creating a response
    * @returns A promise resolving to the created response or a stream
    */
-  createResponse: (request: api.ResponsesCreateRequest) => Promise<any>;
+  createResponse: typeof api.createResponse;
+
+  /**
+   * Creates a single conversation with optional metadata/project/pin state.
+   */
+  createConversation: typeof api.createConversation;
+
+  /**
+   * Retrieves a single conversation.
+   */
+  getConversation: typeof api.getConversation;
+
+  /**
+   * Updates a single conversation's metadata/project/pin state.
+   */
+  updateConversation: typeof api.updateConversation;
+
+  /**
+   * Deletes a single conversation.
+   */
+  deleteConversation: typeof api.deleteConversation;
+
+  /**
+   * Lists items in a single conversation.
+   */
+  listConversationItems: typeof api.listConversationItems;
+
+  /**
+   * Retrieves a single conversation item.
+   */
+  getConversationItem: typeof api.getConversationItem;
 
   /**
    * Lists all conversations with pagination (non-standard endpoint)
@@ -759,11 +789,7 @@ export type OpenSecretContextType = {
    * - openai.conversations.items.list()
    * - openai.conversations.items.retrieve()
    */
-  listConversations: (params?: {
-    limit?: number;
-    after?: string;
-    before?: string;
-  }) => Promise<api.ConversationsListResponse>;
+  listConversations: typeof api.listConversations;
 
   /**
    * Deletes all conversations
@@ -777,6 +803,36 @@ export type OpenSecretContextType = {
    * @returns A promise resolving to per-item deletion results
    */
   batchDeleteConversations: typeof api.batchDeleteConversations;
+
+  /**
+   * Batch moves conversations into a project or clears project assignment.
+   */
+  batchUpdateConversationProject: typeof api.batchUpdateConversationProject;
+
+  /**
+   * Creates a new conversation project.
+   */
+  createConversationProject: typeof api.createConversationProject;
+
+  /**
+   * Lists conversation projects with pagination.
+   */
+  listConversationProjects: typeof api.listConversationProjects;
+
+  /**
+   * Retrieves a single conversation project.
+   */
+  getConversationProject: typeof api.getConversationProject;
+
+  /**
+   * Updates a conversation project and/or its project-scoped instructions.
+   */
+  updateConversationProject: typeof api.updateConversationProject;
+
+  /**
+   * Deletes a conversation project.
+   */
+  deleteConversationProject: typeof api.deleteConversationProject;
 
   /**
    * Creates a new instruction
@@ -922,9 +978,21 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   cancelResponse: api.cancelResponse,
   deleteResponse: api.deleteResponse,
   createResponse: api.createResponse,
+  createConversation: api.createConversation,
+  getConversation: api.getConversation,
+  updateConversation: api.updateConversation,
+  deleteConversation: api.deleteConversation,
+  listConversationItems: api.listConversationItems,
+  getConversationItem: api.getConversationItem,
   listConversations: api.listConversations,
   deleteConversations: api.deleteConversations,
   batchDeleteConversations: api.batchDeleteConversations,
+  batchUpdateConversationProject: api.batchUpdateConversationProject,
+  createConversationProject: api.createConversationProject,
+  listConversationProjects: api.listConversationProjects,
+  getConversationProject: api.getConversationProject,
+  updateConversationProject: api.updateConversationProject,
+  deleteConversationProject: api.deleteConversationProject,
   createInstruction: api.createInstruction,
   listInstructions: api.listInstructions,
   getInstruction: api.getInstruction,
@@ -1338,9 +1406,21 @@ export function OpenSecretProvider({
     cancelResponse: api.cancelResponse,
     deleteResponse: api.deleteResponse,
     createResponse: api.createResponse,
+    createConversation: api.createConversation,
+    getConversation: api.getConversation,
+    updateConversation: api.updateConversation,
+    deleteConversation: api.deleteConversation,
+    listConversationItems: api.listConversationItems,
+    getConversationItem: api.getConversationItem,
     listConversations: api.listConversations,
     deleteConversations: api.deleteConversations,
     batchDeleteConversations: api.batchDeleteConversations,
+    batchUpdateConversationProject: api.batchUpdateConversationProject,
+    createConversationProject: api.createConversationProject,
+    listConversationProjects: api.listConversationProjects,
+    getConversationProject: api.getConversationProject,
+    updateConversationProject: api.updateConversationProject,
+    deleteConversationProject: api.deleteConversationProject,
     createInstruction: api.createInstruction,
     listInstructions: api.listInstructions,
     getInstruction: api.getInstruction,
