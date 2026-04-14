@@ -421,15 +421,15 @@ export type OpenSecretContextType = {
 
   /**
    * Generates a JWT token for use with third-party services
-   * @param audience - Optional URL of the service (e.g. "https://billing.opensecret.cloud")
+   * @param audience - Optional audience value for the target service
    * @returns A promise resolving to the token response
    * @throws {Error} If:
    * - The user is not authenticated
-   * - The audience URL is invalid (if provided)
+   * - The audience value is invalid (if provided)
    *
    *
    * - Generates a signed JWT token for use with third-party services
-   * - If audience is provided, it can be any valid URL
+   * - If audience is provided, it can be a valid URL or another accepted audience string
    * - If audience is omitted, a token with no audience restriction will be generated
    * - Requires an active authentication session
    * - Token can be used to authenticate with the specified service

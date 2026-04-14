@@ -26,10 +26,10 @@ function TokenGenerator() {
     <div>
       <div className="auth-form">
         <input
-          type="url"
+          type="text"
           value={audience}
           onChange={(e) => setAudience(e.target.value)}
-          placeholder="Enter audience URL"
+          placeholder="Enter audience"
         />
         <button onClick={generateToken}>Generate Token</button>
       </div>
