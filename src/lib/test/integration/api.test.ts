@@ -178,12 +178,19 @@ test("Third party token generation", async () => {
   expect(typeof opensSecretResponse.token).toBe("string");
   expect(opensSecretResponse.token.length).toBeGreaterThan(0);
 
-  // Test with any valid URL (now allowed)
+  // Test with any valid URL
   const anyValidUrl = "https://google.com";
   const googleResponse = await generateThirdPartyToken(anyValidUrl);
   expect(googleResponse.token).toBeDefined();
   expect(typeof googleResponse.token).toBe("string");
   expect(googleResponse.token.length).toBeGreaterThan(0);
+
+  // Test with a non-URL audience identifier
+  const stringAudience = "authenticated";
+  const stringAudienceResponse = await generateThirdPartyToken(stringAudience);
+  expect(stringAudienceResponse.token).toBeDefined();
+  expect(typeof stringAudienceResponse.token).toBe("string");
+  expect(stringAudienceResponse.token.length).toBeGreaterThan(0);
 
   // Test with no audience (should work)
   const noAudienceResponse = await generateThirdPartyToken();
@@ -191,10 +198,10 @@ test("Third party token generation", async () => {
   expect(typeof noAudienceResponse.token).toBe("string");
   expect(noAudienceResponse.token.length).toBeGreaterThan(0);
 
-  // Test invalid audience URL (this should still fail)
+  // Test reserved internal audience (this should still fail)
   try {
-    await generateThirdPartyToken("not-a-url");
-    throw new Error("Should not accept invalid URL");
+    await generateThirdPartyToken("access");
+    throw new Error("Should not accept reserved internal audience");
   } catch (error: any) {
     expect(error.message).toBe("Bad Request");
   }

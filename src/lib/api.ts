@@ -924,11 +924,11 @@ export type ThirdPartyTokenResponse = {
 
 /**
  * Generates a JWT token for use with third-party services
- * @param audience - Optional URL of the service
+ * @param audience - Optional audience value for the target service
  * @returns A promise resolving to the token response containing the JWT
  *
  * @description
- * - If audience is provided, it can be any valid URL
+ * - If audience is provided, it can be a valid URL or another accepted audience string
  * - If audience is omitted, a token with no audience restriction will be generated
  */
 export async function generateThirdPartyToken(audience?: string): Promise<ThirdPartyTokenResponse> {
