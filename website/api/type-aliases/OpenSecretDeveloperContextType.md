@@ -1,10 +1,14 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: OpenSecretDeveloperContextType
 
 > **OpenSecretDeveloperContextType** = `object`
 
 ## Properties
 
-### acceptInvite()
+### acceptInvite
 
 > **acceptInvite**: (`code`) => `Promise`\<\{ `message`: `string`; \}\>
 
@@ -119,7 +123,7 @@ If the verification fails or the request is invalid
 
 ***
 
-### createOrganization()
+### createOrganization
 
 > **createOrganization**: (`name`) => `Promise`\<`Organization`\>
 
@@ -141,7 +145,7 @@ A promise that resolves to the created organization
 
 ***
 
-### createProject()
+### createProject
 
 > **createProject**: (`orgId`, `name`, `description?`) => `Promise`\<`Project`\>
 
@@ -175,7 +179,7 @@ A promise that resolves to the project details including client ID
 
 ***
 
-### createProjectSecret()
+### createProjectSecret
 
 > **createProjectSecret**: (`orgId`, `projectId`, `keyName`, `secret`) => `Promise`\<`ProjectSecret`\>
 
@@ -223,7 +227,7 @@ createProjectSecret(orgId, projectId, "mySecretKey", encodedSecret);
 
 ***
 
-### deleteOrganization()
+### deleteOrganization
 
 > **deleteOrganization**: (`orgId`) => `Promise`\<`void`\>
 
@@ -243,7 +247,7 @@ Organization ID
 
 ***
 
-### deleteOrganizationInvite()
+### deleteOrganizationInvite
 
 > **deleteOrganizationInvite**: (`orgId`, `inviteCode`) => `Promise`\<\{ `message`: `string`; \}\>
 
@@ -269,7 +273,7 @@ Invitation UUID code
 
 ***
 
-### deleteProject()
+### deleteProject
 
 > **deleteProject**: (`orgId`, `projectId`) => `Promise`\<`void`\>
 
@@ -295,7 +299,7 @@ Project ID
 
 ***
 
-### deleteProjectSecret()
+### deleteProjectSecret
 
 > **deleteProjectSecret**: (`orgId`, `projectId`, `keyName`) => `Promise`\<`void`\>
 
@@ -343,7 +347,7 @@ Gets attestation from the enclave
 
 ***
 
-### getAttestationDocument()
+### getAttestationDocument
 
 > **getAttestationDocument**: () => `Promise`\<[`ParsedAttestationView`](ParsedAttestationView.md)\>
 
@@ -366,7 +370,7 @@ This is a convenience function that:
 
 ***
 
-### getEmailSettings()
+### getEmailSettings
 
 > **getEmailSettings**: (`orgId`, `projectId`) => `Promise`\<`EmailSettings`\>
 
@@ -392,7 +396,7 @@ Project ID
 
 ***
 
-### getOAuthSettings()
+### getOAuthSettings
 
 > **getOAuthSettings**: (`orgId`, `projectId`) => `Promise`\<`OAuthSettings`\>
 
@@ -418,7 +422,7 @@ Project ID
 
 ***
 
-### getOrganizationInvite()
+### getOrganizationInvite
 
 > **getOrganizationInvite**: (`orgId`, `inviteCode`) => `Promise`\<`OrganizationInvite`\>
 
@@ -444,7 +448,7 @@ Invitation UUID code
 
 ***
 
-### getProject()
+### getProject
 
 > **getProject**: (`orgId`, `projectId`) => `Promise`\<`Project`\>
 
@@ -472,7 +476,33 @@ A promise resolving to the project details
 
 ***
 
-### inviteDeveloper()
+### getPushSettings
+
+> **getPushSettings**: (`orgId`, `projectId`) => `Promise`\<[`PushSettings`](PushSettings.md)\>
+
+Gets push settings for a project
+
+#### Parameters
+
+##### orgId
+
+`string`
+
+Organization ID
+
+##### projectId
+
+`string`
+
+Project ID
+
+#### Returns
+
+`Promise`\<[`PushSettings`](PushSettings.md)\>
+
+***
+
+### inviteDeveloper
 
 > **inviteDeveloper**: (`orgId`, `email`, `role?`) => `Promise`\<`OrganizationInvite`\>
 
@@ -504,7 +534,7 @@ Role to assign (defaults to "admin")
 
 ***
 
-### listOrganizationInvites()
+### listOrganizationInvites
 
 > **listOrganizationInvites**: (`orgId`) => `Promise`\<`OrganizationInvite`[]\>
 
@@ -524,7 +554,7 @@ Organization ID
 
 ***
 
-### listOrganizationMembers()
+### listOrganizationMembers
 
 > **listOrganizationMembers**: (`orgId`) => `Promise`\<`OrganizationMember`[]\>
 
@@ -544,7 +574,7 @@ Organization ID
 
 ***
 
-### listOrganizations()
+### listOrganizations
 
 > **listOrganizations**: () => `Promise`\<`Organization`[]\>
 
@@ -558,7 +588,7 @@ A promise resolving to array of organization details
 
 ***
 
-### listProjects()
+### listProjects
 
 > **listProjects**: (`orgId`) => `Promise`\<`Project`[]\>
 
@@ -580,7 +610,7 @@ A promise resolving to array of project details
 
 ***
 
-### listProjectSecrets()
+### listProjectSecrets
 
 > **listProjectSecrets**: (`orgId`, `projectId`) => `Promise`\<`ProjectSecret`[]\>
 
@@ -606,7 +636,7 @@ Project ID
 
 ***
 
-### parseAttestationForView()
+### parseAttestationForView
 
 > **parseAttestationForView**: (`document`, `cabundle`, `pcrConfig?`) => `Promise`\<[`ParsedAttestationView`](ParsedAttestationView.md)\>
 
@@ -640,7 +670,7 @@ Additional PCR0 hashes to validate against
 
 ***
 
-### refetchDeveloper()
+### refetchDeveloper
 
 > **refetchDeveloper**: () => `Promise`\<`void`\>
 
@@ -662,7 +692,7 @@ If the refresh fails
 
 ***
 
-### removeMember()
+### removeMember
 
 > **removeMember**: (`orgId`, `userId`) => `Promise`\<`void`\>
 
@@ -745,7 +775,7 @@ If the request fails or the email doesn't exist
 
 ***
 
-### signIn()
+### signIn
 
 > **signIn**: (`email`, `password`) => `Promise`\<`platformApi.PlatformLoginResponse`\>
 
@@ -778,7 +808,7 @@ A promise that resolves to the login response with access and refresh tokens
 
 ***
 
-### signOut()
+### signOut
 
 > **signOut**: () => `Promise`\<`void`\>
 
@@ -794,7 +824,7 @@ Signs out the current developer by removing authentication tokens
 
 ***
 
-### signUp()
+### signUp
 
 > **signUp**: (`email`, `password`, `invite_code`, `name?`) => `Promise`\<`platformApi.PlatformLoginResponse`\>
 
@@ -839,7 +869,7 @@ A promise that resolves to the login response with access and refresh tokens
 
 ***
 
-### updateEmailSettings()
+### updateEmailSettings
 
 > **updateEmailSettings**: (`orgId`, `projectId`, `settings`) => `Promise`\<`EmailSettings`\>
 
@@ -871,7 +901,7 @@ Email settings
 
 ***
 
-### updateMemberRole()
+### updateMemberRole
 
 > **updateMemberRole**: (`orgId`, `userId`, `role`) => `Promise`\<`OrganizationMember`\>
 
@@ -903,7 +933,7 @@ New role to assign
 
 ***
 
-### updateOAuthSettings()
+### updateOAuthSettings
 
 > **updateOAuthSettings**: (`orgId`, `projectId`, `settings`) => `Promise`\<`OAuthSettings`\>
 
@@ -935,7 +965,7 @@ OAuth settings
 
 ***
 
-### updateProject()
+### updateProject
 
 > **updateProject**: (`orgId`, `projectId`, `updates`) => `Promise`\<`Project`\>
 
@@ -974,6 +1004,38 @@ Object containing fields to update
 #### Returns
 
 `Promise`\<`Project`\>
+
+***
+
+### updatePushSettings
+
+> **updatePushSettings**: (`orgId`, `projectId`, `settings`) => `Promise`\<[`PushSettings`](PushSettings.md)\>
+
+Updates push configuration
+
+#### Parameters
+
+##### orgId
+
+`string`
+
+Organization ID
+
+##### projectId
+
+`string`
+
+Project ID
+
+##### settings
+
+[`PushSettings`](PushSettings.md)
+
+Push settings
+
+#### Returns
+
+`Promise`\<[`PushSettings`](PushSettings.md)\>
 
 ***
 

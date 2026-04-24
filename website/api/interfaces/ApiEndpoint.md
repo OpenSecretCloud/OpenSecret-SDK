@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Interface: ApiEndpoint
 
 ## Properties

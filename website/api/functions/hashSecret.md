@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Function: hashSecret()
 
 > **hashSecret**(`secret`): `Promise`\<`string`\>

@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Function: useOpenSecretDeveloper()
 
 > **useOpenSecretDeveloper**(): [`OpenSecretDeveloperContextType`](../type-aliases/OpenSecretDeveloperContextType.md)

@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: LoginResponse
 
 > **LoginResponse** = `object`
@@ -12,7 +16,7 @@
 
 ### email?
 
-> `optional` **email**: `string`
+> `optional` **email?**: `string`
 
 ***
 

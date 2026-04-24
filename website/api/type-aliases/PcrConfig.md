@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: PcrConfig
 
 > **PcrConfig** = `object`
@@ -8,7 +12,7 @@ Configuration options for PCR validation
 
 ### pcr0DevValues?
 
-> `optional` **pcr0DevValues**: `string`[]
+> `optional` **pcr0DevValues?**: `string`[]
 
 Additional custom PCR0 values for development environments
 
@@ -16,7 +20,7 @@ Additional custom PCR0 values for development environments
 
 ### pcr0Values?
 
-> `optional` **pcr0Values**: `string`[]
+> `optional` **pcr0Values?**: `string`[]
 
 Additional custom PCR0 values for production environments
 
@@ -24,7 +28,7 @@ Additional custom PCR0 values for production environments
 
 ### remoteAttestation?
 
-> `optional` **remoteAttestation**: `boolean`
+> `optional` **remoteAttestation?**: `boolean`
 
 Enable/disable remote attestation (defaults to true)
 
@@ -32,18 +36,18 @@ Enable/disable remote attestation (defaults to true)
 
 ### remoteAttestationUrls?
 
-> `optional` **remoteAttestationUrls**: `object`
+> `optional` **remoteAttestationUrls?**: `object`
 
 Custom URLs for remote attestation
 
 #### dev?
 
-> `optional` **dev**: `string`
+> `optional` **dev?**: `string`
 
 URL for development PCR history
 
 #### prod?
 
-> `optional` **prod**: `string`
+> `optional` **prod?**: `string`
 
 URL for production PCR history

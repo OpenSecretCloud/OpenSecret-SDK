@@ -59,7 +59,7 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     fetch: createCustomFetch()
   });
 
-  const model = "llama-3.3-70b";
+  const model = "llama3-3-70b";
   const messages = [
     { role: "user", content: 'please reply with exactly and only the word "echo"' } as ChatMessage
   ];
@@ -91,7 +91,7 @@ async function streamCompletion(prompt: string) {
       Accept: "text/event-stream"
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b",
+      model: "llama3-3-70b",
       messages: [{ role: "user", content: prompt }],
       stream: true
     })
@@ -273,7 +273,7 @@ test.skip("OpenAI responses endpoint returns in_progress status (non-streaming)"
   });
 
   const response = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "echo"',
     stream: false
   });
@@ -309,7 +309,7 @@ test("OpenAI responses endpoint streams response", async () => {
   const conversation = await openai.conversations.create({});
 
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "echo"',
     conversation: conversation.id,
     stream: true
@@ -371,7 +371,7 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
   const conversation = await openai.conversations.create({});
 
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the words "echo echo"',
     conversation: conversation.id,
     stream: true
@@ -537,7 +537,7 @@ test("OpenAI responses retrieve endpoint works", async () => {
 
   // First create a response to retrieve
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "test"',
     conversation: conversation.id,
     stream: true
@@ -589,7 +589,7 @@ test.skip("OpenAI responses cancel endpoint works", async () => {
 
   // Create a long-running response that we can cancel
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: "write a very long story about space exploration with at least 500 words",
     stream: true
   });
@@ -657,7 +657,7 @@ test("OpenAI responses delete endpoint works", async () => {
 
   // First create a response to delete
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "delete"',
     conversation: conversation.id,
     stream: true
@@ -719,7 +719,7 @@ test("Integration test: Complete responses workflow", async () => {
 
   // 1. Create a new response
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "workflow"',
     conversation: conversation.id,
     stream: true
@@ -788,7 +788,7 @@ test("Integration test: Direct API functions for responses", async () => {
 
   // 1. Create a response to test with
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "apitest"',
     conversation: conversation.id,
     stream: true
@@ -860,7 +860,7 @@ test("Integration test: Cancel in-progress response", async () => {
 
   // Create a slow response that we can cancel
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: "Count from 1 to 100 slowly, with detailed explanations for each number",
     conversation: conversation.id,
     stream: true
@@ -982,7 +982,7 @@ test("Responses API: Create response with conversation parameter", async () => {
 
   // Create first response in the conversation
   const stream1 = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "first"',
     conversation: conversation.id,
     stream: true
@@ -1005,7 +1005,7 @@ test("Responses API: Create response with conversation parameter", async () => {
 
   // Create second response in the same conversation using object format
   const stream2 = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: 'please reply with exactly and only the word "second"',
     conversation: { id: conversation.id }, // Test object format
     stream: true
@@ -1057,7 +1057,7 @@ test("Conversations API: Full integration with responses", async () => {
 
   // 2. Create responses in the conversation (using streaming since non-streaming not supported yet)
   const stream = await openai.responses.create({
-    model: "llama-3.3-70b",
+    model: "llama3-3-70b",
     input: "What is 2+2?",
     conversation: conversation.id,
     stream: true

@@ -1023,7 +1023,7 @@ impl OpenSecretClient {
 
         // Sort by created_at descending (newest first)
         let mut keys = response.keys;
-        keys.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
 
         Ok(keys)
     }

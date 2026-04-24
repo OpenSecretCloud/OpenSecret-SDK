@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Interface: Model
 
 Describes an OpenAI model offering that can be used with the API.
