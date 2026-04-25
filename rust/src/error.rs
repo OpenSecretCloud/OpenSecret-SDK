@@ -9,7 +9,7 @@ pub enum Error {
     Serialization(#[from] serde_json::Error),
 
     #[error("CBOR error: {0}")]
-    Cbor(#[from] serde_cbor::Error),
+    Cbor(String),
 
     #[error("Cryptographic error: {0}")]
     Crypto(String),

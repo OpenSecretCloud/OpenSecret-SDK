@@ -4,6 +4,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Nonce},
     ChaCha20Poly1305,
 };
+use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, SharedSecret, StaticSecret};
 
 // Re-export for tests
@@ -16,7 +17,7 @@ pub struct KeyPair {
 }
 
 pub fn generate_key_pair() -> KeyPair {
-    let secret = StaticSecret::random_from_rng(rand::thread_rng());
+    let secret = StaticSecret::random_from_rng(OsRng);
     let public = X25519PublicKey::from(&secret);
     KeyPair { secret, public }
 }
@@ -35,18 +36,18 @@ pub fn decrypt_message(ciphertext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
 
 pub fn generate_random_bytes<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
-    getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes");
+    OsRng.fill_bytes(&mut bytes);
     bytes
 }
 
 pub fn generate_ephemeral_keypair() -> (EphemeralSecret, PublicKey) {
-    let secret = EphemeralSecret::random_from_rng(rand::thread_rng());
+    let secret = EphemeralSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
     (secret, public)
 }
 
 pub fn generate_static_keypair() -> (StaticSecret, PublicKey) {
-    let secret = StaticSecret::random_from_rng(rand::thread_rng());
+    let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
     (secret, public)
 }

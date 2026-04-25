@@ -1,5 +1,6 @@
 use crate::{
     attestation::{AttestationDocument, AttestationVerifier},
+    cbor::{self, Value as CborValue},
     crypto::{self},
     error::{Error, Result},
     session::SessionManager,
@@ -12,7 +13,6 @@ use reqwest::{
     Client,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use serde_cbor::Value as CborValue;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
@@ -321,7 +321,7 @@ impl OpenSecretClient {
     fn parse_mock_attestation(&self, document_b64: &str) -> Result<AttestationDocument> {
         // For mock/dev mode, just extract the essential fields without full verification
         let document_bytes = BASE64.decode(document_b64)?;
-        let cbor_value: CborValue = serde_cbor::from_slice(&document_bytes)?;
+        let cbor_value: CborValue = cbor::from_slice(&document_bytes)?;
 
         // Parse COSE_Sign1 structure
         let cose_sign1 = match &cbor_value {
@@ -344,7 +344,7 @@ impl OpenSecretClient {
         };
 
         // Parse attestation document from payload
-        let doc_cbor: CborValue = serde_cbor::from_slice(payload)?;
+        let doc_cbor: CborValue = cbor::from_slice(payload)?;
         let map = match &doc_cbor {
             CborValue::Map(m) => m,
             _ => {
@@ -1942,9 +1942,7 @@ mod tests {
     use super::*;
     use crate::PushNotificationKeyPair;
     use futures::StreamExt;
-    use serde_cbor::Value as CborValue;
     use serde_json::json;
-    use std::collections::BTreeMap;
     use wiremock::{
         matchers::{header, method, path},
         Match, Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -2008,25 +2006,26 @@ mod tests {
     }
 
     fn build_mock_attestation_document(nonce: &str, server_public_key: &[u8; 32]) -> String {
-        let mut payload = BTreeMap::new();
-        payload.insert(
-            CborValue::Text("public_key".to_string()),
-            CborValue::Bytes(server_public_key.to_vec()),
-        );
-        payload.insert(
-            CborValue::Text("nonce".to_string()),
-            CborValue::Bytes(nonce.as_bytes().to_vec()),
-        );
+        let payload = CborValue::Map(vec![
+            (
+                CborValue::Text("public_key".to_string()),
+                CborValue::Bytes(server_public_key.to_vec()),
+            ),
+            (
+                CborValue::Text("nonce".to_string()),
+                CborValue::Bytes(nonce.as_bytes().to_vec()),
+            ),
+        ]);
 
-        let payload = serde_cbor::to_vec(&CborValue::Map(payload)).unwrap();
+        let payload = cbor::to_vec(&payload).unwrap();
         let cose_sign1 = CborValue::Array(vec![
             CborValue::Bytes(vec![]),
-            CborValue::Map(BTreeMap::new()),
+            CborValue::Map(Vec::new()),
             CborValue::Bytes(payload),
             CborValue::Bytes(vec![]),
         ]);
 
-        BASE64.encode(serde_cbor::to_vec(&cose_sign1).unwrap())
+        BASE64.encode(cbor::to_vec(&cose_sign1).unwrap())
     }
 
     fn encrypted_response<T: Serialize>(session_key: &[u8; 32], payload: &T) -> serde_json::Value {

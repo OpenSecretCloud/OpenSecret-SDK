@@ -1,4 +1,5 @@
 pub mod attestation;
+mod cbor;
 pub mod client;
 pub mod crypto;
 pub mod error;

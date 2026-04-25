@@ -20,7 +20,7 @@ async-trait = "0.1"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_cbor = "0.11"
+ciborium = "0.2"
 percent-encoding = "2.3"
 
 # Cryptography
@@ -29,8 +29,6 @@ chacha20poly1305 = "0.10"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 hkdf = "0.12"
 p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
-getrandom = "0.2"
-rand = "0.8"
 sha2 = "0.10"
 base64 = "0.22"
 ring = "0.17"  # For certificate validation
