@@ -1,8 +1,8 @@
+use crate::cbor::{self, Value as CborValue};
 use crate::error::{Error, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use ring::signature;
 use serde::{Deserialize, Serialize};
-use serde_cbor::Value as CborValue;
 use x509_parser::prelude::*;
 
 // AWS Nitro Root Certificate (production)
@@ -54,7 +54,7 @@ impl AttestationVerifier {
         let document_bytes = BASE64.decode(document_b64)?;
 
         // Parse COSE_Sign1 structure
-        let cbor_value: CborValue = serde_cbor::from_slice(&document_bytes).map_err(Error::Cbor)?;
+        let cbor_value: CborValue = cbor::from_slice(&document_bytes)?;
 
         let cose_sign1 = match &cbor_value {
             CborValue::Array(arr) => arr,
@@ -100,7 +100,7 @@ impl AttestationVerifier {
         };
 
         // Parse attestation document from payload
-        let doc_cbor: CborValue = serde_cbor::from_slice(payload).map_err(Error::Cbor)?;
+        let doc_cbor: CborValue = cbor::from_slice(payload)?;
 
         let doc = self.parse_attestation_document(&doc_cbor)?;
 
@@ -180,12 +180,7 @@ impl AttestationVerifier {
                 }
                 "timestamp" => {
                     doc.timestamp = match value {
-                        CborValue::Integer(i) if *i >= 0 => *i as u64,
-                        CborValue::Integer(_) => {
-                            return Err(Error::AttestationVerificationFailed(
-                                "Invalid timestamp: negative value".to_string(),
-                            ))
-                        }
+                        CborValue::Integer(i) => cbor_integer_to_u64(*i, "timestamp")?,
                         _ => {
                             return Err(Error::AttestationVerificationFailed(
                                 "Invalid timestamp: not an integer".to_string(),
@@ -215,12 +210,7 @@ impl AttestationVerifier {
 
                     for (pcr_key, pcr_value) in pcrs_map {
                         let index = match pcr_key {
-                            CborValue::Integer(i) if *i >= 0 => *i as usize,
-                            CborValue::Integer(_) => {
-                                return Err(Error::AttestationVerificationFailed(
-                                    "Invalid PCR index: negative value".to_string(),
-                                ))
-                            }
+                            CborValue::Integer(i) => cbor_integer_to_usize(*i, "PCR index")?,
                             _ => {
                                 return Err(Error::AttestationVerificationFailed(
                                     "Invalid PCR index: not an integer".to_string(),
@@ -603,6 +593,24 @@ fn extract_ec_point(pubkey_bytes: &[u8], expected_size: usize) -> Result<&[u8]> 
     )))
 }
 
+fn cbor_integer_to_u64(value: ciborium::value::Integer, field_name: &str) -> Result<u64> {
+    u64::try_from(value).map_err(|_| {
+        Error::AttestationVerificationFailed(format!(
+            "Invalid {}: negative or out of range value",
+            field_name
+        ))
+    })
+}
+
+fn cbor_integer_to_usize(value: ciborium::value::Integer, field_name: &str) -> Result<usize> {
+    usize::try_from(value).map_err(|_| {
+        Error::AttestationVerificationFailed(format!(
+            "Invalid {}: negative or out of range value",
+            field_name
+        ))
+    })
+}
+
 fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Result<Vec<u8>> {
     // Create the COSE_Sign1 signature structure as a CBOR array
     // ["Signature1", protected, external_aad, payload]
@@ -614,12 +622,11 @@ fn create_sig_structure(protected: &[u8], payload: &[u8]) -> Result<Vec<u8>> {
     ]);
 
     // Encode to CBOR bytes
-    serde_cbor::to_vec(&sig_structure).map_err(Error::Cbor)
+    cbor::to_vec(&sig_structure)
 }
 
 #[cfg(feature = "mock-attestation")]
 pub fn create_mock_attestation_document(nonce: &str) -> Result<String> {
-    use serde_cbor::to_vec;
     use std::collections::HashMap;
 
     let mut pcrs = HashMap::new();
@@ -638,17 +645,17 @@ pub fn create_mock_attestation_document(nonce: &str) -> Result<String> {
     };
 
     // Create a mock COSE_Sign1 structure
-    let payload = to_vec(&doc).map_err(Error::Cbor)?;
+    let payload = cbor::to_vec(&doc)?;
     let protected = vec![0u8; 32]; // Mock protected header
     let signature = vec![0u8; 64]; // Mock signature
 
     let cose_sign1 = vec![
         CborValue::Bytes(protected),
-        CborValue::Map(std::collections::BTreeMap::new()), // Empty unprotected headers
+        CborValue::Map(Vec::new()), // Empty unprotected headers
         CborValue::Bytes(payload),
         CborValue::Bytes(signature),
     ];
 
-    let cose_bytes = to_vec(&CborValue::Array(cose_sign1)).map_err(Error::Cbor)?;
+    let cose_bytes = cbor::to_vec(&CborValue::Array(cose_sign1))?;
     Ok(BASE64.encode(cose_bytes))
 }
