@@ -44,7 +44,7 @@ export function AI() {
 
       console.log("Created OpenAI client");
 
-      const model = "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4";
+      const model = "llama3-3-70b";
       const messages = [{ role: "user", content: query } as ChatMessage];
 
       console.log("Starting stream request");

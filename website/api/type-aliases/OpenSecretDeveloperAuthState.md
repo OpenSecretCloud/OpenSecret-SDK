@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: OpenSecretDeveloperAuthState
 
 > **OpenSecretDeveloperAuthState** = `object`
@@ -6,7 +10,7 @@
 
 ### developer?
 
-> `optional` **developer**: `DeveloperResponse`
+> `optional` **developer?**: `DeveloperResponse`
 
 ***
 

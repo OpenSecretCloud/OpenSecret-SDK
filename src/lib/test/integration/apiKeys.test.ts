@@ -116,7 +116,7 @@ describe("API Key Authentication with OpenAI", () => {
       fetch: createCustomFetch({ apiKey: testApiKey })
     });
 
-    const model = "llama-3.3-70b";
+    const model = "llama3-3-70b";
     const messages = [
       { role: "user" as const, content: 'please reply with exactly and only the word "echo"' }
     ];

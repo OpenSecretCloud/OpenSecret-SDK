@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: ProjectSettings
 
 > **ProjectSettings** = `object`

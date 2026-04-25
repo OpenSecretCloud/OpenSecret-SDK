@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Function: OpenSecretProvider()
 
 > **OpenSecretProvider**(`props`): `Element`

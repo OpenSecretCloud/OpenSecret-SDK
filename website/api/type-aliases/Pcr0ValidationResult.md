@@ -1,3 +1,7 @@
+[**@opensecret/react**](../README.md)
+
+***
+
 # Type Alias: Pcr0ValidationResult
 
 > **Pcr0ValidationResult** = `object`
@@ -24,6 +28,6 @@ Human-readable description of the validation result
 
 ### verifiedAt?
 
-> `optional` **verifiedAt**: `string`
+> `optional` **verifiedAt?**: `string`
 
 Timestamp of when the PCR was verified (for remote attestation)

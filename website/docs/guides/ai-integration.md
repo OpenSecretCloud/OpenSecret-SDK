@@ -118,7 +118,7 @@ function AIChat() {
       });
       
       // Choose the model to use
-      const model = "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4";
+      const model = "llama3-3-70b";
       const messages = [{ role: "user", content: query } as ChatMessage];
       
       // Create a streaming request
@@ -246,7 +246,7 @@ function AIAssistant() {
     
     try {
       // Choose the model to use
-      const model = "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4";
+      const model = "llama3-3-70b";
       
       // Create a streaming request
       const stream = await openai.beta.chat.completions.stream({
@@ -341,7 +341,7 @@ You can customize the AI parameters like temperature, max tokens, etc.:
 
 ```tsx
 const stream = await openai.beta.chat.completions.stream({
-  model: "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+  model: "llama3-3-70b",
   messages: [...messages, userMessage],
   stream: true,
   temperature: 0.7,
@@ -372,7 +372,7 @@ async function streamCompletion(prompt: string, handleContentUpdate: (content: s
       Accept: "text/event-stream"
     },
     body: JSON.stringify({
-      model: "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+      model: "llama3-3-70b",
       messages: [{ role: "user", content: prompt }],
       stream: true
     })
@@ -481,7 +481,7 @@ This provides **true end-to-end encryption** for AI interactions.
 
 OpenSecret currently supports the following models (check for the latest models available through the SDK):
 
-- `hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4`
+- `llama3-3-70b`
 - `meta-llama/Llama-2-70b-chat-hf`
 - And others based on availability
 
@@ -609,7 +609,7 @@ function DocumentAIChat() {
     ];
     
     const stream = await openai.beta.chat.completions.stream({
-      model: "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+      model: "llama3-3-70b",
       messages,
       stream: true,
     });
