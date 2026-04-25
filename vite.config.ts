@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "fs";
-import dts from 'vite-plugin-dts'
+import dts from "vite-plugin-dts";
 
 // Custom plugin for .der file handling
 function derPlugin() {
@@ -29,19 +29,19 @@ function derPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(), 
+    react(),
     derPlugin(),
     dts({
       rollupTypes: true,
-      tsconfigPath: "tsconfig.app.json"
-    }),
+      tsconfigPath: "tsconfig.build.json"
+    })
   ],
   // Add .der to assetsInclude to ensure it's processed
-  assetsInclude: ['**/*.der'],
+  assetsInclude: ["**/*.der"],
   resolve: {
     alias: {
       // Ensure absolute imports work correctly
-      '@': path.resolve(__dirname, './src')
+      "@": path.resolve(__dirname, "./src")
     }
   },
   build: {
@@ -51,19 +51,12 @@ export default defineConfig({
       fileName: (format) => `opensecret-react.${format}.js`
     },
     rollupOptions: {
-      // Externalize React and React DOM along with their internals
-      external: [
-        "react", 
-        "react-dom",
-        "react/jsx-runtime",
-        /^react\/.*/,
-        /^react-dom\/.*/
-      ],
+      // Externalize React along with its internals
+      external: ["react", "react/jsx-runtime", /^react\/.*/],
       output: {
         // Provide global variables to use in the UMD build
         globals: {
           react: "React",
-          "react-dom": "ReactDOM",
           "react/jsx-runtime": "React"
         }
       }
