@@ -1119,6 +1119,66 @@ type ModelsListResponse = {
   data: Model[];
 };
 
+export type ModelAliasId = "auto:quick" | "auto:powerful";
+export type ModelId = ModelAliasId | (string & {});
+export type ModelAccessTier = "free" | "starter" | "pro";
+
+export type ModelCapabilities = {
+  chat: boolean;
+  vision: boolean;
+  reasoning: boolean;
+  tool_use: boolean;
+};
+
+export type ModelCatalogItem = Model & {
+  provider?: string;
+  provider_id?: string;
+  display_name: string;
+  short_name: string;
+  description?: string;
+  context_window: number;
+  max_context_tokens: number;
+  access: ModelAccessTier;
+  capabilities: ModelCapabilities;
+  tasks?: string[];
+  badges?: string[];
+  enabled: boolean;
+  deprecated: boolean;
+  sort_order?: number;
+};
+
+export type ModelAlias = {
+  id: ModelAliasId;
+  label: string;
+  short_name: string;
+  description: string;
+  target_model: string;
+  access: ModelAccessTier;
+  capabilities: ModelCapabilities;
+};
+
+export type ModelCatalogResponse = {
+  object: "list";
+  data: ModelCatalogItem[];
+  aliases: ModelAlias[];
+  defaults: {
+    quick: ModelAliasId;
+    powerful: ModelAliasId;
+  };
+  audio?: {
+    transcription?: {
+      available: boolean;
+      model: string;
+      display_name?: string;
+    };
+    speech?: {
+      available: boolean;
+      model: string;
+      display_name?: string;
+    };
+  };
+};
+
 /**
  * Fetches available AI models from the OpenAI-compatible API
  * @param apiKey - Optional API key to use instead of JWT token
@@ -1150,6 +1210,40 @@ export async function fetchModels(apiKey?: string): Promise<Model[]> {
     return response.data;
   } catch (error) {
     console.error("Error fetching models:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches the OpenSecret model catalog with display metadata and stable aliases.
+ * @param apiKey - Optional API key to use instead of JWT token
+ * @returns A promise resolving to the model catalog response
+ */
+export async function fetchModelCatalog(apiKey?: string): Promise<ModelCatalogResponse> {
+  try {
+    const response = await openAiAuthenticatedApiCall<void, ModelCatalogResponse>(
+      `${apiUrl}/v1/models/catalog`,
+      "GET",
+      undefined,
+      "Failed to fetch model catalog",
+      apiKey
+    );
+
+    if (!response || typeof response !== "object") {
+      throw new Error("Invalid response from model catalog endpoint");
+    }
+
+    if (response.object !== "list" || !Array.isArray(response.data)) {
+      throw new Error("Model catalog response missing expected 'object' or 'data' fields");
+    }
+
+    if (!Array.isArray(response.aliases)) {
+      throw new Error("Model catalog response missing expected 'aliases' field");
+    }
+
+    return response;
+  } catch (error) {
+    console.error("Error fetching model catalog:", error);
     throw error;
   }
 }
@@ -1897,7 +1991,7 @@ export type ResponsesDeleteResponse = {
 };
 
 export type ResponsesCreateRequest = {
-  model: string;
+  model: ModelId;
   input: string;
   conversation?: string | { id: string };
   previous_response_id?: string; // Deprecated but still supported

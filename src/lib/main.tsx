@@ -521,6 +521,11 @@ export type OpenSecretContextType = {
   fetchModels: () => Promise<Model[]>;
 
   /**
+   * Fetches OpenSecret's model catalog with display metadata and stable aliases.
+   */
+  fetchModelCatalog: () => Promise<api.ModelCatalogResponse>;
+
+  /**
    * Uploads a document for text extraction and processing
    * @param file - The file to upload (File or Blob object)
    * @returns A promise resolving to the task ID and initial metadata
@@ -966,6 +971,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   encryptData: api.encryptData,
   decryptData: api.decryptData,
   fetchModels: api.fetchModels,
+  fetchModelCatalog: api.fetchModelCatalog,
   uploadDocument: api.uploadDocument,
   checkDocumentStatus: api.checkDocumentStatus,
   uploadDocumentWithPolling: api.uploadDocumentWithPolling,
@@ -1394,6 +1400,7 @@ export function OpenSecretProvider({
     encryptData: api.encryptData,
     decryptData: api.decryptData,
     fetchModels: api.fetchModels,
+    fetchModelCatalog: api.fetchModelCatalog,
     uploadDocument: api.uploadDocument,
     checkDocumentStatus: api.checkDocumentStatus,
     uploadDocumentWithPolling: api.uploadDocumentWithPolling,
