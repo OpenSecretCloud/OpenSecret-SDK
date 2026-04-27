@@ -1123,6 +1123,10 @@ export type ModelAliasId = "auto:quick" | "auto:powerful";
 export type ModelId = ModelAliasId | (string & {});
 export type ModelAccessTier = "free" | "starter" | "pro";
 
+function isModelAliasId(value: unknown): value is ModelAliasId {
+  return value === "auto:quick" || value === "auto:powerful";
+}
+
 export type ModelCapabilities = {
   chat: boolean;
   vision: boolean;
@@ -1244,8 +1248,8 @@ export async function fetchModelCatalog(apiKey?: string): Promise<ModelCatalogRe
     if (
       !response.defaults ||
       typeof response.defaults !== "object" ||
-      typeof response.defaults.quick !== "string" ||
-      typeof response.defaults.powerful !== "string"
+      !isModelAliasId(response.defaults.quick) ||
+      !isModelAliasId(response.defaults.powerful)
     ) {
       throw new Error("Model catalog response missing expected 'defaults' field");
     }
