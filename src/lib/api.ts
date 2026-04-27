@@ -1241,6 +1241,15 @@ export async function fetchModelCatalog(apiKey?: string): Promise<ModelCatalogRe
       throw new Error("Model catalog response missing expected 'aliases' field");
     }
 
+    if (
+      !response.defaults ||
+      typeof response.defaults !== "object" ||
+      typeof response.defaults.quick !== "string" ||
+      typeof response.defaults.powerful !== "string"
+    ) {
+      throw new Error("Model catalog response missing expected 'defaults' field");
+    }
+
     return response;
   } catch (error) {
     console.error("Error fetching model catalog:", error);
