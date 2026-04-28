@@ -18,6 +18,13 @@ export type {
   ResponsesCancelResponse,
   ResponsesDeleteResponse,
   ResponsesCreateRequest,
+  ModelAliasId,
+  ModelId,
+  ModelAccessTier,
+  ModelCapabilities,
+  ModelCatalogItem,
+  ModelAlias,
+  ModelCatalogResponse,
   Conversation,
   ConversationItem,
   ConversationCreateOptions,
@@ -56,6 +63,8 @@ export type {
 
 // Export API key management functions
 export { createApiKey, listApiKeys, deleteApiKey } from "./api";
+
+export { fetchModels, fetchModelCatalog } from "./api";
 
 // Export conversation and conversation-project API functions
 export {
