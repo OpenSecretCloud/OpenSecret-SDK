@@ -1217,9 +1217,13 @@ impl OpenSecretClient {
             current_password,
             new_password,
         };
-        let _: serde_json::Value = self
+        let response: CredentialUpdateResponse = self
             .authenticated_api_call("/protected/change_password", "POST", Some(request))
             .await?;
+        if let Some(access_token) = response.access_token {
+            self.session_manager
+                .set_tokens(access_token, response.refresh_token)?;
+        }
         Ok(())
     }
 
@@ -1261,24 +1265,6 @@ impl OpenSecretClient {
         };
         let _: serde_json::Value = self
             .encrypted_api_call("/password-reset/confirm", "POST", Some(request))
-            .await?;
-        Ok(())
-    }
-
-    /// Converts a guest account to an email account
-    pub async fn convert_guest_to_email(
-        &self,
-        email: String,
-        password: String,
-        name: Option<String>,
-    ) -> Result<()> {
-        let request = ConvertGuestToEmailRequest {
-            email,
-            password,
-            name,
-        };
-        let _: serde_json::Value = self
-            .authenticated_api_call("/protected/convert_guest", "POST", Some(request))
             .await?;
         Ok(())
     }

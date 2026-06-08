@@ -262,52 +262,6 @@ This function:
 
 ***
 
-### convertGuestToUserAccount
-
-> **convertGuestToUserAccount**: (`email`, `password`, `name?`) => `Promise`\<`void`\>
-
-Upgrades a guest account to a user account with email and password authentication.
-
-#### Parameters
-
-##### email
-
-`string`
-
-User's email address
-
-##### password
-
-`string`
-
-User's chosen password
-
-##### name?
-
-`string` \| `null`
-
-Optional user's full name
-
-#### Returns
-
-`Promise`\<`void`\>
-
-A promise that resolves when account creation is complete
-
-#### Throws
-
-If:
-- The current user is not a guest account
-- The email address is already in use
-- The user is not authenticated
-
-- Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
-- Requires the user to be currently authenticated as a guest
-- Updates the auth state with new user information
-- Preserves all existing data associated with the guest account
-
-***
-
 ### createApiKey
 
 > **createApiKey**: *typeof* [`createApiKey`](../functions/createApiKey.md)

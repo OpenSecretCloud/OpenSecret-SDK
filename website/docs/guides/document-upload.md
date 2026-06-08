@@ -379,7 +379,7 @@ function DocumentQA() {
 
       // Get AI response
       const stream = await openai.beta.chat.completions.stream({
-        model: "llama3-3-70b",
+        model: "gpt-oss-120b",
         messages,
         stream: true,
         temperature: 0.3, // Lower temperature for more factual responses

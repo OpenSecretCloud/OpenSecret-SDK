@@ -14,6 +14,8 @@ const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 const API_URL = process.env.VITE_OPEN_SECRET_API_URL;
+const CHAT_MODEL = process.env.VITE_TEST_CHAT_MODEL ?? "llama3-3-70b";
+const TTS_MODEL = process.env.VITE_TEST_TTS_MODEL ?? "qwen3-tts";
 
 if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID || !API_URL) {
   throw new Error("Test credentials must be set in .env.local");
@@ -59,7 +61,7 @@ test("OpenAI custom fetch successfully makes a simple request", async () => {
     fetch: createCustomFetch()
   });
 
-  const model = "llama3-3-70b";
+  const model = CHAT_MODEL;
   const messages = [
     { role: "user", content: 'please reply with exactly and only the word "echo"' } as ChatMessage
   ];
@@ -91,7 +93,7 @@ async function streamCompletion(prompt: string) {
       Accept: "text/event-stream"
     },
     body: JSON.stringify({
-      model: "llama3-3-70b",
+      model: CHAT_MODEL,
       messages: [{ role: "user", content: prompt }],
       stream: true
     })
@@ -132,7 +134,7 @@ test("streams chat completion", async () => {
   expect(response?.trim()).toBe("echo");
 });
 
-test.skip("text-to-speech with kokoro model", async () => {
+test.skip("text-to-speech with configured TTS model", async () => {
   await setupTestUser();
 
   const client = new OpenAI({
@@ -148,7 +150,7 @@ test.skip("text-to-speech with kokoro model", async () => {
   const textToSpeak = "Hello, this is a test of the text-to-speech system.";
 
   const response = await client.audio.speech.create({
-    model: "kokoro",
+    model: TTS_MODEL,
     voice: "af_sky" as any,
     input: textToSpeak,
     response_format: "mp3"
@@ -226,7 +228,7 @@ test.skip("TTS → Whisper transcription chain", async () => {
   console.log("Generating speech from text:", originalText);
 
   const ttsResponse = await client.audio.speech.create({
-    model: "kokoro",
+    model: TTS_MODEL,
     voice: "af_sky" as any,
     input: originalText,
     response_format: "mp3"
@@ -273,7 +275,7 @@ test.skip("OpenAI responses endpoint returns in_progress status (non-streaming)"
   });
 
   const response = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "echo"',
     stream: false
   });
@@ -309,7 +311,7 @@ test("OpenAI responses endpoint streams response", async () => {
   const conversation = await openai.conversations.create({});
 
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "echo"',
     conversation: conversation.id,
     stream: true
@@ -371,7 +373,7 @@ test("OpenAI responses endpoint validates complete event sequence", async () => 
   const conversation = await openai.conversations.create({});
 
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the words "echo echo"',
     conversation: conversation.id,
     stream: true
@@ -537,7 +539,7 @@ test("OpenAI responses retrieve endpoint works", async () => {
 
   // First create a response to retrieve
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "test"',
     conversation: conversation.id,
     stream: true
@@ -589,7 +591,7 @@ test.skip("OpenAI responses cancel endpoint works", async () => {
 
   // Create a long-running response that we can cancel
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: "write a very long story about space exploration with at least 500 words",
     stream: true
   });
@@ -657,7 +659,7 @@ test("OpenAI responses delete endpoint works", async () => {
 
   // First create a response to delete
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "delete"',
     conversation: conversation.id,
     stream: true
@@ -719,7 +721,7 @@ test("Integration test: Complete responses workflow", async () => {
 
   // 1. Create a new response
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "workflow"',
     conversation: conversation.id,
     stream: true
@@ -788,7 +790,7 @@ test("Integration test: Direct API functions for responses", async () => {
 
   // 1. Create a response to test with
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "apitest"',
     conversation: conversation.id,
     stream: true
@@ -860,7 +862,7 @@ test("Integration test: Cancel in-progress response", async () => {
 
   // Create a slow response that we can cancel
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: "Count from 1 to 100 slowly, with detailed explanations for each number",
     conversation: conversation.id,
     stream: true
@@ -982,7 +984,7 @@ test("Responses API: Create response with conversation parameter", async () => {
 
   // Create first response in the conversation
   const stream1 = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "first"',
     conversation: conversation.id,
     stream: true
@@ -1005,7 +1007,7 @@ test("Responses API: Create response with conversation parameter", async () => {
 
   // Create second response in the same conversation using object format
   const stream2 = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: 'please reply with exactly and only the word "second"',
     conversation: { id: conversation.id }, // Test object format
     stream: true
@@ -1057,7 +1059,7 @@ test("Conversations API: Full integration with responses", async () => {
 
   // 2. Create responses in the conversation (using streaming since non-streaming not supported yet)
   const stream = await openai.responses.create({
-    model: "llama3-3-70b",
+    model: CHAT_MODEL,
     input: "What is 2+2?",
     conversation: conversation.id,
     stream: true

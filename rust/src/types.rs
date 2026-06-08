@@ -55,6 +55,13 @@ pub struct RefreshResponse {
     pub refresh_token: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialUpdateResponse {
+    pub message: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+}
+
 // Auth Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginCredentials {
@@ -475,13 +482,6 @@ pub struct PasswordResetConfirmRequest {
     pub plaintext_secret: String,
     pub new_password: String,
     pub client_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConvertGuestToEmailRequest {
-    pub email: String,
-    pub password: String,
-    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

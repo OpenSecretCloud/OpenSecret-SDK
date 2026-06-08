@@ -7,6 +7,7 @@ const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
 const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 const API_URL = process.env.VITE_OPEN_SECRET_API_URL;
+const CHAT_MODEL = process.env.VITE_TEST_CHAT_MODEL ?? "llama3-3-70b";
 
 if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID || !API_URL) {
   throw new Error("Test credentials must be set in .env.local");
@@ -116,7 +117,7 @@ describe("API Key Authentication with OpenAI", () => {
       fetch: createCustomFetch({ apiKey: testApiKey })
     });
 
-    const model = "llama3-3-70b";
+    const model = CHAT_MODEL;
     const messages = [
       { role: "user" as const, content: 'please reply with exactly and only the word "echo"' }
     ];

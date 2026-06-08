@@ -170,110 +170,6 @@ function GuestLoginForm() {
 }
 ```
 
-## Converting Guest Accounts to Regular Accounts
-
-One of the most powerful features of guest accounts is the ability to convert them to regular email-based accounts. This allows users to try your application and then upgrade their account to a permanent one without losing their data.
-
-```tsx
-import { useState } from "react";
-import { useOpenSecret } from "@opensecret/react";
-
-function ConvertGuestAccount() {
-  const os = useOpenSecret();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  
-  // Only show for guest accounts
-  const isGuest = os.auth.user && !os.auth.user.email;
-  if (!isGuest) {
-    return null;
-  }
-  
-  async function handleConversion(e) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    setSuccess(false);
-    
-    try {
-      await os.convertGuestToUserAccount(email, password, name);
-      setSuccess(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Account conversion failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-  
-  return (
-    <div className="conversion-form">
-      <h3>Upgrade to a Permanent Account</h3>
-      <p>
-        Add an email address to your guest account to make it permanent and 
-        easier to access in the future.
-      </p>
-      
-      <form onSubmit={handleConversion}>
-        <div className="form-group">
-          <label htmlFor="email">Email Address:</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={loading || success}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="name">Name (Optional):</label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={loading || success}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="password">New Password:</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-            disabled={loading || success}
-          />
-        </div>
-        
-        {error && <div className="error">{error}</div>}
-        {success && (
-          <div className="success-message">
-            <h4>Account Upgraded Successfully!</h4>
-            <p>
-              Your guest account has been converted to a permanent account.
-              You can now log in using your email and password.
-            </p>
-          </div>
-        )}
-        
-        {!success && (
-          <button type="submit" disabled={loading}>
-            {loading ? "Upgrading..." : "Upgrade Account"}
-          </button>
-        )}
-      </form>
-    </div>
-  );
-}
-```
-
 ## Authentication UI with Guest Support
 
 Here's a complete authentication UI example that supports both regular and guest accounts:
@@ -320,8 +216,6 @@ function AuthenticationUI() {
           Log Out
         </button>
         
-        {/* Show conversion option for guest accounts */}
-        {isGuest && <ConvertGuestAccount />}
       </div>
     );
   }
@@ -408,7 +302,7 @@ const messageBytes = new TextEncoder().encode("Hello, world!");
 const signature = await os.signMessage(messageBytes, "schnorr");
 ```
 
-All data associated with a guest account is preserved when converting to a regular account.
+Guest accounts are long-lived accounts identified by UUID and password.
 
 ## Security Considerations
 
@@ -420,7 +314,7 @@ All data associated with a guest account is preserved when converting to a regul
 
 4. **Rate limit guest account creation**: To prevent abuse, consider rate limiting guest account creation by IP address
 
-5. **Encourage conversion to regular accounts**: For important or long-lived data, encourage users to convert to regular accounts
+5. **Treat guest accounts as permanent anonymous accounts**: Guest accounts do not have email recovery, so users must keep both their guest ID and password.
 
 ## Best Practices
 

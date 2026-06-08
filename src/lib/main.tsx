@@ -103,29 +103,6 @@ export type OpenSecretContextType = {
   signUpGuest: (password: string, inviteCode: string) => Promise<LoginResponse>;
 
   /**
-   * Upgrades a guest account to a user account with email and password authentication.
-   * @param email - User's email address
-   * @param password - User's chosen password
-   * @param name - Optional user's full name
-   * @returns A promise that resolves when account creation is complete
-   * @throws {Error} If:
-   * - The current user is not a guest account
-   * - The email address is already in use
-   * - The user is not authenticated
-   *
-   *
-   * - Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
-   * - Requires the user to be currently authenticated as a guest
-   * - Updates the auth state with new user information
-   * - Preserves all existing data associated with the guest account
-   */
-  convertGuestToUserAccount: (
-    email: string,
-    password: string,
-    name?: string | null
-  ) => Promise<void>;
-
-  /**
    * Logs out the current user
    * @returns A promise that resolves when logout is complete
    * @throws {Error} If logout fails
@@ -928,7 +905,6 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
     access_token: "",
     refresh_token: ""
   }),
-  convertGuestToUserAccount: async () => {},
   signOut: async () => {},
   get: api.fetchGet,
   put: api.fetchPut,
@@ -1198,16 +1174,6 @@ export function OpenSecretProvider({
     }
   }
 
-  async function convertGuestToUserAccount(email: string, password: string, name?: string | null) {
-    try {
-      await api.convertGuestToEmailAccount(email, password, name);
-      await fetchUser();
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
-  }
-
   async function signOut() {
     const refresh_token = window.localStorage.getItem("refresh_token");
     if (refresh_token) {
@@ -1354,7 +1320,6 @@ export function OpenSecretProvider({
     signOut,
     signUp,
     signUpGuest,
-    convertGuestToUserAccount,
     get: api.fetchGet,
     put: api.fetchPut,
     list: api.fetchList,

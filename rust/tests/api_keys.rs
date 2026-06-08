@@ -29,6 +29,12 @@ fn get_test_config() -> (String, String, String, Uuid) {
     (api_url, email, password, client_id)
 }
 
+fn chat_model() -> String {
+    env::var("OPENSECRET_TEST_CHAT_MODEL")
+        .or_else(|_| env::var("VITE_TEST_CHAT_MODEL"))
+        .unwrap_or_else(|_| "llama3-3-70b".to_string())
+}
+
 async fn setup_test_client() -> Result<OpenSecretClient> {
     let (api_url, email, password, client_id) = get_test_config();
 
@@ -135,7 +141,7 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
 
     // Test streaming chat completion
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: chat_model(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("Please reply with exactly and only the word 'echo'"),
