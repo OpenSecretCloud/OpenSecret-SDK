@@ -88,7 +88,7 @@ export type OpenSecretContextType = {
   signInGuest: (id: string, password: string) => Promise<void>;
 
   /**
-   * Creates a new guest account, which can be upgraded to a normal account later with email.
+   * Creates a new long-lived guest account with no email recovery.
    * @param password - User's chosen password, cannot be changed or recovered without adding email address.
    * @param inviteCode - Invitation code for registration
    * @returns A promise that resolves to the login response containing the guest ID

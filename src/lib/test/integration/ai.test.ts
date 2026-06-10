@@ -701,7 +701,7 @@ test("OpenAI responses delete endpoint works", async () => {
     expect(isExpectedError).toBe(true);
     console.log(`Confirmed response was deleted - error received: ${errorMessage}`);
   }
-});
+}, 10000);
 
 test("Integration test: Complete responses workflow", async () => {
   await setupTestUser();
@@ -809,7 +809,17 @@ test("Integration test: Direct API functions for responses", async () => {
   expect(responseId).not.toBe("");
 
   // 2. Test fetchResponse - should return full details
-  const retrievedResponse = await fetchResponse(responseId);
+  let retrievedResponse = await fetchResponse(responseId);
+  const terminalStatuses = new Set(["completed", "failed", "cancelled"]);
+  for (
+    let attempt = 0;
+    attempt < 10 && !terminalStatuses.has(retrievedResponse.status);
+    attempt++
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    retrievedResponse = await fetchResponse(responseId);
+  }
+
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.object).toBe("response");
   expect(retrievedResponse.status).toBe("completed");
@@ -840,7 +850,7 @@ test("Integration test: Direct API functions for responses", async () => {
     // The API returns "Resource not found" when trying to fetch a deleted response
     expect(errorMessage).toContain("Resource not found");
   }
-});
+}, 10000);
 
 test("Integration test: Cancel in-progress response", async () => {
   await setupTestUser();

@@ -905,7 +905,7 @@ If signup fails
 
 > **signUpGuest**: (`password`, `inviteCode`) => `Promise`\<[`LoginResponse`](LoginResponse.md)\>
 
-Creates a new guest account, which can be upgraded to a normal account later with email.
+Creates a new long-lived guest account with no email recovery.
 
 #### Parameters
 

@@ -1221,8 +1221,12 @@ impl OpenSecretClient {
             .authenticated_api_call("/protected/change_password", "POST", Some(request))
             .await?;
         if let Some(access_token) = response.access_token {
+            let refresh_token = match response.refresh_token {
+                Some(refresh_token) => Some(refresh_token),
+                None => self.session_manager.get_refresh_token()?,
+            };
             self.session_manager
-                .set_tokens(access_token, response.refresh_token)?;
+                .set_tokens(access_token, refresh_token)?;
         }
         Ok(())
     }
@@ -2341,6 +2345,55 @@ mod tests {
         assert!(client.get_session_id().unwrap().is_none());
         assert!(client.get_access_token().unwrap().is_none());
         assert!(client.get_refresh_token().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_change_password_preserves_refresh_token_when_response_omits_one() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [24u8; 32];
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "old_access_token".to_string(),
+                Some("old_refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/protected/change_password"))
+            .and(header("authorization", "Bearer old_access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "message": "updated",
+                    "access_token": "new_access_token"
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        client
+            .change_password("old-credential".to_string(), "new-credential".to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            client.get_access_token().unwrap().as_deref(),
+            Some("new_access_token")
+        );
+        assert_eq!(
+            client.get_refresh_token().unwrap().as_deref(),
+            Some("old_refresh_token")
+        );
     }
 
     #[tokio::test]

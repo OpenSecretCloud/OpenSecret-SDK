@@ -25,11 +25,22 @@ fn embedding_model() -> String {
 }
 
 fn embedding_dimensions() -> usize {
-    env::var("OPENSECRET_TEST_EMBEDDING_DIMENSIONS")
-        .or_else(|_| env::var("VITE_TEST_EMBEDDING_DIMENSIONS"))
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(768)
+    for name in [
+        "OPENSECRET_TEST_EMBEDDING_DIMENSIONS",
+        "VITE_TEST_EMBEDDING_DIMENSIONS",
+    ] {
+        match env::var(name) {
+            Ok(value) => {
+                return value
+                    .parse::<usize>()
+                    .unwrap_or_else(|err| panic!("failed to parse {name}: {err}"));
+            }
+            Err(env::VarError::NotPresent) => {}
+            Err(err) => panic!("failed to read {name}: {err}"),
+        }
+    }
+
+    768
 }
 
 async fn setup_authenticated_client() -> Result<OpenSecretClient> {

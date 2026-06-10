@@ -322,22 +322,22 @@ Guest accounts are long-lived accounts identified by UUID and password.
 
 2. **Provide clear guest ID instructions**: Make it obvious that users need to save their guest ID
 
-3. **Periodically remind guest users to upgrade**: Consider showing occasional upgrade prompts for guest users
+3. **Offer registered accounts separately**: If users need email recovery, guide them to create a registered account before relying on guest-only data
 
-4. **Implement session recovery options**: For guest users who haven't converted, consider client-side storage for ID recovery
+4. **Implement guest ID recovery aids**: Consider client-side storage or reminders that help users retain their guest ID
 
 5. **Be transparent about limitations**: Clearly communicate any feature limitations for guest accounts
 
-## Example: Progressive Authentication Flow
+## Example: Anonymous Authentication Flow
 
-A common pattern is to implement a progressive authentication flow:
+A common pattern is to support guest access without treating it as a temporary account:
 
 1. **Start as guest**: User starts with a guest account for immediate access
-2. **Store user data**: Application stores user preferences and progress
-3. **Prompt for conversion**: When the user reaches a certain level of engagement, prompt for account conversion
-4. **Seamless upgrade**: Convert to a regular account while preserving all data
+2. **Save guest credentials**: User stores the guest ID and password somewhere durable
+3. **Store user data**: Application stores user preferences and progress under the guest account
+4. **Create registered accounts separately**: If the user wants email recovery, direct them to create a registered account before storing important data there
 
-This provides a frictionless onboarding experience while eventually capturing user information for those who find value in your application.
+This provides a frictionless anonymous experience while keeping the recovery limitations clear.
 
 ## Next Steps
 
