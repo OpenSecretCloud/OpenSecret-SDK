@@ -57,6 +57,7 @@ pub struct RefreshResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CredentialUpdateResponse {
+    #[serde(default)]
     pub message: String,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
@@ -1131,5 +1132,15 @@ mod tests {
                 "project_id": null
             })
         );
+    }
+
+    #[test]
+    fn credential_update_response_tolerates_missing_message() {
+        let response: CredentialUpdateResponse =
+            serde_json::from_value(json!({ "access_token": "new-access" })).unwrap();
+
+        assert_eq!(response.message, "");
+        assert_eq!(response.access_token.as_deref(), Some("new-access"));
+        assert_eq!(response.refresh_token, None);
     }
 }

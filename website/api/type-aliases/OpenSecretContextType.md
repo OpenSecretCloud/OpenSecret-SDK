@@ -1570,7 +1570,7 @@ Creates a new long-lived guest account with no email recovery.
 
 `string`
 
-User's chosen password, cannot be changed or recovered without adding email address.
+User's chosen password. It can be changed while authenticated, but it cannot be recovered via email unless an email address is later added to the account.
 
 ##### inviteCode
 
