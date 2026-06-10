@@ -1,6 +1,6 @@
 use futures::StreamExt;
 use opensecret::{
-    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Function,
+    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Error, Function,
     OpenSecretClient, Result, Tool,
 };
 use std::env;
@@ -41,6 +41,13 @@ fn embedding_dimensions() -> usize {
     }
 
     768
+}
+
+fn is_live_ai_usage_limit(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Api { status: 403, message } if message.contains("Usage limit reached")
+    )
 }
 
 async fn setup_authenticated_client() -> Result<OpenSecretClient> {
@@ -141,10 +148,14 @@ async fn test_chat_completion_streaming() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI streaming test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut full_response = String::new();
     let mut chunk_count = 0;
@@ -211,10 +222,14 @@ async fn test_reasoning_content_with_kimi_k2() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI reasoning test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut saw_reasoning_content = false;
 
@@ -266,10 +281,14 @@ async fn test_chat_completion_with_system_message() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI system-message test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut full_response = String::new();
     while let Some(result) = stream.next().await {
