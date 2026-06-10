@@ -497,6 +497,7 @@ async fn test_embeddings_from_string_conversion() {
 }
 
 #[tokio::test]
+#[ignore = "Requires live model usage budget for multi-tool streaming"]
 async fn test_streaming_multi_tool_calls() {
     let client = setup_authenticated_client()
         .await

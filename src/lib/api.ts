@@ -43,12 +43,12 @@ type CredentialUpdateResponse = {
 };
 
 function storeAuthTokens(response: CredentialUpdateResponse) {
-  if (!response.access_token || !response.refresh_token) {
-    return;
+  if (response.access_token) {
+    window.localStorage.setItem("access_token", response.access_token);
   }
-
-  window.localStorage.setItem("access_token", response.access_token);
-  window.localStorage.setItem("refresh_token", response.refresh_token);
+  if (response.refresh_token) {
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+  }
 }
 
 export type KVListItem = {

@@ -813,7 +813,7 @@ test("Integration test: Direct API functions for responses", async () => {
   const terminalStatuses = new Set(["completed", "failed", "cancelled"]);
   for (
     let attempt = 0;
-    attempt < 10 && !terminalStatuses.has(retrievedResponse.status);
+    attempt < 34 && !terminalStatuses.has(retrievedResponse.status);
     attempt++
   ) {
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -822,6 +822,7 @@ test("Integration test: Direct API functions for responses", async () => {
 
   expect(retrievedResponse.id).toBe(responseId);
   expect(retrievedResponse.object).toBe("response");
+  expect(terminalStatuses.has(retrievedResponse.status)).toBe(true);
   expect(retrievedResponse.status).toBe("completed");
   expect(Array.isArray(retrievedResponse.output)).toBe(true);
   expect(retrievedResponse.output?.length).toBeGreaterThan(0);

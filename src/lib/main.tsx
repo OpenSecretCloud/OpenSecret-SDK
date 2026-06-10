@@ -89,7 +89,7 @@ export type OpenSecretContextType = {
 
   /**
    * Creates a new long-lived guest account with no email recovery.
-   * @param password - User's chosen password, cannot be changed or recovered without adding email address.
+   * @param password - User's chosen password. It can be changed while authenticated, but it cannot be recovered via email unless an email address is later added to the account.
    * @param inviteCode - Invitation code for registration
    * @returns A promise that resolves to the login response containing the guest ID
    * @throws {Error} If signup fails

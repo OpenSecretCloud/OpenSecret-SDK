@@ -122,6 +122,12 @@ test("Guest change password keeps authenticated token state", async () => {
 
   const newPassword = `newpass${Date.now()}`;
   await changePassword(TEST_PASSWORD!, newPassword);
+  const updatedAccessToken = window.localStorage.getItem("access_token");
+  const updatedRefreshToken = window.localStorage.getItem("refresh_token");
+  // Current servers keep the existing tokens valid. AEAD-hardened servers return
+  // replacement tokens; the SDK must preserve a usable auth state in both cases.
+  expect(updatedAccessToken).toBeTruthy();
+  expect(updatedRefreshToken).toBeTruthy();
 
   const userResponse = await fetchUser();
   expect(userResponse.user.id).toBe(guestSignup.id);
