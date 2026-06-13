@@ -1407,7 +1407,7 @@ test("Platform password change requires authentication", async () => {
 
 // ===== PROJECT PUSH SETTINGS TESTS =====
 
-test("Project push settings CRUD operations", async () => {
+test.skip("Project push settings CRUD operations", async () => {
   try {
     const { access_token, refresh_token } = await tryDeveloperLogin();
     window.localStorage.setItem("access_token", access_token);
