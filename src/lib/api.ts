@@ -36,6 +36,21 @@ type RefreshResponse = {
   refresh_token: string;
 };
 
+type CredentialUpdateResponse = {
+  message: string;
+  access_token?: string;
+  refresh_token?: string;
+};
+
+function storeAuthTokens(response: CredentialUpdateResponse) {
+  if (response.access_token) {
+    window.localStorage.setItem("access_token", response.access_token);
+  }
+  if (response.refresh_token) {
+    window.localStorage.setItem("refresh_token", response.refresh_token);
+  }
+}
+
 export type KVListItem = {
   key: string;
   value: string;
@@ -296,12 +311,13 @@ export async function changePassword(currentPassword: string, newPassword: strin
     current_password: currentPassword,
     new_password: newPassword
   };
-  return authenticatedApiCall<typeof changePasswordData, void>(
+  const response = await authenticatedApiCall<typeof changePasswordData, CredentialUpdateResponse>(
     `${apiUrl}/protected/change_password`,
     "POST",
     changePasswordData,
     "Failed to change password"
   );
+  storeAuthTokens(response);
 }
 
 export async function initiateGitHubAuth(
@@ -892,25 +908,6 @@ export async function fetchPublicKey(
     "GET",
     undefined,
     "Failed to fetch public key"
-  );
-}
-
-export async function convertGuestToEmailAccount(
-  email: string,
-  password: string,
-  name?: string | null
-): Promise<void> {
-  const conversionData = {
-    email,
-    password,
-    ...(name !== undefined && { name })
-  };
-
-  return authenticatedApiCall<typeof conversionData, void>(
-    `${apiUrl}/protected/convert_guest`,
-    "POST",
-    conversionData,
-    "Failed to convert guest account"
   );
 }
 

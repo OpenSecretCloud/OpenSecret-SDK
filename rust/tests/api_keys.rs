@@ -1,4 +1,4 @@
-use opensecret::{OpenSecretClient, Result};
+use opensecret::{Error, OpenSecretClient, Result};
 use std::env;
 use uuid::Uuid;
 
@@ -27,6 +27,19 @@ fn get_test_config() -> (String, String, String, Uuid) {
         .expect("VITE_TEST_CLIENT_ID must be a valid UUID");
 
     (api_url, email, password, client_id)
+}
+
+fn chat_model() -> String {
+    env::var("OPENSECRET_TEST_CHAT_MODEL")
+        .or_else(|_| env::var("VITE_TEST_CHAT_MODEL"))
+        .unwrap_or_else(|_| "llama3-3-70b".to_string())
+}
+
+fn is_live_ai_usage_limit(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Api { status: 403, message } if message.contains("Usage limit reached")
+    )
 }
 
 async fn setup_test_client() -> Result<OpenSecretClient> {
@@ -135,7 +148,7 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
 
     // Test streaming chat completion
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: chat_model(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("Please reply with exactly and only the word 'echo'"),
@@ -150,7 +163,15 @@ async fn test_streaming_chat_with_api_key() -> Result<()> {
         tool_choice: None,
     };
 
-    let mut stream = api_client.create_chat_completion_stream(request).await?;
+    let mut stream = match api_client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping API-key streaming test: live AI usage limit reached");
+            client.delete_api_key(&api_key_name).await?;
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     let mut full_response = String::new();
 
     while let Some(chunk_result) = stream.next().await {

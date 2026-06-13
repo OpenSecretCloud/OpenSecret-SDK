@@ -7,7 +7,7 @@ import {
   fetchLogout,
   refreshToken,
   fetchUser,
-  // convertGuestToEmailAccount,
+  changePassword,
   generateThirdPartyToken,
   encryptData,
   decryptData,
@@ -93,50 +93,6 @@ test("Guest signup and login flow", async () => {
   const userResponse = await fetchUser();
   expect(userResponse.user.id).toBe(guestSignup.id);
   expect(userResponse.user.email).toBeNull();
-
-  /* Commenting out guest conversion tests due to email sending
-  // Generate random email and password for conversion
-  const newEmail = `tony+test${Math.random().toString(36).substring(2)}@opensecret.cloud`;
-  const newPassword = Math.random().toString(36).substring(2);
-
-  // Convert guest to email account
-  await convertGuestToEmailAccount(newEmail, newPassword, undefined, TEST_CLIENT_ID!);
-
-  // Verify converted user data
-  const convertedUserResponse = await fetchUser();
-  expect(convertedUserResponse.user.email).toBe(newEmail);
-  expect(convertedUserResponse.user.email_verified).toBe(false);
-
-  // Try converting to an email address already in use
-  try {
-    await convertGuestToEmailAccount(TEST_EMAIL!, newPassword, undefined, TEST_CLIENT_ID!);
-    throw new Error("Should not be able to convert to existing email");
-  } catch (error: any) {
-    expect(error.message).toBe("Bad Request");
-  }
-
-  // Try converting an already converted account
-  try {
-    await convertGuestToEmailAccount("another@example.com", "newpassword123", undefined, TEST_CLIENT_ID!);
-    throw new Error("Should not be able to convert an already converted account");
-  } catch (error: any) {
-    expect(error.message).toBe("Bad Request");
-  }
-
-  // Try login with new email and password (should succeed)
-  const emailLogin = await fetchLogin(newEmail, newPassword, TEST_CLIENT_ID!);
-  expect(emailLogin.id).toBe(guestSignup.id);
-  expect(emailLogin.email).toBe(newEmail);
-  expect(emailLogin.access_token).toBeDefined();
-
-  // Try guest login with old credentials (should fail)
-  try {
-    await fetchGuestLogin(guestSignup.id, TEST_PASSWORD!, TEST_CLIENT_ID!);
-    throw new Error("Should not be able to login with old guest credentials");
-  } catch (error: any) {
-    expect(error.message).toBe("Invalid email, password, or login method");
-  }
-  */
 });
 
 test("Guest refresh token works", async () => {
@@ -156,6 +112,29 @@ test("Guest refresh token works", async () => {
   const userResponse = await fetchUser();
   expect(userResponse.user.id).toBe(guestSignup.id);
   expect(userResponse.user.email).toBeNull();
+});
+
+test("Guest change password keeps authenticated token state", async () => {
+  const guestSignup = await fetchGuestSignUp(TEST_PASSWORD!, "", TEST_CLIENT_ID!);
+
+  window.localStorage.setItem("access_token", guestSignup.access_token);
+  window.localStorage.setItem("refresh_token", guestSignup.refresh_token);
+
+  const newPassword = `newpass${Date.now()}`;
+  await changePassword(TEST_PASSWORD!, newPassword);
+  const updatedAccessToken = window.localStorage.getItem("access_token");
+  const updatedRefreshToken = window.localStorage.getItem("refresh_token");
+  // Current servers keep the existing tokens valid. AEAD-hardened servers return
+  // replacement tokens; the SDK must preserve a usable auth state in both cases.
+  expect(updatedAccessToken).toBeTruthy();
+  expect(updatedRefreshToken).toBeTruthy();
+
+  const userResponse = await fetchUser();
+  expect(userResponse.user.id).toBe(guestSignup.id);
+  expect(userResponse.user.email).toBeNull();
+
+  const reloginResponse = await fetchGuestLogin(guestSignup.id, newPassword, TEST_CLIENT_ID!);
+  expect(reloginResponse.id).toBe(guestSignup.id);
 });
 
 test("Guest logout doesn't error", async () => {

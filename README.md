@@ -79,7 +79,6 @@ The `useOpenSecret` hook provides access to the OpenSecret API. It returns an ob
 - `signUp(email: string, password: string, inviteCode: string, name?: string): Promise<void>`: Signs up a new user with the provided email, password, invite code, and optional name.
 - `signInGuest(id: string, password: string): Promise<void>`: Signs in a guest user with their ID and password. Guest accounts are scoped to the project specified by `clientId`.
 - `signUpGuest(password: string, inviteCode: string): Promise<LoginResponse>`: Creates a new guest account with just a password and invite code. Returns a response containing the guest's ID, access token, and refresh token. The guest account will be associated with the project specified by `clientId`.
-- `convertGuestToUserAccount(email: string, password: string, name?: string): Promise<void>`: Converts current guest account to a regular account with email authentication. Optionally sets the user's name. The account remains associated with the same project it was created under.
 - `signOut(): Promise<void>`: Signs out the current user.
 
 #### Key-Value Storage Methods
@@ -481,4 +480,3 @@ Common issues:
 ## License
 
 This project is licensed under the MIT License.
-

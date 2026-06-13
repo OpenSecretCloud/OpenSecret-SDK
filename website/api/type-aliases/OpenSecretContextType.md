@@ -262,52 +262,6 @@ This function:
 
 ***
 
-### convertGuestToUserAccount
-
-> **convertGuestToUserAccount**: (`email`, `password`, `name?`) => `Promise`\<`void`\>
-
-Upgrades a guest account to a user account with email and password authentication.
-
-#### Parameters
-
-##### email
-
-`string`
-
-User's email address
-
-##### password
-
-`string`
-
-User's chosen password
-
-##### name?
-
-`string` \| `null`
-
-Optional user's full name
-
-#### Returns
-
-`Promise`\<`void`\>
-
-A promise that resolves when account creation is complete
-
-#### Throws
-
-If:
-- The current user is not a guest account
-- The email address is already in use
-- The user is not authenticated
-
-- Upgrades the currently signed-in guest account (identified by their UUID) to a full email account
-- Requires the user to be currently authenticated as a guest
-- Updates the auth state with new user information
-- Preserves all existing data associated with the guest account
-
-***
-
 ### createApiKey
 
 > **createApiKey**: *typeof* [`createApiKey`](../functions/createApiKey.md)
@@ -1608,7 +1562,7 @@ If signup fails
 
 > **signUpGuest**: (`password`, `inviteCode`) => `Promise`\<[`LoginResponse`](LoginResponse.md)\>
 
-Creates a new guest account, which can be upgraded to a normal account later with email.
+Creates a new long-lived guest account with no email recovery.
 
 #### Parameters
 
@@ -1616,7 +1570,7 @@ Creates a new guest account, which can be upgraded to a normal account later wit
 
 `string`
 
-User's chosen password, cannot be changed or recovered without adding email address.
+User's chosen password. It can be changed while authenticated, but it cannot be recovered via email unless an email address is later added to the account.
 
 ##### inviteCode
 

@@ -1,10 +1,54 @@
 use futures::StreamExt;
 use opensecret::{
-    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Function,
+    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Error, Function,
     OpenSecretClient, Result, Tool,
 };
 use std::env;
 use uuid::Uuid;
+
+fn chat_model() -> String {
+    env::var("OPENSECRET_TEST_CHAT_MODEL")
+        .or_else(|_| env::var("VITE_TEST_CHAT_MODEL"))
+        .unwrap_or_else(|_| "llama3-3-70b".to_string())
+}
+
+fn reasoning_model() -> String {
+    env::var("OPENSECRET_TEST_REASONING_MODEL")
+        .or_else(|_| env::var("VITE_TEST_REASONING_MODEL"))
+        .unwrap_or_else(|_| "kimi-k2-5".to_string())
+}
+
+fn embedding_model() -> String {
+    env::var("OPENSECRET_TEST_EMBEDDING_MODEL")
+        .or_else(|_| env::var("VITE_TEST_EMBEDDING_MODEL"))
+        .unwrap_or_else(|_| "nomic-embed-text".to_string())
+}
+
+fn embedding_dimensions() -> usize {
+    for name in [
+        "OPENSECRET_TEST_EMBEDDING_DIMENSIONS",
+        "VITE_TEST_EMBEDDING_DIMENSIONS",
+    ] {
+        match env::var(name) {
+            Ok(value) => {
+                return value
+                    .parse::<usize>()
+                    .unwrap_or_else(|err| panic!("failed to parse {name}: {err}"));
+            }
+            Err(env::VarError::NotPresent) => {}
+            Err(err) => panic!("failed to read {name}: {err}"),
+        }
+    }
+
+    768
+}
+
+fn is_live_ai_usage_limit(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Api { status: 403, message } if message.contains("Usage limit reached")
+    )
+}
 
 async fn setup_authenticated_client() -> Result<OpenSecretClient> {
     // Load .env.local from OpenSecret-SDK directory
@@ -89,7 +133,7 @@ async fn test_chat_completion_streaming() {
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: chat_model(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!(r#"please reply with exactly and only the word "echo""#),
@@ -104,10 +148,14 @@ async fn test_chat_completion_streaming() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI streaming test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut full_response = String::new();
     let mut chunk_count = 0;
@@ -159,7 +207,7 @@ async fn test_reasoning_content_with_kimi_k2() {
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "kimi-k2-5".to_string(),
+        model: reasoning_model(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("What is 2+2?"),
@@ -174,10 +222,14 @@ async fn test_reasoning_content_with_kimi_k2() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI reasoning test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut saw_reasoning_content = false;
 
@@ -193,7 +245,7 @@ async fn test_reasoning_content_with_kimi_k2() {
 
     assert!(
         saw_reasoning_content,
-        "kimi-k2-5 model should return reasoning_content in the response"
+        "reasoning model should return reasoning_content in the response"
     );
 }
 
@@ -204,7 +256,7 @@ async fn test_chat_completion_with_system_message() {
         .expect("Failed to setup client");
 
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: chat_model(),
         messages: vec![
             ChatMessage {
                 role: "system".to_string(),
@@ -229,10 +281,14 @@ async fn test_chat_completion_with_system_message() {
         tool_choice: None,
     };
 
-    let mut stream = client
-        .create_chat_completion_stream(request)
-        .await
-        .expect("Failed to create streaming completion");
+    let mut stream = match client.create_chat_completion_stream(request).await {
+        Ok(stream) => stream,
+        Err(error) if is_live_ai_usage_limit(&error) => {
+            eprintln!("Skipping live AI system-message test: usage limit reached");
+            return;
+        }
+        Err(error) => panic!("Failed to create streaming completion: {error:?}"),
+    };
 
     let mut full_response = String::new();
     while let Some(result) = stream.next().await {
@@ -352,7 +408,7 @@ async fn test_create_embeddings_single_input() {
 
     let request = EmbeddingRequest {
         input: EmbeddingInput::Single("Hello, world!".to_string()),
-        model: "nomic-embed-text".to_string(),
+        model: embedding_model(),
         encoding_format: None,
         dimensions: None,
         user: None,
@@ -369,11 +425,11 @@ async fn test_create_embeddings_single_input() {
     assert_eq!(response.data[0].object, "embedding");
     assert_eq!(response.data[0].index, 0);
 
-    // nomic-embed-text has 768 dimensions
+    let expected_dimensions = embedding_dimensions();
     assert_eq!(
         response.data[0].embedding.len(),
-        768,
-        "Expected 768 dimensions for nomic-embed-text"
+        expected_dimensions,
+        "Unexpected embedding dimensions"
     );
 
     // Verify usage
@@ -399,7 +455,7 @@ async fn test_create_embeddings_multiple_inputs() {
             "Second text to embed".to_string(),
             "Third text to embed".to_string(),
         ]),
-        model: "nomic-embed-text".to_string(),
+        model: embedding_model(),
         encoding_format: None,
         dimensions: None,
         user: None,
@@ -420,8 +476,8 @@ async fn test_create_embeddings_multiple_inputs() {
         assert_eq!(embedding_data.index as usize, i);
         assert_eq!(
             embedding_data.embedding.len(),
-            768,
-            "Each embedding should have 768 dimensions"
+            embedding_dimensions(),
+            "Unexpected embedding dimensions"
         );
     }
 
@@ -444,7 +500,7 @@ async fn test_embeddings_from_string_conversion() {
     // Test the From<&str> conversion
     let request = EmbeddingRequest {
         input: "Test string conversion".into(),
-        model: "nomic-embed-text".to_string(),
+        model: embedding_model(),
         encoding_format: None,
         dimensions: None,
         user: None,
@@ -456,10 +512,11 @@ async fn test_embeddings_from_string_conversion() {
         .expect("Failed to create embeddings");
 
     assert_eq!(response.data.len(), 1);
-    assert_eq!(response.data[0].embedding.len(), 768);
+    assert_eq!(response.data[0].embedding.len(), embedding_dimensions());
 }
 
 #[tokio::test]
+#[ignore = "Requires live model usage budget for multi-tool streaming"]
 async fn test_streaming_multi_tool_calls() {
     let client = setup_authenticated_client()
         .await
@@ -497,7 +554,7 @@ async fn test_streaming_multi_tool_calls() {
     ];
 
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: chat_model(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("What is the weather in NYC and what time is it there?"),

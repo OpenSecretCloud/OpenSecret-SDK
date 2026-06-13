@@ -55,6 +55,14 @@ pub struct RefreshResponse {
     pub refresh_token: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialUpdateResponse {
+    #[serde(default)]
+    pub message: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+}
+
 // Auth Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginCredentials {
@@ -475,13 +483,6 @@ pub struct PasswordResetConfirmRequest {
     pub plaintext_secret: String,
     pub new_password: String,
     pub client_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConvertGuestToEmailRequest {
-    pub email: String,
-    pub password: String,
-    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1131,5 +1132,15 @@ mod tests {
                 "project_id": null
             })
         );
+    }
+
+    #[test]
+    fn credential_update_response_tolerates_missing_message() {
+        let response: CredentialUpdateResponse =
+            serde_json::from_value(json!({ "access_token": "new-access" })).unwrap();
+
+        assert_eq!(response.message, "");
+        assert_eq!(response.access_token.as_deref(), Some("new-access"));
+        assert_eq!(response.refresh_token, None);
     }
 }

@@ -2,12 +2,32 @@ use opensecret::{OpenSecretClient, Result};
 use std::env;
 use uuid::Uuid;
 
+fn load_test_env() {
+    let env_path = std::path::Path::new("../.env.local");
+    if env_path.exists() {
+        dotenv::from_path(env_path).ok();
+    } else {
+        dotenv::dotenv().ok();
+    }
+}
+
 async fn setup_client() -> Result<OpenSecretClient> {
+    load_test_env();
+
     let base_url = env::var("VITE_OPEN_SECRET_API_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
     let client = OpenSecretClient::new(base_url)?;
     client.perform_attestation_handshake().await?;
     Ok(client)
+}
+
+fn test_client_id() -> Uuid {
+    load_test_env();
+
+    env::var("VITE_TEST_CLIENT_ID")
+        .ok()
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .expect("VITE_TEST_CLIENT_ID must be set in .env.local or .env")
 }
 
 #[tokio::test]
@@ -21,7 +41,6 @@ async fn test_account_management_apis_exist() {
     // - client.change_password(current_password, new_password)
     // - client.request_password_reset(email, hashed_secret, client_id)
     // - client.confirm_password_reset(email, code, secret, new_password, client_id)
-    // - client.convert_guest_to_email(email, password, name)
     // - client.verify_email(code)
     // - client.request_new_verification_code()
     // - client.request_account_deletion(hashed_secret)
@@ -31,18 +50,34 @@ async fn test_account_management_apis_exist() {
 }
 
 #[tokio::test]
-#[ignore = "Destructive operation - would change account password permanently"]
-async fn test_change_password() {
-    // This test is skipped because:
-    // 1. It would permanently change the test account's password
-    // 2. Future test runs would fail with the old password
-    // 3. There's no way to reliably reset it without the password reset flow
+async fn test_guest_change_password_keeps_authenticated_token_state() -> Result<()> {
+    let client_id = test_client_id();
+    let client = setup_client().await?;
+    let original_password = "test_guest_change_password_123";
+    let new_password = format!(
+        "new_guest_password_{}",
+        chrono::Utc::now().timestamp_millis()
+    );
 
-    // If this test were to run, it would:
-    // 1. Login with current credentials
-    // 2. Call change_password with old and new passwords
-    // 3. Verify the response is successful
-    // 4. Attempt to login with the new password to confirm
+    let guest_response = client
+        .register_guest(original_password.to_string(), client_id)
+        .await?;
+
+    client
+        .change_password(original_password.to_string(), new_password.clone())
+        .await?;
+
+    let user_response = client.get_user().await?;
+    assert_eq!(user_response.user.id, guest_response.id);
+    assert!(user_response.user.email.is_none());
+
+    let relogin_client = setup_client().await?;
+    let relogin_response = relogin_client
+        .login_with_id(guest_response.id, new_password, client_id)
+        .await?;
+    assert_eq!(relogin_response.id, guest_response.id);
+
+    Ok(())
 }
 
 #[tokio::test]
@@ -58,21 +93,6 @@ async fn test_password_reset_flow() {
     // 2. Manually retrieve the code from email (not possible in automated test)
     // 3. Call confirm_password_reset with the code
     // 4. Verify login works with new password
-}
-
-#[tokio::test]
-#[ignore = "One-time operation - can only convert guest account once"]
-async fn test_convert_guest_to_email() {
-    // This test is skipped because:
-    // 1. A guest account can only be converted once
-    // 2. After conversion, it's no longer a guest account
-    // 3. This would permanently alter the test account state
-
-    // If this test were to run, it would:
-    // 1. Create a new guest account
-    // 2. Login as guest
-    // 3. Call convert_guest_to_email
-    // 4. Verify the account now has an email
 }
 
 #[tokio::test]

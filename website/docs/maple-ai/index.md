@@ -69,7 +69,7 @@ async function chat(apiKey: string, message: string) {
   });
 
   const stream = await openai.chat.completions.create({
-    model: "llama3-3-70b",
+    model: "gpt-oss-120b",
     messages: [{ role: "user", content: message }],
     stream: true
   });
@@ -120,11 +120,11 @@ console.log(models.data.map(m => m.id));
 | Model | Best For | Price (per M tokens) |
 |-------|----------|----------------------|
 | `gpt-oss-120b` | Quick responses, creative writing | $1.50 input / $2.50 output |
-| `kimi-k2-5` | Reasoning, coding, image analysis | $3 input / $10.50 output |
-| `deepseek-r1-0528` | Deep reasoning, research, math | $3 input / $10.50 output |
+| `kimi-k2-6` | Reasoning, coding, image analysis | $3 input / $10.50 output |
+| `deepseek-v4-pro` | Deep reasoning, research, math | $3 input / $10.50 output |
 | `llama3-3-70b` | General reasoning, daily tasks | $3.50 input / $5.50 output |
 | `qwen3-vl-30b` | Image analysis, vision tasks | $2.50 input / $8 output |
-| `gemma-3-27b` | Fast image analysis | $10 input / $10 output |
+| `gemma4-31b` | Fast image analysis | $10 input / $10 output |
 
 For detailed model capabilities and example prompts, see the [Maple Model Guide](https://blog.trymaple.ai/maple-ai-model-guide-with-example-prompts/).
 
@@ -171,7 +171,7 @@ export function MapleChat({ apiKey }: MapleChatProps) {
       });
 
       const stream = await openai.chat.completions.create({
-        model: "llama3-3-70b",
+        model: "gpt-oss-120b",
         messages: [...messages, userMessage],
         stream: true
       });
@@ -239,7 +239,7 @@ async function completion(apiKey: string, prompt: string) {
       "Accept": "text/event-stream"
     },
     body: JSON.stringify({
-      model: "llama3-3-70b",
+      model: "gpt-oss-120b",
       messages: [{ role: "user", content: prompt }],
       stream: true
     })
@@ -276,7 +276,7 @@ Handle common error cases:
 ```typescript
 try {
   const stream = await openai.chat.completions.create({
-    model: "llama3-3-70b",
+    model: "gpt-oss-120b",
     messages: [{ role: "user", content: "Hello" }],
     stream: true
   });
@@ -332,7 +332,7 @@ async fn main() -> Result<()> {
     
     // Create streaming chat completion
     let request = ChatCompletionRequest {
-        model: "llama3-3-70b".to_string(),
+        model: "gpt-oss-120b".to_string(),
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: serde_json::json!("Hello, world!"),
