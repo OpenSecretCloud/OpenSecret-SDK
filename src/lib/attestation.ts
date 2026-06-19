@@ -246,6 +246,17 @@ const FakeAttestationDocumentSchema = z.object({
 
 type FakeAttestationDocument = z.infer<typeof FakeAttestationDocumentSchema>;
 
+const LOCAL_DEVELOPMENT_API_HOSTS = new Set(["127.0.0.1", "localhost", "0.0.0.0", "[::1]"]);
+
+export function isLocalDevelopmentApiUrl(apiUrl: string): boolean {
+  try {
+    const url = new URL(apiUrl);
+    return url.protocol === "http:" && LOCAL_DEVELOPMENT_API_HOSTS.has(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 async function fakeAuthenticate(
   attestationDocumentBase64: string
 ): Promise<FakeAttestationDocument> {
@@ -269,12 +280,7 @@ export async function verifyAttestation(
     const apiUrl = explicitApiUrl || getApiUrl();
 
     // With a local backend we get a fake attestation document, so we'll just pretend to authenticate it
-    if (
-      apiUrl &&
-      (apiUrl === "http://127.0.0.1:3000" ||
-        apiUrl === "http://localhost:3000" ||
-        apiUrl === "http://0.0.0.0:3000")
-    ) {
+    if (apiUrl && isLocalDevelopmentApiUrl(apiUrl)) {
       console.log("DEV MODE: Using fake attestation document");
       const fakeDocument = await fakeAuthenticate(attestationDocumentBase64);
       return fakeDocument as AttestationDocument;

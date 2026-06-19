@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { createSigStructure, parseDocumentData, parseDocumentPayload } from "../../attestation";
+import {
+  createSigStructure,
+  isLocalDevelopmentApiUrl,
+  parseDocumentData,
+  parseDocumentPayload
+} from "../../attestation";
 import { encode } from "@stablelib/base64";
 
 const HARDCODED_TEST_ATTESTATION_DOCUMENT =
@@ -26,4 +31,31 @@ test("Makes CoseSign1 bytes correctly", async () => {
   const hash = await crypto.subtle.digest("SHA-384", coseSign1);
 
   expect(encode(new Uint8Array(hash))).toBe(EXPECTED_SIGNATURE_STRUCTURE_DIGEST);
+});
+
+test("Recognizes local development API URLs independent of port", () => {
+  const localApiUrls = [
+    "http://127.0.0.1:31110",
+    "http://localhost:31110/",
+    "http://0.0.0.0:31110",
+    "http://[::1]:31110"
+  ];
+
+  for (const apiUrl of localApiUrls) {
+    expect(isLocalDevelopmentApiUrl(apiUrl)).toBe(true);
+  }
+});
+
+test("Does not recognize production or invalid API URLs as local development URLs", () => {
+  const nonLocalApiUrls = [
+    "https://api.opensecret.cloud",
+    "https://localhost:31110",
+    "http://api.opensecret.cloud",
+    "localhost:31110",
+    "not a url"
+  ];
+
+  for (const apiUrl of nonLocalApiUrls) {
+    expect(isLocalDevelopmentApiUrl(apiUrl)).toBe(false);
+  }
 });
