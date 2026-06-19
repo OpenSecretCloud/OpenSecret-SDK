@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use opensecret::{
-    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, Error, Function,
-    OpenSecretClient, Result, Tool,
+    ChatCompletionRequest, ChatMessage, EmbeddingInput, EmbeddingRequest, EmbeddingValues, Error,
+    Function, OpenSecretClient, Result, Tool,
 };
 use std::env;
 use uuid::Uuid;
@@ -426,19 +426,17 @@ async fn test_create_embeddings_single_input() {
     assert_eq!(response.data[0].index, 0);
 
     let expected_dimensions = embedding_dimensions();
-    assert_eq!(
-        response.data[0].embedding.len(),
-        expected_dimensions,
-        "Unexpected embedding dimensions"
-    );
+    match &response.data[0].embedding {
+        EmbeddingValues::Floats(v) => assert_eq!(v.len(), expected_dimensions, "Unexpected embedding dimensions"),
+        EmbeddingValues::Base64(_) => panic!("Expected float embeddings, got base64"),
+    }
 
     // Verify usage
     assert!(response.usage.prompt_tokens > 0);
     assert!(response.usage.total_tokens > 0);
 
     println!(
-        "Embedding created with {} dimensions, {} tokens used",
-        response.data[0].embedding.len(),
+        "Embedding created with dimensions from response, {} tokens used",
         response.usage.total_tokens
     );
 }
@@ -474,11 +472,10 @@ async fn test_create_embeddings_multiple_inputs() {
     for (i, embedding_data) in response.data.iter().enumerate() {
         assert_eq!(embedding_data.object, "embedding");
         assert_eq!(embedding_data.index as usize, i);
-        assert_eq!(
-            embedding_data.embedding.len(),
-            embedding_dimensions(),
-            "Unexpected embedding dimensions"
-        );
+        match &embedding_data.embedding {
+            EmbeddingValues::Floats(v) => assert_eq!(v.len(), embedding_dimensions(), "Unexpected embedding dimensions"),
+            EmbeddingValues::Base64(_) => panic!("Expected float embeddings, got base64"),
+        }
     }
 
     // Verify usage accounts for all inputs
@@ -512,7 +509,10 @@ async fn test_embeddings_from_string_conversion() {
         .expect("Failed to create embeddings");
 
     assert_eq!(response.data.len(), 1);
-    assert_eq!(response.data[0].embedding.len(), embedding_dimensions());
+    match &response.data[0].embedding {
+        EmbeddingValues::Floats(v) => assert_eq!(v.len(), embedding_dimensions()),
+        EmbeddingValues::Base64(_) => panic!("Expected float embeddings, got base64"),
+    }
 }
 
 #[tokio::test]

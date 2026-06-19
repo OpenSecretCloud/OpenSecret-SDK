@@ -854,10 +854,17 @@ pub struct EmbeddingResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum EmbeddingValues {
+    Floats(Vec<f64>),
+    Base64(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingData {
     pub object: String,
     pub index: i32,
-    pub embedding: Vec<f64>,
+    pub embedding: EmbeddingValues,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1142,5 +1149,77 @@ mod tests {
         assert_eq!(response.message, "");
         assert_eq!(response.access_token.as_deref(), Some("new-access"));
         assert_eq!(response.refresh_token, None);
+    }
+
+    #[test]
+    fn embedding_values_deserializes_float_array() {
+        let data: EmbeddingData = serde_json::from_value(json!({
+            "object": "embedding",
+            "index": 0,
+            "embedding": [0.1, 0.2, 0.3]
+        }))
+        .unwrap();
+
+        assert_eq!(data.object, "embedding");
+        assert_eq!(data.index, 0);
+        match &data.embedding {
+            EmbeddingValues::Floats(v) => assert_eq!(v, &[0.1, 0.2, 0.3]),
+            EmbeddingValues::Base64(_) => panic!("Expected Floats variant"),
+        }
+    }
+
+    #[test]
+    fn embedding_values_deserializes_base64_string() {
+        let data: EmbeddingData = serde_json::from_value(json!({
+            "object": "embedding",
+            "index": 0,
+            "embedding": "AQIDBA=="
+        }))
+        .unwrap();
+
+        assert_eq!(data.object, "embedding");
+        assert_eq!(data.index, 0);
+        match &data.embedding {
+            EmbeddingValues::Base64(s) => assert_eq!(s, "AQIDBA=="),
+            EmbeddingValues::Floats(_) => panic!("Expected Base64 variant"),
+        }
+    }
+
+    #[test]
+    fn embedding_response_deserializes_with_floats() {
+        let response: EmbeddingResponse = serde_json::from_value(json!({
+            "object": "list",
+            "data": [{
+                "object": "embedding",
+                "index": 0,
+                "embedding": [0.1, 0.2, 0.3]
+            }],
+            "model": "nomic-embed-text",
+            "usage": { "prompt_tokens": 5, "total_tokens": 5 }
+        }))
+        .unwrap();
+
+        assert_eq!(response.object, "list");
+        assert_eq!(response.data.len(), 1);
+        assert!(matches!(response.data[0].embedding, EmbeddingValues::Floats(_)));
+    }
+
+    #[test]
+    fn embedding_response_deserializes_with_base64() {
+        let response: EmbeddingResponse = serde_json::from_value(json!({
+            "object": "list",
+            "data": [{
+                "object": "embedding",
+                "index": 0,
+                "embedding": "AQIDBA=="
+            }],
+            "model": "nomic-embed-text",
+            "usage": { "prompt_tokens": 5, "total_tokens": 5 }
+        }))
+        .unwrap();
+
+        assert_eq!(response.object, "list");
+        assert_eq!(response.data.len(), 1);
+        assert!(matches!(response.data[0].embedding, EmbeddingValues::Base64(_)));
     }
 }
