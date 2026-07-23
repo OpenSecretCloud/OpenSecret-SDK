@@ -102,15 +102,26 @@ jobs:
         with:
           workspaces: rust -> target
 
-      - name: Run tests
+      - name: Detect a signed development release
+        id: trusted-release-policy
         working-directory: rust
         run: |
-          if jq -e '.releases | length > 0' assets/trusted_enclave_releases.generated.json >/dev/null; then
-            cargo test --all-features
+          if jq -e 'any(.releases[]; .manifest.environment == "dev")' \
+            assets/trusted_enclave_releases.generated.json >/dev/null; then
+            echo "dev_releases_available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Trusted-release snapshot is empty; running library unit tests only."
-            cargo test --all-features --lib
+            echo "dev_releases_available=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Run library unit tests before the first signed development release
+        if: steps.trusted-release-policy.outputs.dev_releases_available != 'true'
+        working-directory: rust
+        run: cargo test --all-features --lib
+
+      - name: Run live tests
+        if: steps.trusted-release-policy.outputs.dev_releases_available == 'true'
+        working-directory: rust
+        run: cargo test --all-features
         env:
           VITE_OPEN_SECRET_API_URL: ${{ secrets.VITE_OPEN_SECRET_API_URL }}
           VITE_OPEN_SECRET_PCR_ENVIRONMENT: development
