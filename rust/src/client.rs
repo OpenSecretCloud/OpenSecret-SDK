@@ -3,8 +3,8 @@ use crate::{
     cbor::{self, Value as CborValue},
     crypto::{self},
     error::{Error, Result},
-    pcr::{Pcr0Environment, Pcr0TrustPolicy},
     session::SessionManager,
+    trusted_release::{AttestationEnvironment, TrustedReleasePolicy},
     types::*,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -48,7 +48,7 @@ pub struct OpenSecretClient {
     session_manager: SessionManager,
     refresh_lock: Mutex<()>,
     use_mock_attestation: bool,
-    pcr0_trust_policy: Pcr0TrustPolicy,
+    trusted_release_policy: TrustedReleasePolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -423,27 +423,66 @@ fn uses_mock_attestation(base_url: &str) -> Result<bool> {
     Ok(is_mock_host)
 }
 
+fn official_attestation_environment(base_url: &str) -> Result<Option<AttestationEnvironment>> {
+    let parsed = reqwest::Url::parse(base_url)
+        .map_err(|error| Error::Configuration(format!("Invalid base URL: {error}")))?;
+    Ok(match parsed.origin().ascii_serialization().as_str() {
+        "https://api.opensecret.cloud"
+        | "https://developer.opensecret.cloud"
+        | "https://enclave.trymaple.ai" => Some(AttestationEnvironment::Production),
+        "https://enclave.secretgpt.ai" => Some(AttestationEnvironment::Development),
+        _ => None,
+    })
+}
+
+fn default_attestation_environment(base_url: &str) -> Result<AttestationEnvironment> {
+    if let Some(environment) = official_attestation_environment(base_url)? {
+        return Ok(environment);
+    }
+    if uses_mock_attestation(base_url)? {
+        // The mock path is feature-gated and bypasses this policy, but client
+        // construction still needs a well-formed embedded policy value.
+        return Ok(AttestationEnvironment::Production);
+    }
+    Err(Error::Configuration(
+        "No default attestation environment is defined for this origin; use an explicit trusted-release policy"
+            .to_string(),
+    ))
+}
+
+fn validate_official_origin_environment(
+    base_url: &str,
+    policy: &TrustedReleasePolicy,
+) -> Result<()> {
+    if let Some(expected) = official_attestation_environment(base_url)? {
+        if policy.environment() != expected.as_str() {
+            return Err(Error::Configuration(format!(
+                "Attestation environment '{}' is not allowed for this official origin; expected '{}'",
+                policy.environment(),
+                expected.as_str()
+            )));
+        }
+    }
+    Ok(())
+}
+
 impl OpenSecretClient {
-    /// Construct a client using the official production PCR0 trust roots.
+    /// Construct a client using the embedded trusted-release snapshot selected
+    /// by the exact official origin.
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
-        Self::new_with_pcr0_environment(base_url, Pcr0Environment::default())
+        let base_url = base_url.into();
+        let environment = default_attestation_environment(&base_url)?;
+        Self::new_with_attestation_policy(base_url, TrustedReleasePolicy::embedded(environment)?)
     }
 
-    /// Construct a client using one explicit official PCR0 environment.
-    pub fn new_with_pcr0_environment(
+    /// Construct a client with an explicit offline trusted-release policy.
+    pub fn new_with_attestation_policy(
         base_url: impl Into<String>,
-        pcr0_environment: Pcr0Environment,
-    ) -> Result<Self> {
-        Self::new_with_pcr0_trust_policy(base_url, Pcr0TrustPolicy::official_for(pcr0_environment))
-    }
-
-    /// Construct a client with an explicit PCR0 trust policy.
-    pub fn new_with_pcr0_trust_policy(
-        base_url: impl Into<String>,
-        pcr0_trust_policy: Pcr0TrustPolicy,
+        trusted_release_policy: TrustedReleasePolicy,
     ) -> Result<Self> {
         let base_url = base_url.into();
         let use_mock = uses_mock_attestation(&base_url)?;
+        validate_official_origin_environment(&base_url, &trusted_release_policy)?;
 
         Ok(Self {
             client: Client::new(),
@@ -451,36 +490,31 @@ impl OpenSecretClient {
             session_manager: SessionManager::new(),
             refresh_lock: Mutex::new(()),
             use_mock_attestation: use_mock,
-            pcr0_trust_policy,
+            trusted_release_policy,
         })
     }
 
-    /// Construct an API-key client using the official production PCR0 trust roots.
+    /// Construct an API-key client using the embedded trusted-release snapshot
+    /// selected by the exact official origin.
     pub fn new_with_api_key(base_url: impl Into<String>, api_key: String) -> Result<Self> {
-        Self::new_with_api_key_and_pcr0_environment(base_url, api_key, Pcr0Environment::default())
-    }
-
-    /// Construct an API-key client using one explicit official PCR0 environment.
-    pub fn new_with_api_key_and_pcr0_environment(
-        base_url: impl Into<String>,
-        api_key: String,
-        pcr0_environment: Pcr0Environment,
-    ) -> Result<Self> {
-        Self::new_with_api_key_and_pcr0_trust_policy(
+        let base_url = base_url.into();
+        let environment = default_attestation_environment(&base_url)?;
+        Self::new_with_api_key_and_attestation_policy(
             base_url,
             api_key,
-            Pcr0TrustPolicy::official_for(pcr0_environment),
+            TrustedReleasePolicy::embedded(environment)?,
         )
     }
 
-    /// Construct an API-key client with an explicit PCR0 trust policy.
-    pub fn new_with_api_key_and_pcr0_trust_policy(
+    /// Construct an API-key client with an explicit offline trusted-release policy.
+    pub fn new_with_api_key_and_attestation_policy(
         base_url: impl Into<String>,
         api_key: String,
-        pcr0_trust_policy: Pcr0TrustPolicy,
+        trusted_release_policy: TrustedReleasePolicy,
     ) -> Result<Self> {
         let base_url = base_url.into();
         let use_mock = uses_mock_attestation(&base_url)?;
+        validate_official_origin_environment(&base_url, &trusted_release_policy)?;
 
         Ok(Self {
             client: Client::new(),
@@ -488,7 +522,7 @@ impl OpenSecretClient {
             session_manager: SessionManager::new_with_api_key(api_key),
             refresh_lock: Mutex::new(()),
             use_mock_attestation: use_mock,
-            pcr0_trust_policy,
+            trusted_release_policy,
         })
     }
 
@@ -523,17 +557,14 @@ impl OpenSecretClient {
 
     /// Establish a session from a Nitro-authenticated document.
     ///
-    /// Keeping PCR0 enforcement in the same path as key exchange makes the
+    /// Keeping full trusted-release enforcement in the same path as key exchange makes the
     /// fail-before-key-exchange ordering explicit and independently testable.
     async fn establish_session_from_verified_attestation(
         &self,
         nonce: &str,
         doc: AttestationDocument,
     ) -> Result<()> {
-        let pcr0 = doc.pcrs.get(&0).ok_or_else(|| {
-            Error::AttestationVerificationFailed("Missing PCR0 in attestation document".to_string())
-        })?;
-        self.pcr0_trust_policy.verify_pcr0(pcr0).await?;
+        self.trusted_release_policy.verify_attestation(&doc)?;
         self.establish_session_from_document(nonce, doc).await
     }
 
