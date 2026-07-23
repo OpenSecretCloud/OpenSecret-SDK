@@ -104,7 +104,13 @@ jobs:
 
       - name: Run tests
         working-directory: rust
-        run: cargo test --all-features
+        run: |
+          if jq -e '.releases | length > 0' assets/trusted_enclave_releases.generated.json >/dev/null; then
+            cargo test --all-features
+          else
+            echo "Trusted-release snapshot is empty; running library unit tests only."
+            cargo test --all-features --lib
+          fi
         env:
           VITE_OPEN_SECRET_API_URL: ${{ secrets.VITE_OPEN_SECRET_API_URL }}
           VITE_OPEN_SECRET_PCR_ENVIRONMENT: development
