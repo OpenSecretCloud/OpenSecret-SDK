@@ -113,8 +113,22 @@ export {
   getSubagentItem
 } from "./api";
 
-// Export AI customization options
-export { createCustomFetch, type CustomFetchOptions } from "./ai";
+// Export AI customization options and speech synthesis
+export {
+  VOXTRAL_TTS_VOICES,
+  createCustomFetch,
+  synthesizeSpeech,
+  type CustomFetchOptions,
+  type SpeechSynthesisOptions,
+  type SpeechSynthesisJsonValue,
+  type SpeechSynthesisReference,
+  type SpeechSynthesisRequest,
+  type SpeechSynthesisResponseFormat,
+  type SpeechSynthesisStreamFormat,
+  type SpeechSynthesisTaskType,
+  type SpeechSynthesisVoice,
+  type VoxtralTtsVoice
+} from "./ai";
 
 // Re-export Model type from OpenAI for convenience
 export type { Model } from "openai/resources/models.js";

@@ -40,6 +40,12 @@ struct EncryptedBody {
     encrypted: String,
 }
 
+#[derive(Deserialize)]
+struct SpeechSynthesisCarrier {
+    content_base64: String,
+    content_type: String,
+}
+
 const MAX_INFERENCE_SSE_LINE_BYTES: usize = 16 * 1024 * 1024;
 
 pub struct OpenSecretClient {
@@ -2076,6 +2082,105 @@ impl OpenSecretClient {
             .await
     }
 
+    /// Synthesizes speech with OpenSecret's OpenAI-compatible audio endpoint.
+    ///
+    /// The SDK forwards every field supplied by the caller without selecting
+    /// provider defaults. Binary carriers are decoded into their original bytes;
+    /// successful JSON provider responses are returned as JSON bytes for the
+    /// caller to interpret. This typed helper collects the complete response body
+    /// before returning, including when provider streaming fields are requested.
+    pub async fn synthesize_speech(
+        &self,
+        request: SpeechSynthesisRequest,
+    ) -> Result<SpeechSynthesisResponse> {
+        let request = HttpRequest::builder()
+            .method(http::Method::POST)
+            .uri("/v1/audio/speech")
+            .body(Bytes::from(serde_json::to_vec(&request)?))
+            .map_err(|error| {
+                Error::Configuration(format!("Failed to build speech synthesis request: {error}"))
+            })?;
+        let response = self.send_inference_request(request).await?;
+        let status = response.status();
+        let response_content_type = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let body = collect_response_body(response.into_body()).await?;
+
+        if !status.is_success() {
+            return Err(Error::Api {
+                status: status.as_u16(),
+                message: String::from_utf8_lossy(&body).into_owned(),
+            });
+        }
+
+        let response_json: serde_json::Value = serde_json::from_slice(&body).map_err(|error| {
+            Error::InvalidResponse(format!(
+                "Speech synthesis response was neither a valid response carrier nor JSON: {error}"
+            ))
+        })?;
+        let is_carrier = response_json.as_object().is_some_and(|object| {
+            object.contains_key("content_base64") && object.contains_key("content_type")
+        });
+        if !is_carrier {
+            return Ok(SpeechSynthesisResponse {
+                body: SpeechSynthesisResponseBody::Json(body),
+                content_type: response_content_type
+                    .unwrap_or_else(|| "application/json".to_string()),
+            });
+        }
+
+        let carrier: SpeechSynthesisCarrier =
+            serde_json::from_value(response_json).map_err(|error| {
+                Error::InvalidResponse(format!(
+                    "Speech synthesis response was not a valid response carrier: {error}"
+                ))
+            })?;
+        let content_type = carrier.content_type.trim().to_string();
+        let media_type = content_type
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        let is_valid_media_type = media_type.split_once('/').is_some_and(|(top, subtype)| {
+            !top.is_empty()
+                && !subtype.is_empty()
+                && !top
+                    .chars()
+                    .chain(subtype.chars())
+                    .any(|character| character.is_whitespace() || matches!(character, '/' | ';'))
+        });
+        if !is_valid_media_type {
+            return Err(Error::InvalidResponse(
+                "Speech synthesis response did not contain a valid content type".to_string(),
+            ));
+        }
+        let is_json = media_type == "application/json" || media_type.ends_with("+json");
+        let payload = BASE64.decode(carrier.content_base64).map_err(|error| {
+            Error::InvalidResponse(format!(
+                "Speech synthesis response contained invalid base64 data: {error}"
+            ))
+        })?;
+        if !is_json && payload.is_empty() {
+            return Err(Error::InvalidResponse(
+                "Speech synthesis response contained an empty binary body".to_string(),
+            ));
+        }
+
+        let body = if is_json {
+            SpeechSynthesisResponseBody::Json(Bytes::from(payload))
+        } else {
+            SpeechSynthesisResponseBody::Binary(Bytes::from(payload))
+        };
+
+        Ok(SpeechSynthesisResponse { body, content_type })
+    }
+
     /// Creates embeddings for the given input text(s)
     ///
     /// # Example
@@ -3596,6 +3701,375 @@ mod tests {
             Some("2 + 2 = 4")
         );
         assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_decodes_voxtral_wav_bytes_and_content_type() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [49u8; 32];
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+
+        let wav_bytes = Bytes::from_static(
+            b"RIFF\xff\x00\x80\x7f\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00",
+        );
+        let carrier = json!({
+            "content_base64": BASE64.encode(wav_bytes.as_ref()),
+            "content_type": "audio/wav"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .and(header("authorization", "Bearer speech_api_key"))
+            .and(header("x-session-id", session_id.to_string()))
+            .and(header("content-type", "application/json"))
+            .and(EncryptedJsonBodyMatcher {
+                session_key,
+                expected: json!({
+                    "input": "The assistant can speak this response.",
+                    "model": "voxtral-tts",
+                    "voice": "neutral_female"
+                }),
+            })
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &carrier)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let mut request = SpeechSynthesisRequest::new("The assistant can speak this response.");
+        request.model = NullableField::value("voxtral-tts".to_string());
+        request.voice = NullableField::value("neutral_female".to_string());
+        let response = client.synthesize_speech(request).await.unwrap();
+
+        assert_eq!(
+            response.body,
+            SpeechSynthesisResponseBody::Binary(wav_bytes)
+        );
+        assert_eq!(response.content_type, "audio/wav");
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_preserves_successful_json_provider_error() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_key = [54u8; 32];
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), session_key)
+            .unwrap();
+
+        let provider_error = json!({
+            "error": {
+                "message": "Unknown voice",
+                "type": "BadRequestError"
+            }
+        });
+        let expected = Bytes::from(serde_json::to_vec(&provider_error).unwrap());
+        let carrier = json!({
+            "content_base64": BASE64.encode(expected.as_ref()),
+            "content_type": "application/json"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &carrier)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Invalid voice"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.body, SpeechSynthesisResponseBody::Json(expected));
+        assert_eq!(response.content_type, "application/json");
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_decodes_json_response_carrier_without_reformatting() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_key = [55u8; 32];
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), session_key)
+            .unwrap();
+
+        let provider_error = Bytes::from_static(
+            br#"{ "error": { "message": "Unknown voice" }, "request_id": "tts-7" }"#,
+        );
+        let carrier = json!({
+            "content_base64": BASE64.encode(provider_error.as_ref()),
+            "content_type": "application/problem+json; charset=utf-8"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &carrier)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Invalid voice"))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.body,
+            SpeechSynthesisResponseBody::Json(provider_error)
+        );
+        assert_eq!(
+            response.content_type,
+            "application/problem+json; charset=utf-8"
+        );
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_accepts_binary_content_type_fallback() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_key = [56u8; 32];
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), session_key)
+            .unwrap();
+
+        let binary = Bytes::from_static(b"provider-binary-audio");
+        let carrier = json!({
+            "content_base64": BASE64.encode(binary.as_ref()),
+            "content_type": "application/octet-stream"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &carrier)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Binary fallback"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.body, SpeechSynthesisResponseBody::Binary(binary));
+        assert_eq!(response.content_type, "application/octet-stream");
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_preserves_json_with_one_carrier_named_field() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_key = [50u8; 32];
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), session_key)
+            .unwrap();
+
+        let provider_error = json!({
+            "error": { "message": "Provider metadata collision" },
+            "content_base64": "this field alone is not a carrier"
+        });
+        let expected = Bytes::from(serde_json::to_vec(&provider_error).unwrap());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &provider_error)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Provider JSON"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.body, SpeechSynthesisResponseBody::Json(expected));
+        assert_eq!(response.content_type, "application/json");
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_rejects_invalid_base64_audio() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        let session_key = [51u8; 32];
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), session_key)
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "content_base64": "%%%not-base64%%%",
+                    "content_type": "audio/wav"
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let error = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Invalid base64"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::InvalidResponse(message) if message.contains("invalid base64 data")
+        ));
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_rejects_empty_binary_and_malformed_content_type() {
+        for (carrier, expected_message) in [
+            (
+                json!({
+                    "content_base64": "",
+                    "content_type": "audio/wav"
+                }),
+                "empty binary body",
+            ),
+            (
+                json!({
+                    "content_base64": "UklGRg==",
+                    "content_type": ""
+                }),
+                "valid content type",
+            ),
+            (
+                json!({
+                    "content_base64": "UklGRg==",
+                    "content_type": "audio/"
+                }),
+                "valid content type",
+            ),
+            (
+                json!({
+                    "content_base64": "UklGRg==",
+                    "content_type": "audio//"
+                }),
+                "valid content type",
+            ),
+            (
+                json!({
+                    "content_base64": "UklGRg==",
+                    "content_type": "audio/wav extra"
+                }),
+                "valid content type",
+            ),
+            (
+                json!({
+                    "content_base64": "UklGRg==",
+                    "content_type": "audio/wav/extra"
+                }),
+                "valid content type",
+            ),
+        ] {
+            let mock_server = MockServer::start().await;
+            let client =
+                OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                    .unwrap();
+            let session_key = [52u8; 32];
+            client
+                .session_manager
+                .set_session(Uuid::new_v4(), session_key)
+                .unwrap();
+
+            Mock::given(method("POST"))
+                .and(path("/v1/audio/speech"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(encrypted_response(&session_key, &carrier)),
+                )
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let error = client
+                .synthesize_speech(SpeechSynthesisRequest::new("Invalid audio carrier"))
+                .await
+                .unwrap_err();
+
+            assert!(
+                matches!(error, Error::InvalidResponse(message) if message.contains(expected_message))
+            );
+            mock_server.verify().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn synthesize_speech_preserves_non_success_api_error() {
+        let mock_server = MockServer::start().await;
+        let client =
+            OpenSecretClient::new_with_api_key(mock_server.uri(), "speech_api_key".to_string())
+                .unwrap();
+        client
+            .session_manager
+            .set_session(Uuid::new_v4(), [53u8; 32])
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/speech"))
+            .respond_with(
+                ResponseTemplate::new(422).set_body_string("voxtral request was rejected"),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let error = client
+            .synthesize_speech(SpeechSynthesisRequest::new("Rejected request"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Api { status: 422, message }
+                if message == "voxtral request was rejected"
+        ));
+        mock_server.verify().await;
     }
 
     #[tokio::test]

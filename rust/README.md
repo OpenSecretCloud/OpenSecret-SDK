@@ -109,6 +109,42 @@ it cannot be used to bypass JWT-only account or conversation APIs. The existing
 typed model, embedding, and chat-completion helpers remain available as
 compatibility wrappers over the same transport.
 
+### Speech synthesis
+
+The typed speech helper forwards only the parameters selected by the caller.
+It returns decoded audio bytes and their MIME type, while preserving successful
+JSON provider errors as a distinct response-body variant. It buffers the full
+response even when provider streaming request fields are forwarded:
+
+```rust
+use opensecret::{
+    NullableField, SpeechSynthesisRequest, SpeechSynthesisResponseFormat,
+    SpeechSynthesisResponseBody,
+};
+
+let mut request = SpeechSynthesisRequest::new(
+    "Your audio never leaves the enclave.",
+);
+request.model = NullableField::value("voxtral-tts".to_string());
+request.voice = NullableField::value("neutral_female".to_string());
+request.response_format = Some(SpeechSynthesisResponseFormat::Wav);
+request.speed = NullableField::value(1.2);
+
+let response = client
+    .synthesize_speech(request)
+    .await?;
+
+assert_eq!(response.content_type, "audio/wav");
+match response.body {
+    SpeechSynthesisResponseBody::Binary(audio) => {
+        std::fs::write("speech.wav", audio.as_ref())?;
+    }
+    SpeechSynthesisResponseBody::Json(error) => {
+        eprintln!("Provider error: {}", String::from_utf8_lossy(&error));
+    }
+}
+```
+
 The SDK manages transport credentials and framing. Caller-provided `Host`,
 `Authorization`, `x-session-id`, `Content-Length`, `Content-Type`,
 `Content-Encoding`, `Accept-Encoding`, `Content-MD5`, `Digest`, hop-by-hop, and

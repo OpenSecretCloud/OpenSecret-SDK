@@ -683,6 +683,231 @@ pub struct ConversationProjectListParams {
 }
 
 // AI/OpenAI API Types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SpeechSynthesisResponseFormat {
+    Wav,
+    Pcm,
+    Flac,
+    Mp3,
+    Aac,
+    Opus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SpeechSynthesisStreamFormat {
+    Sse,
+    Audio,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpeechSynthesisTaskType {
+    CustomVoice,
+    VoiceDesign,
+    Base,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SpeechReferenceAudio {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SpeechSpeakerEmbedding {
+    Single(Vec<f64>),
+    Multiple(Vec<Vec<f64>>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeechReference {
+    pub audio_path: String,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub text: NullableField<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("additional speech parameter conflicts with typed field: {parameter}")]
+pub struct SpeechAdditionalParameterError {
+    pub parameter: String,
+}
+
+const SPEECH_SYNTHESIS_TYPED_PARAMETERS: [&str; 26] = [
+    "input",
+    "model",
+    "voice",
+    "speaker",
+    "instructions",
+    "response_format",
+    "speed",
+    "stream_format",
+    "stream",
+    "task_type",
+    "language",
+    "ref_audio",
+    "ref_text",
+    "ref_audio_2",
+    "ambient_sound",
+    "duration_seconds",
+    "x_vector_only_mode",
+    "speaker_embedding",
+    "max_new_tokens",
+    "seed",
+    "initial_codec_chunk_frames",
+    "non_streaming_mode",
+    "extra_params",
+    "word_timestamps",
+    "references",
+    "additional_parameters",
+];
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeechSynthesisRequest {
+    pub input: String,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub model: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub voice: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub speaker: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub instructions: NullableField<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<SpeechSynthesisResponseFormat>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub speed: NullableField<f64>,
+    /// Provider streaming format. The typed speech helper still buffers the
+    /// complete response before returning it.
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub stream_format: NullableField<SpeechSynthesisStreamFormat>,
+    /// Provider streaming switch. This is forwarded unchanged, while the typed
+    /// speech helper remains a buffered response API.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub task_type: NullableField<SpeechSynthesisTaskType>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub language: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub ref_audio: NullableField<SpeechReferenceAudio>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub ref_text: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub ref_audio_2: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub ambient_sound: NullableField<String>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub duration_seconds: NullableField<f64>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub x_vector_only_mode: NullableField<bool>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub speaker_embedding: NullableField<SpeechSpeakerEmbedding>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub max_new_tokens: NullableField<i64>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub seed: NullableField<u64>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub initial_codec_chunk_frames: NullableField<u64>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub non_streaming_mode: NullableField<bool>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub extra_params: NullableField<serde_json::Map<String, Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub word_timestamps: Option<bool>,
+    #[serde(default, skip_serializing_if = "NullableField::is_missing")]
+    pub references: NullableField<Vec<SpeechReference>>,
+    /// Provider fields not yet modeled by this SDK version.
+    ///
+    /// Values are flattened into the request body. Use [`Value::Null`] to
+    /// explicitly send JSON `null`; absent entries are omitted.
+    #[serde(default, flatten)]
+    additional_parameters: serde_json::Map<String, Value>,
+}
+
+impl SpeechSynthesisRequest {
+    /// Creates a speech request without selecting any provider defaults.
+    pub fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+            model: NullableField::Missing,
+            voice: NullableField::Missing,
+            speaker: NullableField::Missing,
+            instructions: NullableField::Missing,
+            response_format: None,
+            speed: NullableField::Missing,
+            stream_format: NullableField::Missing,
+            stream: None,
+            task_type: NullableField::Missing,
+            language: NullableField::Missing,
+            ref_audio: NullableField::Missing,
+            ref_text: NullableField::Missing,
+            ref_audio_2: NullableField::Missing,
+            ambient_sound: NullableField::Missing,
+            duration_seconds: NullableField::Missing,
+            x_vector_only_mode: NullableField::Missing,
+            speaker_embedding: NullableField::Missing,
+            max_new_tokens: NullableField::Missing,
+            seed: NullableField::Missing,
+            initial_codec_chunk_frames: NullableField::Missing,
+            non_streaming_mode: NullableField::Missing,
+            extra_params: NullableField::Missing,
+            word_timestamps: None,
+            references: NullableField::Missing,
+            additional_parameters: serde_json::Map::new(),
+        }
+    }
+
+    /// Returns forward-compatible provider parameters not modeled by this SDK.
+    pub fn additional_parameters(&self) -> &serde_json::Map<String, Value> {
+        &self.additional_parameters
+    }
+
+    /// Adds a forward-compatible provider parameter to the flattened request.
+    ///
+    /// Typed field names are rejected to prevent duplicate JSON keys. Set those
+    /// fields directly instead.
+    pub fn insert_additional_parameter(
+        &mut self,
+        parameter: impl Into<String>,
+        value: Value,
+    ) -> std::result::Result<Option<Value>, SpeechAdditionalParameterError> {
+        let parameter = parameter.into();
+        if SPEECH_SYNTHESIS_TYPED_PARAMETERS.contains(&parameter.as_str()) {
+            return Err(SpeechAdditionalParameterError { parameter });
+        }
+        Ok(self.additional_parameters.insert(parameter, value))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpeechSynthesisResponseBody {
+    Binary(bytes::Bytes),
+    Json(bytes::Bytes),
+}
+
+impl SpeechSynthesisResponseBody {
+    pub fn as_bytes(&self) -> &bytes::Bytes {
+        match self {
+            Self::Binary(bytes) | Self::Json(bytes) => bytes,
+        }
+    }
+
+    pub fn into_bytes(self) -> bytes::Bytes {
+        match self {
+            Self::Binary(bytes) | Self::Json(bytes) => bytes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpeechSynthesisResponse {
+    pub body: SpeechSynthesisResponseBody,
+    pub content_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
     pub id: String,
@@ -1264,6 +1489,168 @@ pub enum AgentSseEvent {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn speech_synthesis_request_has_no_sdk_defaults() {
+        let request = SpeechSynthesisRequest::new("The assistant can speak this response.");
+
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            json!({
+                "input": "The assistant can speak this response."
+            })
+        );
+
+        let deserialized: SpeechSynthesisRequest =
+            serde_json::from_value(json!({ "input": "No defaults." })).unwrap();
+        assert_eq!(deserialized, SpeechSynthesisRequest::new("No defaults."));
+    }
+
+    #[test]
+    fn speech_synthesis_request_preserves_explicit_nulls() {
+        let mut request = SpeechSynthesisRequest::new("Preserve nulls.");
+        request.model = NullableField::null();
+        request.voice = NullableField::null();
+        request.speed = NullableField::null();
+        request.ref_audio = NullableField::null();
+        request.extra_params = NullableField::null();
+        request.references = NullableField::value(vec![SpeechReference {
+            audio_path: "https://example.com/reference.wav".to_string(),
+            text: NullableField::null(),
+        }]);
+
+        let serialized = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            serialized,
+            json!({
+                "input": "Preserve nulls.",
+                "model": null,
+                "voice": null,
+                "speed": null,
+                "ref_audio": null,
+                "extra_params": null,
+                "references": [{
+                    "audio_path": "https://example.com/reference.wav",
+                    "text": null
+                }]
+            })
+        );
+
+        let round_tripped: SpeechSynthesisRequest = serde_json::from_value(serialized).unwrap();
+        assert_eq!(round_tripped, request);
+    }
+
+    #[test]
+    fn speech_synthesis_request_serializes_current_and_future_provider_parameters() {
+        let mut request = SpeechSynthesisRequest::new("Create configurable speech.");
+        request.model = NullableField::value("voxtral-tts".to_string());
+        request.voice = NullableField::value("neutral_female".to_string());
+        request.speaker = NullableField::value("speaker-alias".to_string());
+        request.instructions = NullableField::value("Sound cheerful".to_string());
+        request.response_format = Some(SpeechSynthesisResponseFormat::Flac);
+        request.speed = NullableField::value(1.2);
+        request.stream_format = NullableField::value(SpeechSynthesisStreamFormat::Audio);
+        request.stream = Some(false);
+        request.task_type = NullableField::value(SpeechSynthesisTaskType::CustomVoice);
+        request.language = NullableField::value("Auto".to_string());
+        request.ref_audio = NullableField::value(SpeechReferenceAudio::Multiple(vec![
+            "data:audio/wav;base64,AAAA".to_string(),
+            "https://example.com/reference.wav".to_string(),
+        ]));
+        request.ref_text = NullableField::value("Reference transcript".to_string());
+        request.ref_audio_2 = NullableField::value("https://example.com/second.wav".to_string());
+        request.ambient_sound = NullableField::value("ocean waves".to_string());
+        request.duration_seconds = NullableField::value(4.5);
+        request.x_vector_only_mode = NullableField::value(true);
+        request.speaker_embedding = NullableField::value(SpeechSpeakerEmbedding::Multiple(vec![
+            vec![0.1, 0.2],
+            vec![0.3, 0.4],
+        ]));
+        request.max_new_tokens = NullableField::value(2048);
+        request.seed = NullableField::value(42);
+        request.initial_codec_chunk_frames = NullableField::value(8);
+        request.non_streaming_mode = NullableField::value(true);
+        request.extra_params = NullableField::value(serde_json::Map::from_iter([(
+            "cfg_alpha".to_string(),
+            json!(0.7),
+        )]));
+        request.word_timestamps = Some(true);
+        request.references = NullableField::value(vec![SpeechReference {
+            audio_path: "https://example.com/voice.wav".to_string(),
+            text: NullableField::value("Hello".to_string()),
+        }]);
+        request
+            .insert_additional_parameter("future_control", Value::Null)
+            .unwrap();
+
+        let serialized = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            serialized,
+            json!({
+                "input": "Create configurable speech.",
+                "model": "voxtral-tts",
+                "voice": "neutral_female",
+                "speaker": "speaker-alias",
+                "instructions": "Sound cheerful",
+                "response_format": "flac",
+                "speed": 1.2,
+                "stream_format": "audio",
+                "stream": false,
+                "task_type": "CustomVoice",
+                "language": "Auto",
+                "ref_audio": [
+                    "data:audio/wav;base64,AAAA",
+                    "https://example.com/reference.wav"
+                ],
+                "ref_text": "Reference transcript",
+                "ref_audio_2": "https://example.com/second.wav",
+                "ambient_sound": "ocean waves",
+                "duration_seconds": 4.5,
+                "x_vector_only_mode": true,
+                "speaker_embedding": [[0.1, 0.2], [0.3, 0.4]],
+                "max_new_tokens": 2048,
+                "seed": 42,
+                "initial_codec_chunk_frames": 8,
+                "non_streaming_mode": true,
+                "extra_params": { "cfg_alpha": 0.7 },
+                "word_timestamps": true,
+                "references": [{
+                    "audio_path": "https://example.com/voice.wav",
+                    "text": "Hello"
+                }],
+                "future_control": null
+            })
+        );
+
+        let round_tripped: SpeechSynthesisRequest = serde_json::from_value(serialized).unwrap();
+        assert_eq!(round_tripped, request);
+    }
+
+    #[test]
+    fn speech_synthesis_additional_parameters_reject_typed_field_collisions() {
+        let mut request = SpeechSynthesisRequest::new("No duplicate keys.");
+
+        let error = request
+            .insert_additional_parameter("speed", json!(1.5))
+            .unwrap_err();
+        assert_eq!(error.parameter, "speed");
+        assert!(request.additional_parameters().is_empty());
+
+        request
+            .insert_additional_parameter("future_nullable_control", Value::Null)
+            .unwrap();
+        assert_eq!(
+            request.additional_parameters()["future_nullable_control"],
+            Value::Null
+        );
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            json!({
+                "input": "No duplicate keys.",
+                "future_nullable_control": null
+            })
+        );
+    }
 
     #[test]
     fn nullable_field_request_serialization_distinguishes_missing_and_null() {

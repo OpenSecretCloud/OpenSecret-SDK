@@ -336,6 +336,26 @@ You can now use the OpenAI client as normal. (Right now only streaming responses
 
 For an alternative approach using custom fetch directly, see the implementation in `src/lib/ai.test.ts` in the SDK source code.
 
+For non-streaming text-to-speech, the context provides a typed speech helper.
+Request fields are forwarded without SDK defaults, binary and HTTP-200 provider
+error bodies are returned as a standard `Response`, and an `AbortSignal` can
+cancel the request. The current speech proxy buffers the complete response;
+streaming request fields are forwarded but do not make this helper incremental:
+
+```typescript
+const controller = new AbortController();
+const response = await os.synthesizeSpeech(
+  {
+    input: "Read this response aloud.",
+    model: "voxtral-tts",
+    voice: "neutral_female",
+    speed: 1.2
+  },
+  { signal: controller.signal }
+);
+const audio = await response.arrayBuffer();
+```
+
 ### Library development
 
 This library uses [Bun](https://bun.sh/) for development.
