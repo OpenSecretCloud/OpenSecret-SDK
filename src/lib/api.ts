@@ -232,10 +232,11 @@ export async function requestNewVerificationCode(): Promise<void> {
 
 export async function fetchAttestationDocument(
   nonce: string,
-  explicitApiUrl?: string
+  explicitApiUrl?: string,
+  signal?: AbortSignal
 ): Promise<string> {
   const url = explicitApiUrl || apiUrl;
-  const response = await fetch(`${url}/attestation/${nonce}`);
+  const response = await fetch(`${url}/attestation/${nonce}`, { signal });
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
@@ -246,7 +247,8 @@ export async function fetchAttestationDocument(
 export async function keyExchange(
   clientPublicKey: string,
   nonce: string,
-  explicitApiUrl?: string
+  explicitApiUrl?: string,
+  signal?: AbortSignal
 ): Promise<{ encrypted_session_key: string; session_id: string }> {
   const url = explicitApiUrl || apiUrl;
   const response = await fetch(`${url}/key_exchange`, {
@@ -254,7 +256,8 @@ export async function keyExchange(
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ client_public_key: clientPublicKey, nonce })
+    body: JSON.stringify({ client_public_key: clientPublicKey, nonce }),
+    signal
   });
 
   if (!response.ok) {

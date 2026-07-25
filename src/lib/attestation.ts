@@ -270,10 +270,11 @@ async function fakeAuthenticate(
 
 export async function verifyAttestation(
   nonce: string,
-  explicitApiUrl?: string
+  explicitApiUrl?: string,
+  signal?: AbortSignal
 ): Promise<AttestationDocument> {
   try {
-    const attestationDocumentBase64 = await fetchAttestationDocument(nonce, explicitApiUrl);
+    const attestationDocumentBase64 = await fetchAttestationDocument(nonce, explicitApiUrl, signal);
 
     // Get the API URL from the API layer where it's already set
     // First check explicit URL, then check both possible APIs
@@ -290,6 +291,15 @@ export async function verifyAttestation(
     const verifiedDocument = await authenticate(attestationDocumentBase64, awsRootCertDer, nonce);
     return verifiedDocument;
   } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      error.name === "AbortError"
+    ) {
+      throw error;
+    }
+
     if (error instanceof Error) {
       console.error("Error verifying attestation document:", error);
       throw new Error(`Couldn't process attestation document: ${error.message}`);

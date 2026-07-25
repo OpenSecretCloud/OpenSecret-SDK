@@ -7,6 +7,82 @@ export interface CustomFetchOptions {
   apiUrl?: string; // Optional API URL for attestation (required when not using OpenSecretProvider)
 }
 
+export const VOXTRAL_TTS_VOICES = [
+  "neutral_female",
+  "neutral_male",
+  "casual_female",
+  "casual_male",
+  "cheerful_female",
+  "ar_male",
+  "de_female",
+  "de_male",
+  "es_female",
+  "es_male",
+  "fr_female",
+  "fr_male",
+  "hi_female",
+  "hi_male",
+  "it_female",
+  "it_male",
+  "nl_female",
+  "nl_male",
+  "pt_female",
+  "pt_male"
+] as const;
+
+export type VoxtralTtsVoice = (typeof VOXTRAL_TTS_VOICES)[number];
+export type SpeechSynthesisVoice = VoxtralTtsVoice;
+
+export type SpeechSynthesisRequest = {
+  input: string;
+  model?: "voxtral-tts";
+  voice?: SpeechSynthesisVoice;
+};
+
+export interface SpeechSynthesisOptions extends CustomFetchOptions {
+  signal?: AbortSignal;
+}
+
+type AudioResponseCarrier = {
+  content_base64: string;
+  content_type: string;
+};
+
+const DEFAULT_SPEECH_MODEL = "voxtral-tts";
+const DEFAULT_SPEECH_VOICE: SpeechSynthesisVoice = "neutral_female";
+
+export async function synthesizeSpeech(
+  request: SpeechSynthesisRequest,
+  options?: SpeechSynthesisOptions
+): Promise<Response> {
+  const requestApiUrl = options?.apiUrl || api.getApiUrl();
+  if (!requestApiUrl) {
+    throw new Error(
+      "No API URL configured. Pass apiUrl or call synthesizeSpeech within OpenSecretProvider."
+    );
+  }
+
+  const apiUrl = requestApiUrl.replace(/\/+$/, "");
+  const customFetch = createCustomFetch({
+    apiKey: options?.apiKey,
+    apiUrl
+  });
+
+  return customFetch(`${apiUrl}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      Accept: "audio/wav",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      input: request.input,
+      model: request.model ?? DEFAULT_SPEECH_MODEL,
+      voice: request.voice ?? DEFAULT_SPEECH_VOICE
+    }),
+    signal: options?.signal
+  });
+}
+
 export function createCustomFetch(
   options?: CustomFetchOptions
 ): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
@@ -29,7 +105,11 @@ export function createCustomFetch(
       const headers = new Headers(init?.headers);
       headers.set("Authorization", getAuthHeader());
 
-      const { sessionKey, sessionId } = await getAttestation(false, options?.apiUrl);
+      const { sessionKey, sessionId } = await getAttestation(
+        false,
+        options?.apiUrl,
+        init?.signal ?? undefined
+      );
       if (!sessionKey || !sessionId) {
         throw new Error("No session key or ID available");
       }
@@ -132,63 +212,39 @@ export function createCustomFetch(
 
       // Decrypt regular JSON responses
       const responseText = await response.text();
+      let responseData: unknown;
       try {
-        const responseData = JSON.parse(responseText);
+        responseData = JSON.parse(responseText);
+      } catch {
+        // If it's not JSON or doesn't have encrypted field, return original response
+        console.log("Response is not encrypted JSON, returning as-is");
+      }
 
-        // Check if the response has an encrypted field
-        if (responseData.encrypted) {
-          const decrypted = decryptMessage(sessionKey, responseData.encrypted);
+      if (isRecord(responseData) && typeof responseData.encrypted === "string") {
+        const decrypted = decryptMessage(sessionKey, responseData.encrypted);
+        const audioCarrier = parseAudioResponseCarrier(decrypted);
 
-          // Try to parse as JSON to check for TTS response format
-          try {
-            const decryptedData = JSON.parse(decrypted);
+        if (audioCarrier) {
+          const bytes = decodeAudioResponseCarrier(audioCarrier);
+          const headersOut = new Headers(response.headers);
+          headersOut.set("content-type", audioCarrier.content_type);
+          // These describe the encrypted carrier rather than the decoded audio.
+          headersOut.delete("content-encoding");
+          headersOut.delete("content-length");
+          headersOut.delete("transfer-encoding");
 
-            // Check if this is a TTS response with content_base64 and content_type
-            if (decryptedData.content_base64 && decryptedData.content_type) {
-              console.log("TTS response detected with content_type:", decryptedData.content_type);
-
-              // Decode base64 audio data to binary
-              let bytes: Uint8Array;
-              try {
-                const binaryString = atob(decryptedData.content_base64);
-                bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-              } catch (e) {
-                console.error("Failed to decode base64 audio data:", e);
-                throw new Error("Invalid base64 audio data in TTS response");
-              }
-
-              console.log("Decoded audio bytes length:", bytes.length);
-
-              // Return as a binary response with the proper content type
-              const headersOut = new Headers(response.headers);
-              headersOut.set("content-type", decryptedData.content_type);
-              // Remove headers that are no longer valid for the decoded response
-              headersOut.delete("content-encoding");
-              headersOut.delete("content-length");
-              headersOut.delete("transfer-encoding");
-
-              return new Response(bytes, {
-                headers: headersOut,
-                status: response.status,
-                statusText: response.statusText
-              });
-            }
-          } catch {
-            // Not JSON, continue with regular text response
-          }
-          // Return a new Response with the decrypted data
-          return new Response(decrypted, {
-            headers: response.headers,
+          return new Response(bytes, {
+            headers: headersOut,
             status: response.status,
             statusText: response.statusText
           });
         }
-      } catch {
-        // If it's not JSON or doesn't have encrypted field, return original response
-        console.log("Response is not encrypted JSON, returning as-is");
+
+        return new Response(decrypted, {
+          headers: response.headers,
+          status: response.status,
+          statusText: response.statusText
+        });
       }
 
       // Return the original response text as a new Response
@@ -202,6 +258,68 @@ export function createCustomFetch(
       throw error;
     }
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseAudioResponseCarrier(decrypted: string): AudioResponseCarrier | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(decrypted);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const hasContent = Object.prototype.hasOwnProperty.call(value, "content_base64");
+  const hasContentType = Object.prototype.hasOwnProperty.call(value, "content_type");
+  if (!hasContent && !hasContentType) {
+    return null;
+  }
+
+  if (typeof value.content_base64 !== "string" || value.content_base64.length === 0) {
+    throw new Error("Invalid audio response carrier");
+  }
+
+  if (typeof value.content_type !== "string") {
+    throw new Error("Invalid audio response carrier");
+  }
+
+  const contentType = value.content_type.trim();
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (!/^audio\/[^\s/;]+$/.test(mediaType)) {
+    throw new Error("Invalid audio response carrier");
+  }
+
+  return {
+    content_base64: value.content_base64,
+    content_type: contentType
+  };
+}
+
+function decodeAudioResponseCarrier(carrier: AudioResponseCarrier): Uint8Array {
+  let binaryString: string;
+  try {
+    binaryString = atob(carrier.content_base64);
+  } catch (error) {
+    console.error("Failed to decode base64 audio data:", error);
+    throw new Error("Invalid base64 audio data in response");
+  }
+
+  if (binaryString.length === 0) {
+    throw new Error("Audio response carrier contained no audio data");
+  }
+
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 function extractEvent(buffer: string): string | null {

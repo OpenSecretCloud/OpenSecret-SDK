@@ -1,6 +1,11 @@
 import React, { createContext, useState, useEffect } from "react";
 import * as api from "./api";
-import { createCustomFetch } from "./ai";
+import {
+  createCustomFetch,
+  synthesizeSpeech as synthesizeSpeechRequest,
+  type SpeechSynthesisOptions,
+  type SpeechSynthesisRequest
+} from "./ai";
 import { getAttestation } from "./getAttestation";
 import type { Model } from "openai/resources/models.js";
 import { authenticate } from "./attestation";
@@ -342,6 +347,17 @@ export type OpenSecretContextType = {
    * ```
    */
   aiCustomFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+  /**
+   * Synthesizes WAV speech with Tinfoil's Voxtral TTS model.
+   *
+   * The provider supplies the configured OpenSecret URL and current API key.
+   * Pass an AbortSignal to cancel an in-flight synthesis request.
+   */
+  synthesizeSpeech: (
+    request: SpeechSynthesisRequest,
+    options?: Pick<SpeechSynthesisOptions, "signal">
+  ) => Promise<Response>;
 
   /**
    * Returns the current OpenSecret enclave API URL being used
@@ -939,6 +955,7 @@ export const OpenSecretContext = createContext<OpenSecretContextType>({
   getPublicKey: api.fetchPublicKey,
   signMessage: api.signMessage,
   aiCustomFetch: async () => new Response(),
+  synthesizeSpeech: async () => new Response(),
   apiUrl: "",
   pcrConfig: {},
   getAttestation,
@@ -1361,6 +1378,12 @@ export function OpenSecretProvider({
     getPublicKey: api.fetchPublicKey,
     signMessage: api.signMessage,
     aiCustomFetch: aiCustomFetch || (async () => new Response()),
+    synthesizeSpeech: (request, options) =>
+      synthesizeSpeechRequest(request, {
+        apiUrl,
+        apiKey,
+        signal: options?.signal
+      }),
     apiUrl,
     pcrConfig,
     getAttestation,

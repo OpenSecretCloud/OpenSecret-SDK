@@ -683,6 +683,40 @@ pub struct ConversationProjectListParams {
 }
 
 // AI/OpenAI API Types
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeechSynthesisRequest {
+    pub input: String,
+    #[serde(default = "default_speech_synthesis_model")]
+    pub model: String,
+    #[serde(default = "default_speech_synthesis_voice")]
+    pub voice: String,
+}
+
+impl SpeechSynthesisRequest {
+    /// Creates a Voxtral TTS request with the default neutral female voice.
+    pub fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+            model: default_speech_synthesis_model(),
+            voice: default_speech_synthesis_voice(),
+        }
+    }
+}
+
+fn default_speech_synthesis_model() -> String {
+    "voxtral-tts".to_string()
+}
+
+fn default_speech_synthesis_voice() -> String {
+    "neutral_female".to_string()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpeechSynthesisResponse {
+    pub audio: bytes::Bytes,
+    pub content_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
     pub id: String,
@@ -1264,6 +1298,27 @@ pub enum AgentSseEvent {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn speech_synthesis_request_defaults_to_exact_voxtral_contract() {
+        let request = SpeechSynthesisRequest::new("The assistant can speak this response.");
+
+        assert_eq!(request.model, "voxtral-tts");
+        assert_eq!(request.voice, "neutral_female");
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            json!({
+                "input": "The assistant can speak this response.",
+                "model": "voxtral-tts",
+                "voice": "neutral_female"
+            })
+        );
+
+        let deserialized: SpeechSynthesisRequest =
+            serde_json::from_value(json!({ "input": "Use the defaults." })).unwrap();
+        assert_eq!(deserialized.model, "voxtral-tts");
+        assert_eq!(deserialized.voice, "neutral_female");
+    }
 
     #[test]
     fn nullable_field_request_serialization_distinguishes_missing_and_null() {

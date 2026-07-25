@@ -109,6 +109,24 @@ it cannot be used to bypass JWT-only account or conversation APIs. The existing
 typed model, embedding, and chat-completion helpers remain available as
 compatibility wrappers over the same transport.
 
+### Speech synthesis
+
+The typed speech helper defaults to the `voxtral-tts` model and its
+`neutral_female` voice, then returns decoded audio bytes and their MIME type:
+
+```rust
+use opensecret::SpeechSynthesisRequest;
+
+let response = client
+    .synthesize_speech(SpeechSynthesisRequest::new(
+        "Your audio never leaves the enclave.",
+    ))
+    .await?;
+
+assert_eq!(response.content_type, "audio/wav");
+std::fs::write("speech.wav", response.audio.as_ref())?;
+```
+
 The SDK manages transport credentials and framing. Caller-provided `Host`,
 `Authorization`, `x-session-id`, `Content-Length`, `Content-Type`,
 `Content-Encoding`, `Accept-Encoding`, `Content-MD5`, `Digest`, hop-by-hop, and

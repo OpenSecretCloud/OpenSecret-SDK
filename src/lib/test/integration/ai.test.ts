@@ -7,7 +7,7 @@ import {
   batchDeleteConversations,
   listConversations
 } from "../../api";
-import { createCustomFetch } from "../../ai";
+import { createCustomFetch, synthesizeSpeech } from "../../ai";
 import OpenAI from "openai";
 
 const TEST_EMAIL = process.env.VITE_TEST_EMAIL;
@@ -15,7 +15,6 @@ const TEST_PASSWORD = process.env.VITE_TEST_PASSWORD;
 const TEST_CLIENT_ID = process.env.VITE_TEST_CLIENT_ID;
 const API_URL = process.env.VITE_OPEN_SECRET_API_URL;
 const CHAT_MODEL = process.env.VITE_TEST_CHAT_MODEL ?? "llama3-3-70b";
-const TTS_MODEL = process.env.VITE_TEST_TTS_MODEL ?? "qwen3-tts";
 
 if (!TEST_EMAIL || !TEST_PASSWORD || !TEST_CLIENT_ID || !API_URL) {
   throw new Error("Test credentials must be set in .env.local");
@@ -198,53 +197,27 @@ liveAiTest("streams chat completion", async () => {
   expect(response?.trim()).toBe("echo");
 });
 
-test.skip("text-to-speech with configured TTS model", async () => {
+test.skip("Voxtral text-to-speech returns WAV audio", async () => {
   await setupTestUser();
 
-  const client = new OpenAI({
-    baseURL: `${API_URL}/v1/`,
-    dangerouslyAllowBrowser: true,
-    apiKey: "api-key-doesnt-matter",
-    defaultHeaders: {
-      "Accept-Encoding": "identity"
-    },
-    fetch: createCustomFetch()
-  });
-
   const textToSpeak = "Hello, this is a test of the text-to-speech system.";
-
-  const response = await client.audio.speech.create({
-    model: TTS_MODEL,
-    voice: "af_sky" as any,
-    input: textToSpeak,
-    response_format: "mp3"
-  });
+  const response = await synthesizeSpeech(
+    {
+      input: textToSpeak,
+      model: "voxtral-tts",
+      voice: "neutral_female"
+    },
+    { apiUrl: API_URL }
+  );
 
   const buffer = Buffer.from(await response.arrayBuffer());
 
-  // Verify we got back audio data
-  expect(buffer.length).toBeGreaterThan(0);
+  expect(response.headers.get("content-type")).toContain("audio/wav");
+  expect(buffer.length).toBeGreaterThan(44);
+  expect(buffer.subarray(0, 4).toString("ascii")).toBe("RIFF");
+  expect(buffer.subarray(8, 12).toString("ascii")).toBe("WAVE");
 
   console.log(`TTS response size: ${buffer.length} bytes`);
-
-  // Log the first 20 bytes to understand the format
-  const first20Bytes = buffer.slice(0, 20).toString("hex");
-  console.log(`First 20 bytes (hex): ${first20Bytes}`);
-
-  // Also log as string to see if it's JSON or text
-  const first100Chars = buffer.slice(0, 100).toString("utf-8");
-  console.log(`First 100 chars (string): ${first100Chars}`);
-
-  // MP3 files typically start with an ID3 tag or FF FB/FF FA (MPEG audio sync)
-  const firstBytes = buffer.slice(0, 3).toString("hex");
-  const isID3 = firstBytes === "494433"; // "ID3" in hex
-  const isMPEGSync = firstBytes.startsWith("fff") || firstBytes.startsWith("ffe");
-
-  // For now, just verify we got data back
-  // The format check might need adjustment based on what the server returns
-  if (!isID3 && !isMPEGSync) {
-    console.warn("Response doesn't appear to be MP3 format, but got data back");
-  }
 });
 
 // To run this test manually:
@@ -276,34 +249,26 @@ test.skip("Whisper transcription with real MP3 file", async () => {
 test.skip("TTS → Whisper transcription chain", async () => {
   await setupTestUser();
 
-  const client = new OpenAI({
-    baseURL: `${API_URL}/v1/`,
-    dangerouslyAllowBrowser: true,
-    apiKey: "api-key-doesnt-matter",
-    defaultHeaders: {
-      "Accept-Encoding": "identity"
-    },
-    fetch: createCustomFetch()
-  });
-
   // Step 1: Generate speech from simple text
   const originalText = "Hello";
 
   console.log("Generating speech from text:", originalText);
 
-  const ttsResponse = await client.audio.speech.create({
-    model: TTS_MODEL,
-    voice: "af_sky" as any,
-    input: originalText,
-    response_format: "mp3"
-  });
+  const ttsResponse = await synthesizeSpeech(
+    {
+      input: originalText,
+      model: "voxtral-tts",
+      voice: "neutral_female"
+    },
+    { apiUrl: API_URL }
+  );
 
   const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
   console.log(`Generated audio size: ${audioBuffer.length} bytes`);
 
   // Step 2: Create a Blob from the audio buffer
-  const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
-  const audioFile = new File([audioBlob], "tts_output.mp3", { type: "audio/mpeg" });
+  const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
+  const audioFile = new File([audioBlob], "tts_output.wav", { type: "audio/wav" });
 
   // Step 3: Transcribe the audio back to text using Whisper
   console.log("Transcribing audio back to text...");
