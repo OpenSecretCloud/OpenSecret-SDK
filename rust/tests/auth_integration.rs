@@ -8,10 +8,10 @@ async fn test_login_signup_flow() -> Result<()> {
     // Load environment variables from .env.local in SDK root
     let env_path = std::path::Path::new("../.env.local");
     if env_path.exists() {
-        dotenvy::from_path(env_path).ok();
+        dotenv::from_path(env_path).ok();
     } else {
         // Fallback to standard .env
-        dotenvy::dotenv().ok();
+        dotenv::dotenv().ok();
     }
 
     // Use VITE_ prefixed variables to match the TypeScript SDK

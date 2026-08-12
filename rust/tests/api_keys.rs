@@ -8,10 +8,10 @@ use uuid::Uuid;
 fn load_env_vars() {
     let env_path = std::path::Path::new("../.env.local");
     if env_path.exists() {
-        dotenvy::from_path(env_path).ok();
+        dotenv::from_path(env_path).ok();
     } else {
         // Fallback to standard .env
-        dotenvy::dotenv().ok();
+        dotenv::dotenv().ok();
     }
 }
 

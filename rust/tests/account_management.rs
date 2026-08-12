@@ -7,9 +7,9 @@ use uuid::Uuid;
 fn load_test_env() {
     let env_path = std::path::Path::new("../.env.local");
     if env_path.exists() {
-        dotenvy::from_path(env_path).ok();
+        dotenv::from_path(env_path).ok();
     } else {
-        dotenvy::dotenv().ok();
+        dotenv::dotenv().ok();
     }
 }
 
