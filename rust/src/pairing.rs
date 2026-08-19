@@ -1928,19 +1928,22 @@ impl ApproveMaplePairingRequest {
 
 impl ConfirmMaplePairingRequest {
     /// Builds the unsigned host-commit request after the caller has durably
-    /// promoted its local approval record.
+    /// written the approval to a non-admitting stage and reconciled it against
+    /// a fresh current `awaiting_host_commit` STATUS.
     ///
-    /// The verified authorization supplies the exact pair lineage and digest;
-    /// this constructor does not persist anything and deliberately does not
-    /// send or auto-confirm. The caller must sign the returned prepared value's
-    /// canonical transcript with the host installation key, attach it through
+    /// The staged authorization supplies the exact pair lineage and digest;
+    /// this constructor does not persist, admit, send, or auto-confirm. The
+    /// caller must sign the returned prepared value's canonical transcript
+    /// with the host installation key, attach it through
     /// `PreparedMaplePairingHostCommitV1::with_signature`, and invoke
-    /// `OpenSecretClient::confirm_maple_pairing` separately.
-    pub fn unsigned_v1_after_durable_commit(
+    /// `OpenSecretClient::confirm_maple_pairing` separately. Even a successful
+    /// CONFIRM receipt is historical-capable and cannot promote the stage; a
+    /// second fresh current `active` STATUS must match it exactly.
+    pub fn unsigned_v1_after_durable_stage(
         operation_id: Uuid,
         ready: &HostCommitReadyMaplePairAuthorizationV1,
     ) -> Result<PreparedMaplePairingHostCommitV1> {
-        let authorization = ready.authorization().as_inner();
+        let authorization = ready.staged_authorization().as_inner();
         let request = Self {
             protocol_version: MAPLE_PAIRING_PROTOCOL_VERSION,
             transcript_version: MAPLE_PAIRING_TRANSCRIPT_VERSION,
@@ -3804,25 +3807,119 @@ impl VerifiedMaplePairAuthorizationV1 {
     }
 }
 
-/// An awaiting-host-commit authorization whose status revision and host role
-/// were verified. This is the only input accepted by the manual confirm
-/// constructor, preventing active or revoked historical artifacts from being
-/// reinstalled and reconfirmed.
+/// Issuer-verified approval material that may only be written to a
+/// non-admitting durable stage.
+///
+/// This value can come from an exact-operation APPROVE receipt that is
+/// historical by the time it is replayed. It is therefore not evidence of the
+/// pair's current lifecycle state and must never be installed as an active
+/// admission. Use [`Self::after_durable_stage`] to obtain the only staged type
+/// accepted by a later fresh-status reconciliation.
+#[derive(Clone)]
+pub struct NonAdmittingMaplePairAuthorizationStageV1 {
+    authorization: VerifiedMaplePairAuthorizationV1,
+}
+
+redacted_debug!(NonAdmittingMaplePairAuthorizationStageV1);
+
+impl NonAdmittingMaplePairAuthorizationStageV1 {
+    pub fn as_inner(&self) -> &MaplePairAuthorizationV1 {
+        self.authorization.as_inner()
+    }
+
+    pub fn transcript_digest(&self) -> Result<String> {
+        self.authorization.transcript_digest()
+    }
+
+    /// Runs the caller's durable, non-admitting stage write before minting the
+    /// capability accepted by current-status reconciliation.
+    ///
+    /// The callback must not update the host's active admission set. If the
+    /// write is ambiguous or fails, return an error and retain/retry the exact
+    /// APPROVE operation rather than treating the authorization as admitted.
+    pub fn after_durable_stage<F>(self, persist: F) -> Result<DurablyStagedMaplePairAuthorizationV1>
+    where
+        F: FnOnce(&MaplePairAuthorizationV1) -> Result<()>,
+    {
+        persist(self.authorization.as_inner())?;
+        Ok(DurablyStagedMaplePairAuthorizationV1 {
+            authorization: self.authorization,
+        })
+    }
+}
+
+/// An issuer-verified pair authorization persisted in a durable,
+/// non-admitting stage.
+///
+/// This remains non-admitting until a fresh current STATUS reports `active`
+/// for the exact staged authorization and yields an
+/// [`AdmissionReadyMaplePairAuthorizationV1`].
+#[derive(Clone)]
+pub struct DurablyStagedMaplePairAuthorizationV1 {
+    authorization: VerifiedMaplePairAuthorizationV1,
+}
+
+redacted_debug!(DurablyStagedMaplePairAuthorizationV1);
+
+impl DurablyStagedMaplePairAuthorizationV1 {
+    pub fn as_inner(&self) -> &MaplePairAuthorizationV1 {
+        self.authorization.as_inner()
+    }
+
+    pub fn transcript_digest(&self) -> Result<String> {
+        self.authorization.transcript_digest()
+    }
+}
+
+/// A durably staged authorization whose exact pair, incarnation, namespace,
+/// and digest were matched by a fresh current host STATUS in
+/// `awaiting_host_commit` state.
+///
+/// This is the only input accepted by the manual CONFIRM constructor. It is
+/// still non-admitting: confirmation and a second fresh current `active`
+/// STATUS are required before promotion.
 #[derive(Clone)]
 pub struct HostCommitReadyMaplePairAuthorizationV1 {
-    authorization: VerifiedMaplePairAuthorizationV1,
+    staged_authorization: DurablyStagedMaplePairAuthorizationV1,
     expected_pairing_revision: i64,
 }
 
 redacted_debug!(HostCommitReadyMaplePairAuthorizationV1);
 
 impl HostCommitReadyMaplePairAuthorizationV1 {
-    pub fn authorization(&self) -> &VerifiedMaplePairAuthorizationV1 {
-        &self.authorization
+    pub fn staged_authorization(&self) -> &DurablyStagedMaplePairAuthorizationV1 {
+        &self.staged_authorization
     }
 
     pub fn expected_pairing_revision(&self) -> i64 {
         self.expected_pairing_revision
+    }
+}
+
+/// A pair authorization that a fresh current host STATUS reported as active
+/// and matched exactly to the caller's durable non-admitting stage and
+/// reconciled revocation namespace.
+///
+/// This is the only SDK capability intended for promotion into the host's
+/// active admission set. Mutation receipts never construct this type.
+#[derive(Clone)]
+pub struct AdmissionReadyMaplePairAuthorizationV1 {
+    authorization: VerifiedMaplePairAuthorizationV1,
+}
+
+redacted_debug!(AdmissionReadyMaplePairAuthorizationV1);
+
+impl AdmissionReadyMaplePairAuthorizationV1 {
+    pub fn as_inner(&self) -> &MaplePairAuthorizationV1 {
+        self.authorization.as_inner()
+    }
+
+    pub fn into_inner(self) -> MaplePairAuthorizationV1 {
+        self.authorization.into_inner()
+    }
+
+    pub fn transcript_digest(&self) -> Result<String> {
+        self.authorization.transcript_digest()
     }
 }
 
@@ -3890,8 +3987,13 @@ impl VerifiedMaplePairingStatusV1 {
         self.status
     }
 
-    /// Returns the authorization only after the enclosing status verifier has
-    /// bound it to the status's issuer-verified request ticket.
+    /// Returns an issuer-verified authorization after the enclosing status
+    /// verifier bound it to the signed request ticket.
+    ///
+    /// This artifact alone is not current admission authority. Mutation
+    /// receipts may be historical, and a current non-active status must not be
+    /// admitted. Use the fresh-status capabilities on
+    /// [`VerifiedMaplePairingStatusResponse`] for host materialization.
     pub fn pair_authorization(&self) -> Option<VerifiedMaplePairAuthorizationV1> {
         self.status.pair_authorization.clone().map(|authorization| {
             // Construction of `Self` already verified and bound this artifact
@@ -3901,25 +4003,23 @@ impl VerifiedMaplePairingStatusV1 {
         })
     }
 
-    /// Returns a host-commit-ready authorization only for a verified host view
-    /// in `awaiting_host_commit` state whose namespace matches the host's
-    /// durably reconciled revocation stream.
-    pub fn host_commit_ready_authorization(
+    fn authorization_matching_durable_stage(
         &self,
-        revocation_stream: &DurablyReconciledMapleRevocationStreamV1,
-    ) -> Option<HostCommitReadyMaplePairAuthorizationV1> {
-        if self.status.state != MaplePairingState::AwaitingHostCommit || self.status.revision != 2 {
-            return None;
+        staged: &DurablyStagedMaplePairAuthorizationV1,
+    ) -> Result<VerifiedMaplePairAuthorizationV1> {
+        let authorization = self.pair_authorization().ok_or_else(|| {
+            Error::InvalidResponse(
+                "Current Maple pairing status omitted the staged pair authorization; fence or remove the non-admitting stage"
+                    .to_string(),
+            )
+        })?;
+        if authorization.as_inner() != staged.as_inner() {
+            return Err(Error::InvalidResponse(
+                "Current Maple pairing status does not exactly match the staged authorization; fence or remove the non-admitting stage"
+                    .to_string(),
+            ));
         }
-        self.pair_authorization().and_then(|authorization| {
-            revocation_stream
-                .validate_authorization(authorization.as_inner())
-                .ok()?;
-            Some(HostCommitReadyMaplePairAuthorizationV1 {
-                authorization,
-                expected_pairing_revision: self.status.revision,
-            })
-        })
+        Ok(authorization)
     }
 }
 
@@ -4306,6 +4406,117 @@ pub struct VerifiedMaplePairingMutationResponse {
 
 redacted_debug!(VerifiedMaplePairingMutationResponse);
 
+/// Verified historical-capable receipt for one exact APPROVE operation.
+///
+/// The contained issuer-verified authorization may only enter a durable,
+/// non-admitting stage. This receipt deliberately exposes no verified pairing
+/// status and cannot construct [`HostCommitReadyMaplePairAuthorizationV1`]: an
+/// exact operation replay may return it after the pair was activated or
+/// revoked. After staging, fetch and verify a fresh current host STATUS and use
+/// [`VerifiedMaplePairingStatusResponse::confirm_ready_after_durable_stage`].
+///
+/// ```compile_fail
+/// use opensecret::{
+///     AdmissionReadyMaplePairAuthorizationV1,
+///     VerifiedMaplePairingApprovalReceipt,
+/// };
+///
+/// fn admit(_: AdmissionReadyMaplePairAuthorizationV1) {}
+///
+/// fn historical_approval_cannot_admit(receipt: VerifiedMaplePairingApprovalReceipt) {
+///     admit(receipt.into_non_admitting_stage());
+/// }
+/// ```
+#[derive(Clone)]
+pub struct VerifiedMaplePairingApprovalReceipt {
+    protocol_version: u16,
+    operation_id: Uuid,
+    pairing_request_id: Uuid,
+    pair_id: Uuid,
+    pairing_incarnation: u64,
+    non_admitting_stage: NonAdmittingMaplePairAuthorizationStageV1,
+}
+
+redacted_debug!(VerifiedMaplePairingApprovalReceipt);
+
+impl VerifiedMaplePairingApprovalReceipt {
+    pub fn protocol_version(&self) -> u16 {
+        self.protocol_version
+    }
+
+    pub fn operation_id(&self) -> Uuid {
+        self.operation_id
+    }
+
+    pub fn pairing_request_id(&self) -> Uuid {
+        self.pairing_request_id
+    }
+
+    pub fn pair_id(&self) -> Uuid {
+        self.pair_id
+    }
+
+    pub fn pairing_incarnation(&self) -> u64 {
+        self.pairing_incarnation
+    }
+
+    pub fn non_admitting_stage(&self) -> &NonAdmittingMaplePairAuthorizationStageV1 {
+        &self.non_admitting_stage
+    }
+
+    pub fn into_non_admitting_stage(self) -> NonAdmittingMaplePairAuthorizationStageV1 {
+        self.non_admitting_stage
+    }
+}
+
+/// Verified historical-capable receipt for one exact CONFIRM operation.
+///
+/// This proves that the exact submitted operation once succeeded. It exposes
+/// no pairing status or admission capability because a replay may return the
+/// same receipt after a later revocation. Fetch and verify a fresh current host
+/// STATUS, then reconcile the durable stage with
+/// [`VerifiedMaplePairingStatusResponse::admission_ready_after_confirm`].
+///
+/// ```compile_fail
+/// use opensecret::VerifiedMaplePairingConfirmationReceipt;
+///
+/// fn historical_confirm_is_not_current(receipt: VerifiedMaplePairingConfirmationReceipt) {
+///     let _ = receipt.pairing;
+/// }
+/// ```
+#[derive(Clone)]
+pub struct VerifiedMaplePairingConfirmationReceipt {
+    protocol_version: u16,
+    operation_id: Uuid,
+    pairing_request_id: Uuid,
+    pair_id: Uuid,
+    pairing_incarnation: u64,
+}
+
+redacted_debug!(VerifiedMaplePairingConfirmationReceipt);
+
+impl VerifiedMaplePairingConfirmationReceipt {
+    pub fn protocol_version(&self) -> u16 {
+        self.protocol_version
+    }
+
+    pub fn operation_id(&self) -> Uuid {
+        self.operation_id
+    }
+
+    pub fn pairing_request_id(&self) -> Uuid {
+        self.pairing_request_id
+    }
+
+    pub fn pair_id(&self) -> Uuid {
+        self.pair_id
+    }
+
+    pub fn pairing_incarnation(&self) -> u64 {
+        self.pairing_incarnation
+    }
+}
+
 #[derive(Clone)]
 pub struct VerifiedMaplePairingListResponse {
     pub protocol_version: u16,
@@ -4323,9 +4534,72 @@ pub struct VerifiedMaplePairingStatusResponse {
     pub protocol_version: u16,
     pub query_id: Uuid,
     pub pairing: VerifiedMaplePairingStatusV1,
+    role: MaplePairingRole,
 }
 
 redacted_debug!(VerifiedMaplePairingStatusResponse);
+
+impl VerifiedMaplePairingStatusResponse {
+    /// Reconciles a durable non-admitting stage against one fresh current host
+    /// STATUS before constructing the manual CONFIRM capability.
+    ///
+    /// The status must be the host view in `awaiting_host_commit` revision 2,
+    /// and its full issuer-verified authorization (including digest,
+    /// incarnation, and revocation namespace) must exactly equal the staged
+    /// value. Any verified current conflict, expiry, revocation, or mismatch is
+    /// a fail-closed instruction for the caller to fence or remove the stage.
+    /// An ambiguous network error before a current status is obtained leaves
+    /// the stage non-admitting and retryable.
+    pub fn confirm_ready_after_durable_stage(
+        &self,
+        staged: &DurablyStagedMaplePairAuthorizationV1,
+        revocation_stream: &DurablyReconciledMapleRevocationStreamV1,
+    ) -> Result<HostCommitReadyMaplePairAuthorizationV1> {
+        if self.role != MaplePairingRole::Host
+            || self.pairing.status.state != MaplePairingState::AwaitingHostCommit
+            || self.pairing.status.revision != 2
+        {
+            return Err(Error::InvalidResponse(
+                "Current Maple host status is not awaiting host commit; fence or remove the non-admitting stage"
+                    .to_string(),
+            ));
+        }
+        let authorization = self.pairing.authorization_matching_durable_stage(staged)?;
+        revocation_stream.validate_authorization(authorization.as_inner())?;
+        Ok(HostCommitReadyMaplePairAuthorizationV1 {
+            staged_authorization: staged.clone(),
+            expected_pairing_revision: self.pairing.status.revision,
+        })
+    }
+
+    /// Reconciles a durable non-admitting stage against one fresh current host
+    /// STATUS after CONFIRM.
+    ///
+    /// Only an exact host `active` revision 3 match in the reconciled
+    /// revocation namespace yields a capability intended for promotion into
+    /// the active admission set. A CONFIRM mutation receipt never yields this
+    /// type because exact-operation receipts may be historical after a later
+    /// revocation. Any verified current non-active state or mismatch must fence
+    /// or remove the stage; an ambiguous network error leaves it staged.
+    pub fn admission_ready_after_confirm(
+        &self,
+        staged: &DurablyStagedMaplePairAuthorizationV1,
+        revocation_stream: &DurablyReconciledMapleRevocationStreamV1,
+    ) -> Result<AdmissionReadyMaplePairAuthorizationV1> {
+        if self.role != MaplePairingRole::Host
+            || self.pairing.status.state != MaplePairingState::Active
+            || self.pairing.status.revision != 3
+        {
+            return Err(Error::InvalidResponse(
+                "Current Maple host status is not active; fence or remove the non-admitting stage"
+                    .to_string(),
+            ));
+        }
+        let authorization = self.pairing.authorization_matching_durable_stage(staged)?;
+        revocation_stream.validate_authorization(authorization.as_inner())?;
+        Ok(AdmissionReadyMaplePairAuthorizationV1 { authorization })
+    }
+}
 
 pub struct VerifiedMaplePairingRevocationListResponse {
     pub protocol_version: u16,
@@ -4495,7 +4769,7 @@ impl MaplePairingMutationResponse {
         request: &ApproveMaplePairingRequest,
         issuers: &MaplePairingIssuerKeySet,
         trusted_now_unix_ms: i64,
-    ) -> Result<VerifiedMaplePairingMutationResponse> {
+    ) -> Result<VerifiedMaplePairingApprovalReceipt> {
         self.verify_mutation_binding(
             MutationExpectation {
                 operation_id: request.operation_id,
@@ -4534,7 +4808,19 @@ impl MaplePairingMutationResponse {
                 "Maple approval receipt does not bind the submitted host approval".to_string(),
             ));
         }
-        self.into_verified(MaplePairingRole::Host, issuers, trusted_now_unix_ms)
+        Ok(VerifiedMaplePairingApprovalReceipt {
+            protocol_version: self.protocol_version,
+            operation_id: self.operation_id,
+            pairing_request_id: self.pairing.pairing_request_id,
+            pair_id: self.pairing.pair_id,
+            pairing_incarnation: self.pairing.pairing_incarnation,
+            non_admitting_stage: NonAdmittingMaplePairAuthorizationStageV1 {
+                // `verify_mutation_binding` verified the enclosing host status,
+                // including this ticket-bound issuer signature. The stage is
+                // intentionally not a current-state or admission capability.
+                authorization: VerifiedMaplePairAuthorizationV1(authorization.clone()),
+            },
+        })
     }
 
     pub(crate) fn verify_confirm(
@@ -4542,7 +4828,7 @@ impl MaplePairingMutationResponse {
         request: &ConfirmMaplePairingRequest,
         issuers: &MaplePairingIssuerKeySet,
         trusted_now_unix_ms: i64,
-    ) -> Result<VerifiedMaplePairingMutationResponse> {
+    ) -> Result<VerifiedMaplePairingConfirmationReceipt> {
         self.verify_mutation_binding(
             MutationExpectation {
                 operation_id: request.operation_id,
@@ -4570,7 +4856,13 @@ impl MaplePairingMutationResponse {
                     .to_string(),
             ));
         }
-        self.into_verified(MaplePairingRole::Host, issuers, trusted_now_unix_ms)
+        Ok(VerifiedMaplePairingConfirmationReceipt {
+            protocol_version: self.protocol_version,
+            operation_id: self.operation_id,
+            pairing_request_id: self.pairing.pairing_request_id,
+            pair_id: self.pairing.pair_id,
+            pairing_incarnation: self.pairing.pairing_incarnation,
+        })
     }
 
     pub(crate) fn verify_revoke(
@@ -4791,6 +5083,7 @@ impl MaplePairingStatusResponse {
             pairing: self
                 .pairing
                 .verify(issuers, actor_role, trusted_now_unix_ms)?,
+            role: actor_role,
         })
     }
 }
@@ -5339,16 +5632,66 @@ mod tests {
         .expect("exact key length")
     }
 
-    fn resign_revocation(mut revocation: MaplePairRevocationV1) -> MaplePairRevocationV1 {
+    fn fixture_signing_key(name: &str) -> SigningKey {
         let seed = hex::decode(
-            fixture()["test_private_seeds_hex"]["issuer"]
+            fixture()["test_private_seeds_hex"][name]
                 .as_str()
-                .unwrap(),
+                .expect("fixture signing seed"),
         )
-        .unwrap();
-        let seed: [u8; 32] = seed.try_into().unwrap();
+        .expect("hex fixture signing seed");
+        let seed: [u8; 32] = seed.try_into().expect("exact fixture signing seed length");
+        SigningKey::from_bytes(&seed)
+    }
+
+    fn historical_approval_receipt() -> MaplePairingMutationResponse {
+        let approval: ApproveMaplePairingRequest = fixture_value("approval_request");
+        let mut receipt: MaplePairingMutationResponse = fixture_value("active_receipt");
+        receipt.operation_id = approval.operation_id;
+        receipt.pairing.state = MaplePairingState::AwaitingHostCommit;
+        receipt.pairing.revision = 2;
+        receipt.pairing.activated_at_unix_ms = None;
+        receipt
+    }
+
+    fn current_host_status(
+        pairing: MaplePairingStatusV1,
+        trusted_now_unix_ms: i64,
+    ) -> VerifiedMaplePairingStatusResponse {
+        let host_claim = pairing
+            .request_ticket
+            .as_ref()
+            .expect("fixture status ticket")
+            .host
+            .clone();
+        let mut request: MaplePairingStatusRequest = fixture_value("pairing_status_request");
+        request.actor_registration_id = host_claim.registration_id;
+        request.pair_id = pairing.pair_id;
+        request.signature.clear();
+        request.signature = BASE64.encode(
+            fixture_signing_key("host")
+                .sign(&request.canonical_transcript().unwrap())
+                .to_bytes(),
+        );
+        request
+            .validate_with_signing_key(&claim_signing_key(&host_claim))
+            .unwrap();
+        MaplePairingStatusResponse {
+            protocol_version: MAPLE_PAIRING_PROTOCOL_VERSION,
+            query_id: request.query_id,
+            pairing,
+        }
+        .verify_for(
+            &request,
+            MaplePairingRole::Host,
+            &trusted_issuers(),
+            trusted_now_unix_ms,
+        )
+        .unwrap()
+    }
+
+    fn resign_revocation(mut revocation: MaplePairRevocationV1) -> MaplePairRevocationV1 {
         let signature =
-            SigningKey::from_bytes(&seed).sign(&revocation.canonical_transcript().unwrap());
+            fixture_signing_key("issuer").sign(&revocation.canonical_transcript().unwrap());
         revocation.issuer_signature = BASE64.encode(signature.to_bytes());
         revocation
     }
@@ -5470,11 +5813,17 @@ mod tests {
                 authorization.approved_at_unix_ms,
             )
             .unwrap();
+        assert_eq!(verified_active.protocol_version(), 1);
+        assert_eq!(verified_active.operation_id(), confirm.operation_id);
         assert_eq!(
-            verified_active.pairing.as_inner().state,
-            MaplePairingState::Active
+            verified_active.pairing_request_id(),
+            confirm.pairing_request_id
         );
-        assert_eq!(verified_active.pairing.as_inner().revision, 3);
+        assert_eq!(verified_active.pair_id(), confirm.pair_id);
+        assert_eq!(
+            verified_active.pairing_incarnation(),
+            confirm.pairing_incarnation
+        );
 
         let revocation: MaplePairRevocationV1 = fixture_value("pair_revocation");
         assert_eq!(
@@ -5733,24 +6082,93 @@ mod tests {
     }
 
     #[test]
-    fn host_commit_is_manual_and_derived_from_verified_authorization() {
+    fn historical_approval_and_confirm_receipts_are_non_promotable() {
+        let approval: ApproveMaplePairingRequest = fixture_value("approval_request");
+        let approval_wire = historical_approval_receipt();
+        let approved_at = approval_wire.pairing.approved_at_unix_ms.unwrap();
+        let approval_receipt = approval_wire
+            .verify_approve(&approval, &trusted_issuers(), approved_at)
+            .unwrap();
+        assert_eq!(approval_receipt.operation_id(), approval.operation_id);
+        assert_eq!(approval_receipt.pair_id(), approval.pair_id);
+        assert_eq!(approval_receipt.pairing_incarnation(), 3);
+        assert_eq!(
+            approval_receipt
+                .non_admitting_stage()
+                .transcript_digest()
+                .unwrap(),
+            fixture_string("pair_authorization_digest")
+        );
+
+        let confirm: ConfirmMaplePairingRequest = fixture_value("confirm_request");
         let active_receipt: MaplePairingMutationResponse = fixture_value("active_receipt");
-        let mut awaiting = active_receipt.pairing;
-        awaiting.state = MaplePairingState::AwaitingHostCommit;
-        awaiting.revision = 2;
-        awaiting.activated_at_unix_ms = None;
-        let verified_status = awaiting
-            .verify(
-                &trusted_issuers(),
-                MaplePairingRole::Host,
-                awaiting.approved_at_unix_ms.unwrap(),
-            )
+        let confirmation_receipt = active_receipt
+            .verify_confirm(&confirm, &trusted_issuers(), approved_at)
             .unwrap();
+        assert_eq!(confirmation_receipt.operation_id(), confirm.operation_id);
+        assert_eq!(confirmation_receipt.pair_id(), confirm.pair_id);
+        assert_eq!(confirmation_receipt.pairing_incarnation(), 3);
+
+        for debug in [
+            format!("{approval_receipt:?}"),
+            format!("{confirmation_receipt:?}"),
+        ] {
+            assert!(debug.contains("[redacted]"));
+            assert!(!debug.contains(&approval.pair_id.to_string()));
+            assert!(!debug.contains(&fixture_string("pair_authorization_digest")));
+        }
+    }
+
+    #[test]
+    fn fresh_current_status_controls_confirm_and_admission_promotion() {
+        let failed_approval_wire = historical_approval_receipt();
+        let failed_approved_at = failed_approval_wire.pairing.approved_at_unix_ms.unwrap();
+        let failed_approval: ApproveMaplePairingRequest = fixture_value("approval_request");
+        let mut failed_stage_write_attempted = false;
+        let failed_stage = failed_approval_wire
+            .verify_approve(&failed_approval, &trusted_issuers(), failed_approved_at)
+            .unwrap()
+            .into_non_admitting_stage()
+            .after_durable_stage(|_| {
+                failed_stage_write_attempted = true;
+                Err(Error::Configuration(
+                    "simulated durable stage failure".to_string(),
+                ))
+            });
+        assert!(failed_stage_write_attempted);
+        assert!(failed_stage.is_err());
+
+        let approval_wire = historical_approval_receipt();
+        let awaiting = approval_wire.pairing.clone();
+        let approved_at = awaiting.approved_at_unix_ms.unwrap();
+        let approval: ApproveMaplePairingRequest = fixture_value("approval_request");
+        let approval_receipt = approval_wire
+            .verify_approve(&approval, &trusted_issuers(), approved_at)
+            .unwrap();
+        let mut persisted_non_admitting = false;
+        let staged = approval_receipt
+            .into_non_admitting_stage()
+            .after_durable_stage(|authorization| {
+                assert_eq!(
+                    authorization.transcript_digest().unwrap(),
+                    fixture_string("pair_authorization_digest")
+                );
+                persisted_non_admitting = true;
+                Ok(())
+            })
+            .unwrap();
+        assert!(persisted_non_admitting);
+
         let stream = reconciled_stream("revocation_stream_checkpoint");
-        let ready = verified_status
-            .host_commit_ready_authorization(&stream)
+        let current_awaiting = current_host_status(awaiting, approved_at);
+        let wrong_stream = reconciled_stream("discovery_revocation_stream_checkpoint");
+        assert!(current_awaiting
+            .confirm_ready_after_durable_stage(&staged, &wrong_stream)
+            .is_err());
+        let ready = current_awaiting
+            .confirm_ready_after_durable_stage(&staged, &stream)
             .unwrap();
-        let unsigned = ConfirmMaplePairingRequest::unsigned_v1_after_durable_commit(
+        let unsigned = ConfirmMaplePairingRequest::unsigned_v1_after_durable_stage(
             Uuid::parse_str("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee").unwrap(),
             &ready,
         )
@@ -5771,15 +6189,52 @@ mod tests {
         );
 
         let active_response: MaplePairingStatusResponse = fixture_value("pairing_status_response");
-        let active = active_response
-            .pairing
-            .verify(
-                &trusted_issuers(),
+        let active_at = active_response.pairing.activated_at_unix_ms.unwrap();
+        let current_active = current_host_status(active_response.pairing, active_at);
+        let admission = current_active
+            .admission_ready_after_confirm(&staged, &stream)
+            .unwrap();
+        assert_eq!(
+            admission.transcript_digest().unwrap(),
+            fixture_string("pair_authorization_digest")
+        );
+        assert!(current_active
+            .confirm_ready_after_durable_stage(&staged, &stream)
+            .is_err());
+        assert!(current_awaiting
+            .admission_ready_after_confirm(&staged, &stream)
+            .is_err());
+
+        let mut mismatched_stage = staged.clone();
+        mismatched_stage.authorization.0.pairing_incarnation += 1;
+        assert!(current_awaiting
+            .confirm_ready_after_durable_stage(&mismatched_stage, &stream)
+            .is_err());
+        assert!(current_active
+            .admission_ready_after_confirm(&mismatched_stage, &stream)
+            .is_err());
+
+        let controller_request: MaplePairingStatusRequest = fixture_value("pairing_status_request");
+        let controller_response: MaplePairingStatusResponse =
+            fixture_value("pairing_status_response");
+        let controller_current = controller_response
+            .verify_for(
+                &controller_request,
                 MaplePairingRole::Controller,
-                active_response.pairing.activated_at_unix_ms.unwrap(),
+                &trusted_issuers(),
+                active_at,
             )
             .unwrap();
-        assert!(active.host_commit_ready_authorization(&stream).is_none());
+        assert!(controller_current
+            .admission_ready_after_confirm(&staged, &stream)
+            .is_err());
+
+        let revoke_receipt: MaplePairingMutationResponse = fixture_value("revoke_receipt");
+        let revoked_at = revoke_receipt.pairing.revoked_at_unix_ms.unwrap();
+        let current_revoked = current_host_status(revoke_receipt.pairing, revoked_at);
+        assert!(current_revoked
+            .admission_ready_after_confirm(&staged, &stream)
+            .is_err());
     }
 
     #[test]
@@ -5946,9 +6401,6 @@ mod tests {
             )
             .unwrap();
         assert!(verified.pair_authorization().is_none());
-        assert!(verified
-            .host_commit_ready_authorization(&reconciled_stream("revocation_stream_checkpoint"))
-            .is_none());
         assert!(controller_view
             .verify(
                 &issuers,

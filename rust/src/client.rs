@@ -1881,13 +1881,20 @@ impl OpenSecretClient {
     }
 
     /// Approves one pending pairing as its selected host installation.
+    ///
+    /// The returned exact-operation receipt may be historical when replayed.
+    /// Its issuer-verified authorization is only a durable, non-admitting
+    /// stage candidate. After staging it, fetch a fresh current host status and
+    /// reconcile through
+    /// [`VerifiedMaplePairingStatusResponse::confirm_ready_after_durable_stage`]
+    /// before constructing CONFIRM.
     pub async fn approve_maple_pairing(
         &self,
         prepared: &PreparedMaplePairingApprovalV1,
         host_signing_public_key: &[u8; 32],
         issuers: &MaplePairingIssuerKeySet,
         trusted_now_unix_ms: i64,
-    ) -> Result<VerifiedMaplePairingMutationResponse> {
+    ) -> Result<VerifiedMaplePairingApprovalReceipt> {
         let request = prepared.as_inner();
         request.validate_with_signing_key(host_signing_public_key)?;
         let response: MaplePairingMutationResponse = self
@@ -1896,18 +1903,24 @@ impl OpenSecretClient {
         response.verify_approve(request, issuers, trusted_now_unix_ms)
     }
 
-    /// Confirms that the host durably committed the approved authorization.
+    /// Confirms that the host durably staged the approved authorization without
+    /// admitting it.
     ///
-    /// Callers must not invoke this until their local allowlist write is
-    /// durable. Only the resulting `active` receipt makes the controller view
-    /// eligible to dial the host.
+    /// Callers must not invoke this until the non-admitting stage is durable
+    /// and a fresh current host status yielded the prepared CONFIRM capability.
+    /// The returned exact-operation receipt may itself be historical and never
+    /// promotes the stage. Fetch current status again; only
+    /// [`VerifiedMaplePairingStatusResponse::admission_ready_after_confirm`]
+    /// may produce material for the active admission set. A conflict or
+    /// verified non-active status must fence or remove the stage, while an
+    /// ambiguous network result leaves it staged and retryable.
     pub async fn confirm_maple_pairing(
         &self,
         prepared: &PreparedMaplePairingHostCommitV1,
         host_signing_public_key: &[u8; 32],
         issuers: &MaplePairingIssuerKeySet,
         trusted_now_unix_ms: i64,
-    ) -> Result<VerifiedMaplePairingMutationResponse> {
+    ) -> Result<VerifiedMaplePairingConfirmationReceipt> {
         let request = prepared.as_inner();
         request.validate_with_signing_key(host_signing_public_key)?;
         let response: MaplePairingMutationResponse = self
