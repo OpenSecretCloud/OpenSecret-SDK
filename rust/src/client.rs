@@ -3,6 +3,7 @@ use crate::{
     cbor::{self, Value as CborValue},
     crypto::{self},
     error::{Error, Result},
+    pairing::*,
     pcr::{Pcr0Environment, Pcr0TrustPolicy},
     session::SessionManager,
     types::*,
@@ -17,7 +18,7 @@ use reqwest::{
     Client,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{net::IpAddr, pin::Pin};
+use std::{collections::HashSet, net::IpAddr, pin::Pin};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -38,6 +39,53 @@ pub type InferenceResponse = HttpResponse<OpenSecretResponseBody>;
 #[serde(deny_unknown_fields)]
 struct EncryptedBody {
     encrypted: String,
+}
+
+const MAPLE_SECURITY_EPOCH_STALE_CODE: &str = "MapleSecurityEpochStale";
+const MAPLE_SECURITY_EPOCH_STALE_MESSAGE: &str =
+    "Maple device security epoch is stale; refresh device state and retry.";
+const MAPLE_PAIRING_RESET_CLEAR_REQUIRED_CODE: &str = "MaplePairingResetClearRequired";
+const MAPLE_PAIRING_RESET_CLEAR_REQUIRED_MESSAGE: &str =
+    "Maple remote access must be cleared on the host before this operation can continue.";
+const MAPLE_INSTALLATION_RETIRED_CODE: &str = "MapleInstallationRetired";
+const MAPLE_INSTALLATION_RETIRED_MESSAGE: &str =
+    "This Maple installation enrollment is retired; reset Remote access on this device and enroll it again.";
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApiErrorBody {
+    status: u16,
+    code: Option<String>,
+    message: String,
+}
+
+fn classify_api_error(status: u16, body: String) -> Error {
+    if status == 409 {
+        if let Ok(error) = serde_json::from_str::<ApiErrorBody>(&body) {
+            if error.status == 409
+                && error.code.as_deref() == Some(MAPLE_SECURITY_EPOCH_STALE_CODE)
+                && error.message == MAPLE_SECURITY_EPOCH_STALE_MESSAGE
+            {
+                return Error::MapleSecurityEpochStale;
+            }
+            if error.status == 409
+                && error.code.as_deref() == Some(MAPLE_PAIRING_RESET_CLEAR_REQUIRED_CODE)
+                && error.message == MAPLE_PAIRING_RESET_CLEAR_REQUIRED_MESSAGE
+            {
+                return Error::MaplePairingResetClearRequired;
+            }
+            if error.status == 409
+                && error.code.as_deref() == Some(MAPLE_INSTALLATION_RETIRED_CODE)
+                && error.message == MAPLE_INSTALLATION_RETIRED_MESSAGE
+            {
+                return Error::MapleInstallationRetired;
+            }
+        }
+    }
+    Error::Api {
+        status,
+        message: body,
+    }
 }
 
 const MAX_INFERENCE_SSE_LINE_BYTES: usize = 16 * 1024 * 1024;
@@ -165,6 +213,27 @@ fn build_conversation_projects_endpoint(params: Option<&ConversationProjectListP
         }
         if let Some(order) = &params.order {
             append_query_param(&mut query, "order", order);
+        }
+    }
+
+    if !query.is_empty() {
+        endpoint.push('?');
+        endpoint.push_str(&query.join("&"));
+    }
+
+    endpoint
+}
+
+fn build_maple_devices_endpoint(params: Option<&MapleDeviceListParams>) -> String {
+    let mut endpoint = "/protected/maple/devices".to_string();
+    let mut query = Vec::new();
+
+    if let Some(params) = params {
+        if let Some(cursor) = &params.cursor {
+            append_query_param(&mut query, "cursor", cursor);
+        }
+        if let Some(limit) = params.limit {
+            append_query_param(&mut query, "limit", limit);
         }
     }
 
@@ -749,7 +818,7 @@ impl OpenSecretClient {
         method: &str,
         data: Option<T>,
     ) -> Result<U> {
-        self.retry_encrypted_json_call(endpoint, method, data, AuthHeaderMode::Jwt, true)
+        self.retry_encrypted_json_call(endpoint, method, data, AuthHeaderMode::Jwt, true, true)
             .await
     }
 
@@ -788,6 +857,7 @@ impl OpenSecretClient {
         data: Option<T>,
         auth_mode: AuthHeaderMode,
         allow_refresh: bool,
+        retry_bad_request_as_stale_session: bool,
     ) -> Result<U> {
         let mut retried_attestation = false;
         let mut retried_refresh = false;
@@ -799,7 +869,13 @@ impl OpenSecretClient {
                 .await
             {
                 Ok(result) => return Ok(result),
-                Err(error) if !retried_attestation && Self::is_attestation_retryable(&error) => {
+                Err(error)
+                    if !retried_attestation
+                        && Self::is_attestation_retryable_with_policy(
+                            &error,
+                            retry_bad_request_as_stale_session,
+                        ) =>
+                {
                     self.perform_attestation_handshake().await?;
                     retried_attestation = true;
                 }
@@ -817,6 +893,36 @@ impl OpenSecretClient {
                 }
                 Err(error) => return Err(error),
             }
+        }
+    }
+
+    /// Sends one Maple pairing control-plane request and only replays it after
+    /// the service explicitly reports an evicted attested session with HTTP
+    /// 410. Transport, encryption, decryption, and semantic failures are
+    /// returned to the caller because their mutation outcome can be ambiguous.
+    async fn maple_pairing_json_call<T: Serialize + Clone, U: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        data: &T,
+    ) -> Result<U> {
+        // Establishing an absent session is preparation for the first send,
+        // not a replay. A session disappearing after this point is surfaced.
+        if self.session_manager.get_session()?.is_none() {
+            self.perform_attestation_handshake().await?;
+        }
+
+        let auth = self.resolve_auth(AuthHeaderMode::Jwt)?;
+        match self
+            .encrypted_json_call_inner(endpoint, "POST", Some(data), &auth)
+            .await
+        {
+            Err(Error::Api { status: 410, .. }) => {
+                self.perform_attestation_handshake().await?;
+                let auth = self.resolve_auth(AuthHeaderMode::Jwt)?;
+                self.encrypted_json_call_inner(endpoint, "POST", Some(data), &auth)
+                    .await
+            }
+            result => result,
         }
     }
 
@@ -898,12 +1004,10 @@ impl OpenSecretClient {
                 .await;
 
             match result {
-                // OpenSecret currently uses the same 400 for stale sessions and
-                // pre-provider validation. Preserve the legacy one-retry behavior
-                // until the backend exposes an explicit re-attestation signal.
+                // An evicted attested session has an explicit status distinct
+                // from semantic request validation, so replay is unambiguous.
                 Ok((response, _session_key))
-                    if response.status() == reqwest::StatusCode::BAD_REQUEST
-                        && !retried_attestation =>
+                    if response.status() == reqwest::StatusCode::GONE && !retried_attestation =>
                 {
                     self.perform_attestation_handshake().await?;
                     retried_attestation = true;
@@ -1147,10 +1251,7 @@ impl OpenSecretClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::Api {
-                status,
-                message: error_msg,
-            });
+            return Err(classify_api_error(status, error_msg));
         }
 
         Ok((response, session.session_key))
@@ -1222,13 +1323,14 @@ impl OpenSecretClient {
     }
 
     fn is_attestation_retryable(error: &Error) -> bool {
+        Self::is_attestation_retryable_with_policy(error, true)
+    }
+
+    fn is_attestation_retryable_with_policy(error: &Error, retry_stale_session: bool) -> bool {
         matches!(
             error,
-            Error::Session(_)
-                | Error::Api { status: 400, .. }
-                | Error::Encryption(_)
-                | Error::Decryption(_)
-        )
+            Error::Session(_) | Error::Encryption(_) | Error::Decryption(_)
+        ) || (retry_stale_session && matches!(error, Error::Api { status: 410, .. }))
     }
 
     // Auth Methods
@@ -1598,6 +1700,280 @@ impl OpenSecretClient {
     pub async fn get_user(&self) -> Result<UserResponse> {
         self.authenticated_api_call("/protected/user", "GET", None::<()>)
             .await
+    }
+
+    /// Registers or refreshes this account's signed Maple device record.
+    ///
+    /// The caller owns key generation, secure private-key storage, and signing
+    /// the shared structured-field transcript returned by
+    /// [`RegisterMapleDeviceRequest::canonical_transcript`]. The server
+    /// reconstructs the same transcript rather than trusting caller-supplied
+    /// canonical bytes. Keep `request.operation_id` stable until this operation
+    /// has an unambiguous result: authentication and attestation recovery may
+    /// send the cloned encrypted request again.
+    ///
+    /// [`Error::MapleInstallationRetired`] is a permanent enrollment-lineage
+    /// result, not a retryable stale-state response. Reset local Remote
+    /// enrollment state, generate a fresh installation ID and identity, then
+    /// submit a new enrollment. The retired installation can never become
+    /// current again.
+    pub async fn register_maple_device(
+        &self,
+        request: &RegisterMapleDeviceRequest,
+        issuers: &MaplePairingIssuerKeySet,
+    ) -> Result<VerifiedRegisterMapleDeviceResponseV1> {
+        request.validate()?;
+        let response: MapleDeviceRegistrationResponse = self
+            .retry_encrypted_json_call(
+                "/protected/maple/devices/register",
+                "POST",
+                Some(request),
+                AuthHeaderMode::Jwt,
+                true,
+                true,
+            )
+            .await?;
+        if response.protocol_version != MAPLE_DEVICE_PROTOCOL_VERSION
+            || response.operation_id != request.operation_id
+            || response.device_id != request.device_id
+            || response.registration_id.is_nil()
+            || response.revision != request.expected_revision.map_or(1, |revision| revision + 1)
+            || response.security_epoch != request.known_security_epoch
+        {
+            return Err(Error::InvalidResponse(
+                "Maple device registration response did not match the submitted request"
+                    .to_string(),
+            ));
+        }
+        let revocation_sync = response.revocation_sync.verify_against_registration(
+            request,
+            response.registration_id,
+            response.security_epoch,
+            issuers,
+        )?;
+        Ok(VerifiedRegisterMapleDeviceResponseV1::new(
+            response,
+            revocation_sync,
+        ))
+    }
+
+    /// Lists a bounded page of account-scoped Maple device records.
+    pub async fn list_maple_devices(
+        &self,
+        params: Option<MapleDeviceListParams>,
+    ) -> Result<MapleDeviceListResponse> {
+        if let Some(params) = &params {
+            if params.cursor.as_ref().is_some_and(|cursor| {
+                cursor.is_empty() || cursor.len() > MAPLE_DEVICE_LIST_MAX_CURSOR_BYTES
+            }) {
+                return Err(Error::Configuration(
+                    format!(
+                        "Maple device cursor must contain 1 to {MAPLE_DEVICE_LIST_MAX_CURSOR_BYTES} bytes"
+                    ),
+                ));
+            }
+            if let Some(limit) = params.limit {
+                if limit == 0 || limit > MAPLE_DEVICE_LIST_MAX_LIMIT {
+                    return Err(Error::Configuration(format!(
+                        "Maple device page limit must be between 1 and {MAPLE_DEVICE_LIST_MAX_LIMIT}"
+                    )));
+                }
+            }
+        }
+
+        let incoming_cursor = params.as_ref().and_then(|params| params.cursor.as_deref());
+        let requested_limit = params
+            .as_ref()
+            .and_then(|params| params.limit)
+            .unwrap_or(MAPLE_DEVICE_LIST_DEFAULT_LIMIT);
+        let endpoint = build_maple_devices_endpoint(params.as_ref());
+        let response: MapleDeviceListResponse = self
+            .authenticated_api_call(&endpoint, "GET", None::<()>)
+            .await?;
+        let cursor_consistent = response.has_more == response.next_cursor.is_some();
+        let cursor_valid = response.next_cursor.as_ref().is_none_or(|cursor| {
+            !cursor.is_empty() && cursor.len() <= MAPLE_DEVICE_LIST_MAX_CURSOR_BYTES
+        });
+        let page_progresses = !response.has_more
+            || (!response.devices.is_empty() && response.next_cursor.as_deref() != incoming_cursor);
+        if response.protocol_version != MAPLE_DEVICE_PROTOCOL_VERSION
+            || response.security_epoch == 0
+            || response.security_epoch > i64::MAX as u64
+            || !cursor_consistent
+            || !cursor_valid
+            || !page_progresses
+            || response.devices.len() > usize::from(requested_limit)
+        {
+            return Err(Error::InvalidResponse(
+                "Maple device list response is unsupported or internally inconsistent".to_string(),
+            ));
+        }
+        let mut registration_ids = HashSet::with_capacity(response.devices.len());
+        let mut device_ids = HashSet::with_capacity(response.devices.len());
+        let mut installation_ids = HashSet::with_capacity(response.devices.len());
+        let mut endpoint_ids = HashSet::with_capacity(response.devices.len());
+        for device in &response.devices {
+            device.validate().map_err(|error| {
+                Error::InvalidResponse(format!("Invalid Maple device directory record: {error}"))
+            })?;
+            if !registration_ids.insert(device.registration_id)
+                || !device_ids.insert(device.device_id)
+                || !installation_ids.insert(device.installation_id)
+                || !endpoint_ids.insert(device.iroh_endpoint_id.as_str())
+            {
+                return Err(Error::InvalidResponse(
+                    "Maple device list response contains duplicate device identities".to_string(),
+                ));
+            }
+        }
+        Ok(response)
+    }
+
+    /// Creates a short-lived, explicitly directed Maple pairing request.
+    ///
+    /// The borrowed request remains caller-owned on every error, including an
+    /// ambiguous transport failure. Its operation ID must be reused until the
+    /// caller obtains an unambiguous receipt or queries status. The SDK only
+    /// replays the exact cloned request automatically for HTTP 410 stale
+    /// attested-session recovery; semantic 400/409 responses are never replayed.
+    pub async fn create_maple_pairing(
+        &self,
+        request: &CreateMaplePairingRequest,
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingMutationResponse> {
+        request.validate()?;
+        let response: MaplePairingMutationResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/request", request)
+            .await?;
+        response.verify_create(request, issuers, trusted_now_unix_ms)
+    }
+
+    /// Lists a bounded, signed participant view of Maple pairings.
+    pub async fn list_maple_pairings(
+        &self,
+        request: &ListMaplePairingsRequest,
+        actor_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingListResponse> {
+        request.validate_with_signing_key(actor_signing_public_key)?;
+        let response: MaplePairingListResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/list", request)
+            .await?;
+        response.verify_for(request, issuers, trusted_now_unix_ms)
+    }
+
+    /// Fetches one participant-visible pairing status.
+    pub async fn get_maple_pairing_status(
+        &self,
+        request: &MaplePairingStatusRequest,
+        actor_role: MaplePairingRole,
+        actor_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingStatusResponse> {
+        request.validate_with_signing_key(actor_signing_public_key)?;
+        let response: MaplePairingStatusResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/status", request)
+            .await?;
+        response.verify_for(request, actor_role, issuers, trusted_now_unix_ms)
+    }
+
+    /// Approves one pending pairing as its selected host installation.
+    pub async fn approve_maple_pairing(
+        &self,
+        prepared: &PreparedMaplePairingApprovalV1,
+        host_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingMutationResponse> {
+        let request = prepared.as_inner();
+        request.validate_with_signing_key(host_signing_public_key)?;
+        let response: MaplePairingMutationResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/approve", request)
+            .await?;
+        response.verify_approve(request, issuers, trusted_now_unix_ms)
+    }
+
+    /// Confirms that the host durably committed the approved authorization.
+    ///
+    /// Callers must not invoke this until their local allowlist write is
+    /// durable. Only the resulting `active` receipt makes the controller view
+    /// eligible to dial the host.
+    pub async fn confirm_maple_pairing(
+        &self,
+        prepared: &PreparedMaplePairingHostCommitV1,
+        host_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingMutationResponse> {
+        let request = prepared.as_inner();
+        request.validate_with_signing_key(host_signing_public_key)?;
+        let response: MaplePairingMutationResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/confirm", request)
+            .await?;
+        response.verify_confirm(request, issuers, trusted_now_unix_ms)
+    }
+
+    /// Revokes one approved or active directional pairing.
+    pub async fn revoke_maple_pairing(
+        &self,
+        request: &RevokeMaplePairingRequest,
+        actor_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+        trusted_now_unix_ms: i64,
+    ) -> Result<VerifiedMaplePairingMutationResponse> {
+        request.validate_with_signing_key(actor_signing_public_key)?;
+        let response: MaplePairingMutationResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/revoke", request)
+            .await?;
+        response.verify_revoke(request, issuers, trusted_now_unix_ms)
+    }
+
+    /// Lists a contiguous bounded sequence of issuer-signed revocations.
+    ///
+    /// Use the exact nil/zero/after-zero request to discover the current signed
+    /// namespace. The returned checkpoint must be compared with durable host
+    /// state and, on a higher generation, committed through the documented
+    /// clear-all-admissions/reset-cursor transaction before accepting grants or
+    /// events. Returned events remain deliberately non-ACK-ready until bound to
+    /// both the corresponding ticket-bound authorization and that durably
+    /// reconciled namespace.
+    pub async fn list_maple_pairing_revocations(
+        &self,
+        request: &ListMaplePairingRevocationsRequest,
+        host_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+    ) -> Result<VerifiedMaplePairingRevocationListResponse> {
+        request.validate_with_signing_key(host_signing_public_key)?;
+        let response: MaplePairingRevocationListResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/revocations/list", request)
+            .await?;
+        response.verify_for(request, issuers)
+    }
+
+    /// Acknowledges a revocation only after the caller durably commits it.
+    ///
+    /// This API never acknowledges automatically while listing or verifying an
+    /// event. The returned value is an exact operation receipt, not current
+    /// readiness authority: idempotent replay may return an older receipt after
+    /// newer events exist. Fetch and verify a fresh registration or revocation
+    /// list sync before treating the host as Ready or installing current
+    /// namespace state. The borrowed request and operation ID remain available
+    /// to the caller after an ambiguous failure.
+    pub async fn ack_maple_pairing_revocation(
+        &self,
+        prepared: &PreparedMaplePairingRevocationAckV1,
+        host_signing_public_key: &[u8; 32],
+        issuers: &MaplePairingIssuerKeySet,
+    ) -> Result<VerifiedMaplePairingRevocationAckResponse> {
+        let request = prepared.as_inner();
+        request.validate_with_signing_key(host_signing_public_key)?;
+        let response: MaplePairingRevocationAckResponse = self
+            .maple_pairing_json_call("/protected/maple/pairings/revocations/ack", request)
+            .await?;
+        response.verify_for(request, issuers)
     }
 
     pub async fn register_push_device(
@@ -2538,7 +2914,9 @@ impl OpenSecretClient {
 mod tests {
     use super::*;
     use crate::PushNotificationKeyPair;
+    use ed25519_dalek::{Signer, SigningKey};
     use futures::StreamExt;
+    use ring::signature::Ed25519KeyPair;
     use serde_json::json;
     use std::{
         collections::HashMap,
@@ -2783,6 +3161,166 @@ mod tests {
         BASE64.encode(encrypted)
     }
 
+    fn sample_maple_device_request(operation_id: Uuid) -> RegisterMapleDeviceRequest {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let unsigned = RegisterMapleDeviceRequest::unsigned_v1(
+            operation_id,
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440003").unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440004").unwrap(),
+            None,
+            1,
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap(),
+            BASE64.encode(&identity_public_key),
+            hex::encode(&identity_public_key),
+            7,
+            MapleIrohEndpointAddr::canonical_v1(
+                vec!["https://use1-1.relay.n0.iroh.link./".to_string()],
+                vec!["203.0.113.7:4433".to_string()],
+            )
+            .unwrap(),
+            MapleDevicePlatform::Macos,
+            "MacBook Pro",
+            vec!["agent.host".to_string(), "agent.control".to_string()],
+        );
+        let key = Ed25519KeyPair::from_seed_unchecked(&[17u8; 32]).unwrap();
+        let signature = key.sign(&unsigned.canonical_transcript().unwrap());
+        unsigned.with_signature(BASE64.encode(signature.as_ref()))
+    }
+
+    fn sample_maple_device(request: &RegisterMapleDeviceRequest) -> MapleDevice {
+        let mut capabilities = request.capabilities.clone();
+        capabilities.sort_unstable();
+        MapleDevice {
+            registration_id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440005").unwrap(),
+            device_id: request.device_id,
+            installation_id: request.installation_id,
+            identity_algorithm: request.identity_algorithm,
+            identity_public_key: request.identity_public_key.clone(),
+            iroh_endpoint_id: request.iroh_endpoint_id.clone(),
+            endpoint_epoch: request.endpoint_epoch,
+            iroh_endpoint_addr: request.iroh_endpoint_addr.clone(),
+            platform: request.platform,
+            display_name: request.display_name.clone(),
+            capabilities,
+            revision: 1,
+        }
+    }
+
+    fn sample_maple_device_registration_response(
+        request: &RegisterMapleDeviceRequest,
+    ) -> MapleDeviceRegistrationResponse {
+        let registration_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440005").unwrap();
+        let mut checkpoint = MapleRevocationStreamCheckpointV1 {
+            artifact_version: MAPLE_PAIRING_ARTIFACT_VERSION,
+            subject_account_id: request.asserted_account_id,
+            subject_project_id: request.asserted_project_id,
+            host: MaplePairingDeviceClaimV1 {
+                registration_id,
+                device_id: request.device_id,
+                installation_id: request.installation_id,
+                identity_algorithm: MaplePairingIdentityAlgorithm::Ed25519,
+                identity_public_key: request.identity_public_key.clone(),
+                endpoint_id: request.iroh_endpoint_id.clone(),
+                endpoint_epoch: request.endpoint_epoch,
+            },
+            security_epoch: request.known_security_epoch,
+            revocation_stream_id: Uuid::parse_str("15151515-1515-4515-8515-151515151515").unwrap(),
+            revocation_stream_generation: 1,
+            last_issued_issuer_sequence: 0,
+            last_acked_issuer_sequence: 0,
+            issuer_key_id: "maple-test-issuer-2026-08-13".to_string(),
+            issuer_signature: String::new(),
+        };
+        let issuer_seed = hex::decode(
+            pairing_fixture()["test_private_seeds_hex"]["issuer"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        let issuer_seed: [u8; 32] = issuer_seed.try_into().unwrap();
+        checkpoint.issuer_signature = BASE64.encode(
+            SigningKey::from_bytes(&issuer_seed)
+                .sign(&checkpoint.canonical_transcript().unwrap())
+                .to_bytes(),
+        );
+        MapleDeviceRegistrationResponse {
+            protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+            operation_id: request.operation_id,
+            registration_id,
+            device_id: request.device_id,
+            revision: 1,
+            accepted_at: chrono::DateTime::parse_from_rfc3339("2026-08-12T00:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+            security_epoch: request.known_security_epoch,
+            revocation_sync: MapleRevocationSyncV1 {
+                security_epoch: request.known_security_epoch,
+                status: MapleRevocationSyncStatusV1::Ready,
+                stream_checkpoint: checkpoint,
+                reset_clear_instruction: None,
+            },
+        }
+    }
+
+    fn pairing_fixture() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../tests/fixtures/maple_pairing_v1_vectors.json"
+        ))
+        .unwrap()
+    }
+
+    fn sample_create_maple_pairing_request() -> CreateMaplePairingRequest {
+        serde_json::from_value(pairing_fixture()["create_request"].clone()).unwrap()
+    }
+
+    fn sample_pairing_issuer_keys() -> MaplePairingIssuerKeySet {
+        MaplePairingIssuerKeySet::from_v1(
+            serde_json::from_value(pairing_fixture()["issuer_keyset"].clone()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn response_time_from_pairing_fixture() -> i64 {
+        pairing_fixture()["request_ticket"]["created_at_unix_ms"]
+            .as_i64()
+            .unwrap()
+    }
+
+    fn sample_pending_pairing_response(
+        request: &CreateMaplePairingRequest,
+    ) -> MaplePairingMutationResponse {
+        let ticket: MaplePairRequestTicketV1 =
+            serde_json::from_value(pairing_fixture()["request_ticket"].clone()).unwrap();
+        MaplePairingMutationResponse {
+            protocol_version: MAPLE_PAIRING_PROTOCOL_VERSION,
+            operation_id: request.operation_id,
+            pairing: MaplePairingStatusV1 {
+                pairing_request_id: ticket.pairing_request_id,
+                pair_id: ticket.pair_id,
+                state: MaplePairingState::Pending,
+                revision: 1,
+                pairing_incarnation: ticket.pairing_incarnation,
+                revocation_stream_id: None,
+                revocation_stream_generation: None,
+                direction: request.direction,
+                execution_target_id: request.execution_target_id,
+                controller_registration_id: request.controller_registration_id,
+                host_registration_id: request.host_registration_id,
+                created_at_unix_ms: ticket.created_at_unix_ms,
+                expires_at_unix_ms: ticket.expires_at_unix_ms,
+                approved_at_unix_ms: None,
+                activated_at_unix_ms: None,
+                revoked_at_unix_ms: None,
+                request_ticket: Some(ticket),
+                pair_authorization: None,
+                revocation: None,
+            },
+        }
+    }
+
     fn decrypt_request_body<T: serde::de::DeserializeOwned>(
         request: &Request,
         session_key: &[u8; 32],
@@ -2855,6 +3393,19 @@ mod tests {
         }));
 
         assert_eq!(endpoint, "/v1/conversations?unassigned_project=true");
+    }
+
+    #[test]
+    fn test_build_maple_devices_endpoint_encodes_opaque_cursor() {
+        let endpoint = build_maple_devices_endpoint(Some(&MapleDeviceListParams {
+            cursor: Some("opaque+/cursor==".to_string()),
+            limit: Some(25),
+        }));
+
+        assert_eq!(
+            endpoint,
+            "/protected/maple/devices?cursor=opaque%2B%2Fcursor%3D%3D&limit=25"
+        );
     }
 
     #[test]
@@ -3010,6 +3561,141 @@ mod tests {
     }
 
     #[test]
+    fn maple_security_epoch_stale_error_requires_the_exact_frozen_wire_shape() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/maple_pairing_v1_vectors.json"
+        ))
+        .unwrap();
+        let stale = fixture["maple_security_epoch_stale_error"].clone();
+        assert!(matches!(
+            classify_api_error(409, serde_json::to_string(&stale).unwrap()),
+            Error::MapleSecurityEpochStale
+        ));
+
+        for body in [
+            json!({
+                "status": 409,
+                "code": "maple_security_epoch_stale",
+                "message": MAPLE_SECURITY_EPOCH_STALE_MESSAGE,
+            }),
+            json!({
+                "status": 409,
+                "code": MAPLE_SECURITY_EPOCH_STALE_CODE,
+                "message": "refresh and retry",
+            }),
+            json!({
+                "status": 400,
+                "code": MAPLE_SECURITY_EPOCH_STALE_CODE,
+                "message": MAPLE_SECURITY_EPOCH_STALE_MESSAGE,
+            }),
+        ] {
+            assert!(matches!(
+                classify_api_error(409, serde_json::to_string(&body).unwrap()),
+                Error::Api { status: 409, .. }
+            ));
+        }
+        assert!(matches!(
+            classify_api_error(400, serde_json::to_string(&stale).unwrap()),
+            Error::Api { status: 400, .. }
+        ));
+    }
+
+    #[test]
+    fn maple_reset_clear_required_error_requires_the_exact_sanitized_wire_shape() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/maple_pairing_v1_vectors.json"
+        ))
+        .unwrap();
+        let reset_clear = fixture["maple_pairing_reset_clear_required_error"].clone();
+        assert_eq!(reset_clear["status"], 409);
+        assert_eq!(reset_clear["code"], MAPLE_PAIRING_RESET_CLEAR_REQUIRED_CODE);
+        assert_eq!(
+            reset_clear["message"],
+            MAPLE_PAIRING_RESET_CLEAR_REQUIRED_MESSAGE
+        );
+        assert!(matches!(
+            classify_api_error(409, serde_json::to_string(&reset_clear).unwrap()),
+            Error::MaplePairingResetClearRequired
+        ));
+
+        for body in [
+            json!({
+                "status": 409,
+                "code": "maple_pairing_reset_clear_required",
+                "message": MAPLE_PAIRING_RESET_CLEAR_REQUIRED_MESSAGE,
+            }),
+            json!({
+                "status": 409,
+                "code": MAPLE_PAIRING_RESET_CLEAR_REQUIRED_CODE,
+                "message": "host 77777777-7777-4777-8777-777777777777 has reset 93000000-0000-4000-8000-000000000003",
+            }),
+        ] {
+            assert!(matches!(
+                classify_api_error(409, serde_json::to_string(&body).unwrap()),
+                Error::Api { status: 409, .. }
+            ));
+        }
+        assert!(matches!(
+            classify_api_error(400, serde_json::to_string(&reset_clear).unwrap()),
+            Error::Api { status: 400, .. }
+        ));
+    }
+
+    #[test]
+    fn maple_installation_retired_error_is_typed_only_for_sanitized_exact_shape() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/maple_pairing_v1_vectors.json"
+        ))
+        .unwrap();
+        let retired = fixture["maple_installation_retired_error"].clone();
+        assert_eq!(retired.as_object().unwrap().len(), 3);
+        assert_eq!(retired["status"], 409);
+        assert_eq!(retired["code"], MAPLE_INSTALLATION_RETIRED_CODE);
+        assert_eq!(retired["message"], MAPLE_INSTALLATION_RETIRED_MESSAGE);
+        assert!(matches!(
+            classify_api_error(409, serde_json::to_string(&retired).unwrap()),
+            Error::MapleInstallationRetired
+        ));
+        assert_eq!(
+            Error::MapleInstallationRetired.to_string(),
+            MAPLE_INSTALLATION_RETIRED_MESSAGE
+        );
+
+        for body in [
+            json!({
+                "status": 409,
+                "code": "maple_installation_retired",
+                "message": MAPLE_INSTALLATION_RETIRED_MESSAGE,
+            }),
+            json!({
+                "status": 409,
+                "code": MAPLE_INSTALLATION_RETIRED_CODE,
+                "message": "installation 99999999-9999-4999-8999-999999999999 is retired",
+            }),
+            json!({
+                "status": 409,
+                "code": MAPLE_INSTALLATION_RETIRED_CODE,
+                "message": MAPLE_INSTALLATION_RETIRED_MESSAGE,
+                "installation_instance_id": "99999999-9999-4999-8999-999999999999",
+            }),
+            json!({
+                "status": 400,
+                "code": MAPLE_INSTALLATION_RETIRED_CODE,
+                "message": MAPLE_INSTALLATION_RETIRED_MESSAGE,
+            }),
+        ] {
+            assert!(matches!(
+                classify_api_error(409, serde_json::to_string(&body).unwrap()),
+                Error::Api { status: 409, .. }
+            ));
+        }
+        assert!(matches!(
+            classify_api_error(400, serde_json::to_string(&retired).unwrap()),
+            Error::Api { status: 400, .. }
+        ));
+    }
+
+    #[test]
     fn android_emulator_alias_is_not_a_desktop_mock_bypass() {
         let client = OpenSecretClient::new("http://10.0.2.2:3000");
         if cfg!(target_os = "android") {
@@ -3072,6 +3758,547 @@ mod tests {
         second.unwrap();
         assert_eq!(server_secrets.lock().unwrap().len(), 2);
         assert!(client.get_session_id().unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn register_maple_device_uses_encrypted_protected_endpoint() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [61u8; 32];
+        let request = sample_maple_device_request(Uuid::new_v4());
+        let response_receipt = sample_maple_device_registration_response(&request);
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/devices/register"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .and(EncryptedJsonBodyMatcher {
+                session_key,
+                expected: serde_json::to_value(&request).unwrap(),
+            })
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response_receipt)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .register_maple_device(&request, &sample_pairing_issuer_keys())
+            .await
+            .unwrap();
+
+        assert_eq!(response.registration_id(), response_receipt.registration_id);
+        assert_eq!(response.device_id(), response_receipt.device_id);
+        assert_eq!(response.security_epoch(), response_receipt.security_epoch);
+    }
+
+    #[tokio::test]
+    async fn register_maple_device_preserves_operation_id_across_auth_retry() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [62u8; 32];
+        let operation_id = Uuid::new_v4();
+        let request = sample_maple_device_request(operation_id);
+        let expected_request = serde_json::to_value(&request).unwrap();
+        let response_receipt = sample_maple_device_registration_response(&request);
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "expired_access".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/devices/register"))
+            .and(header("authorization", "Bearer expired_access"))
+            .and(EncryptedJsonBodyMatcher {
+                session_key,
+                expected: expected_request.clone(),
+            })
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(json!({ "message": "jwt expired" })),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/refresh"))
+            .and(MissingHeaderMatcher("authorization"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(encrypted_response(
+                &session_key,
+                &json!({
+                    "access_token": "fresh_access",
+                    "refresh_token": "fresh_refresh",
+                }),
+            )))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/devices/register"))
+            .and(header("authorization", "Bearer fresh_access"))
+            .and(EncryptedJsonBodyMatcher {
+                session_key,
+                expected: expected_request,
+            })
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response_receipt)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response = client
+            .register_maple_device(&request, &sample_pairing_issuer_keys())
+            .await
+            .unwrap();
+
+        assert_eq!(response.registration_id(), response_receipt.registration_id);
+        assert_eq!(response.security_epoch(), response_receipt.security_epoch);
+        assert_eq!(request.operation_id, operation_id);
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn create_maple_pairing_uses_exact_encrypted_route_and_verified_receipt() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [71u8; 32];
+        let request = sample_create_maple_pairing_request();
+        let response = sample_pending_pairing_response(&request);
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/pairings/request"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .and(EncryptedJsonBodyMatcher {
+                session_key,
+                expected: serde_json::to_value(&request).unwrap(),
+            })
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let verified = client
+            .create_maple_pairing(
+                &request,
+                &sample_pairing_issuer_keys(),
+                response.pairing.created_at_unix_ms,
+            )
+            .await
+            .unwrap();
+        assert_eq!(verified.operation_id, request.operation_id);
+        assert_eq!(
+            verified.pairing.as_inner().state,
+            MaplePairingState::Pending
+        );
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn create_maple_pairing_replays_exact_body_only_for_stale_session_410() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let stale_session_id = Uuid::new_v4();
+        let stale_session_key = [72u8; 32];
+        let server_secret_key = [73u8; 32];
+        let server_public_key =
+            x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(server_secret_key));
+        let fresh_session_id = Uuid::new_v4();
+        let fresh_session_key = [74u8; 32];
+        let request = sample_create_maple_pairing_request();
+        let expected_body = serde_json::to_value(&request).unwrap();
+        let response = sample_pending_pairing_response(&request);
+        client
+            .session_manager
+            .set_session(stale_session_id, stale_session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/pairings/request"))
+            .and(header("x-session-id", stale_session_id.to_string()))
+            .and(EncryptedJsonBodyMatcher {
+                session_key: stale_session_key,
+                expected: expected_body.clone(),
+            })
+            .respond_with(ResponseTemplate::new(410).set_body_string("stale session"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(PathPrefixMatcher("/attestation/"))
+            .respond_with(AttestationResponder {
+                server_public_key: server_public_key.to_bytes(),
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/key_exchange"))
+            .and(MissingHeaderMatcher("authorization"))
+            .respond_with(KeyExchangeResponder {
+                server_secret_key,
+                session_key: fresh_session_key,
+                session_id: fresh_session_id.to_string(),
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/protected/maple/pairings/request"))
+            .and(header("x-session-id", fresh_session_id.to_string()))
+            .and(EncryptedJsonBodyMatcher {
+                session_key: fresh_session_key,
+                expected: expected_body,
+            })
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&fresh_session_key, &response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        client
+            .create_maple_pairing(
+                &request,
+                &sample_pairing_issuer_keys(),
+                response.pairing.created_at_unix_ms,
+            )
+            .await
+            .unwrap();
+        assert_eq!(request.operation_id, response.operation_id);
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn create_maple_pairing_never_reattests_or_replays_semantic_400_or_409() {
+        for status in [400, 409] {
+            let mock_server = MockServer::start().await;
+            let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+            let session_id = Uuid::new_v4();
+            let session_key = [75u8; 32];
+            let request = sample_create_maple_pairing_request();
+            client
+                .session_manager
+                .set_session(session_id, session_key)
+                .unwrap();
+            client
+                .session_manager
+                .set_tokens(
+                    "access_token".to_string(),
+                    Some("refresh_token".to_string()),
+                )
+                .unwrap();
+
+            Mock::given(method("POST"))
+                .and(path("/protected/maple/pairings/request"))
+                .and(EncryptedJsonBodyMatcher {
+                    session_key,
+                    expected: serde_json::to_value(&request).unwrap(),
+                })
+                .respond_with(ResponseTemplate::new(status).set_body_string("semantic failure"))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let error = client
+                .create_maple_pairing(
+                    &request,
+                    &sample_pairing_issuer_keys(),
+                    response_time_from_pairing_fixture(),
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(error, Error::Api { status: actual, .. } if actual == status));
+            assert_eq!(
+                request.operation_id,
+                sample_create_maple_pairing_request().operation_id
+            );
+            mock_server.verify().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn list_maple_devices_uses_bounded_cursor_page() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [63u8; 32];
+        let request = sample_maple_device_request(Uuid::new_v4());
+        let response = MapleDeviceListResponse {
+            protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+            security_epoch: 1,
+            devices: vec![sample_maple_device(&request)],
+            next_cursor: Some("next-cursor".to_string()),
+            has_more: true,
+        };
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/protected/maple/devices"))
+            .and(query_param("cursor", "opaque+/cursor=="))
+            .and(query_param("limit", "25"))
+            .and(header("authorization", "Bearer access_token"))
+            .and(header("x-session-id", session_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response)),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let listed = client
+            .list_maple_devices(Some(MapleDeviceListParams {
+                cursor: Some("opaque+/cursor==".to_string()),
+                limit: Some(25),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(listed, response);
+    }
+
+    #[tokio::test]
+    async fn list_maple_devices_rejects_unbounded_or_empty_page_inputs_locally() {
+        let client = OpenSecretClient::new("http://localhost:3000").unwrap();
+
+        for params in [
+            MapleDeviceListParams {
+                cursor: None,
+                limit: Some(0),
+            },
+            MapleDeviceListParams {
+                cursor: None,
+                limit: Some(MAPLE_DEVICE_LIST_MAX_LIMIT + 1),
+            },
+            MapleDeviceListParams {
+                cursor: Some(String::new()),
+                limit: Some(10),
+            },
+        ] {
+            let error = client.list_maple_devices(Some(params)).await.unwrap_err();
+            assert!(matches!(error, Error::Configuration(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn list_maple_devices_rejects_malformed_or_oversized_server_pages() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [64u8; 32];
+        let request = sample_maple_device_request(Uuid::new_v4());
+        let mut malformed = sample_maple_device(&request);
+        malformed.display_name = " untrusted".to_string();
+        let response = MapleDeviceListResponse {
+            protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+            security_epoch: 1,
+            devices: vec![malformed],
+            next_cursor: Some(String::new()),
+            has_more: true,
+        };
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/protected/maple/devices"))
+            .and(query_param("limit", "1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response)),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let error = client
+            .list_maple_devices(Some(MapleDeviceListParams {
+                cursor: None,
+                limit: Some(1),
+            }))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidResponse(_)));
+    }
+
+    #[tokio::test]
+    async fn list_maple_devices_rejects_duplicate_server_identities() {
+        let mock_server = MockServer::start().await;
+        let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+        let session_id = Uuid::new_v4();
+        let session_key = [65u8; 32];
+        let request = sample_maple_device_request(Uuid::new_v4());
+        let device = sample_maple_device(&request);
+        let response = MapleDeviceListResponse {
+            protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+            security_epoch: 1,
+            devices: vec![device.clone(), device],
+            next_cursor: None,
+            has_more: false,
+        };
+
+        client
+            .session_manager
+            .set_session(session_id, session_key)
+            .unwrap();
+        client
+            .session_manager
+            .set_tokens(
+                "access_token".to_string(),
+                Some("refresh_token".to_string()),
+            )
+            .unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/protected/maple/devices"))
+            .and(query_param("limit", "2"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(encrypted_response(&session_key, &response)),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let error = client
+            .list_maple_devices(Some(MapleDeviceListParams {
+                cursor: None,
+                limit: Some(2),
+            }))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidResponse(_)));
+    }
+
+    #[tokio::test]
+    async fn list_maple_devices_rejects_non_progressing_server_pages() {
+        for (request_cursor, response_cursor, devices) in [
+            (
+                None,
+                Some(
+                    "AAAAAAAAAAEAAAAAAAAAAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD".to_string(),
+                ),
+                Vec::new(),
+            ),
+            (
+                Some(
+                    "AAAAAAAAAAEAAAAAAAAAAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD".to_string(),
+                ),
+                Some(
+                    "AAAAAAAAAAEAAAAAAAAAAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD".to_string(),
+                ),
+                vec![sample_maple_device(&sample_maple_device_request(
+                    Uuid::new_v4(),
+                ))],
+            ),
+        ] {
+            let mock_server = MockServer::start().await;
+            let client = OpenSecretClient::new(mock_server.uri()).unwrap();
+            let session_id = Uuid::new_v4();
+            let session_key = [66u8; 32];
+            client
+                .session_manager
+                .set_session(session_id, session_key)
+                .unwrap();
+            client
+                .session_manager
+                .set_tokens("access_token".to_string(), None)
+                .unwrap();
+            let response = MapleDeviceListResponse {
+                protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+                security_epoch: 1,
+                devices,
+                next_cursor: response_cursor,
+                has_more: true,
+            };
+            Mock::given(method("GET"))
+                .and(path("/protected/maple/devices"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(encrypted_response(&session_key, &response)),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let error = client
+                .list_maple_devices(Some(MapleDeviceListParams {
+                    cursor: request_cursor,
+                    limit: Some(1),
+                }))
+                .await
+                .unwrap_err();
+            assert!(matches!(error, Error::InvalidResponse(_)));
+        }
     }
 
     #[tokio::test]
@@ -5372,7 +6599,7 @@ mod tests {
                 session_key: stale_session_key,
                 expected: json!({ "input": "stale stream" }),
             })
-            .respond_with(ResponseTemplate::new(400).set_body_string("stale session"))
+            .respond_with(ResponseTemplate::new(410).set_body_string("stale session"))
             .expect(1)
             .mount(&mock_server)
             .await;
