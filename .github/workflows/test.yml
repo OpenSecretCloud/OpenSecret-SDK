@@ -23,6 +23,11 @@ jobs:
         with:
           bun-version: 1.3.5
 
+      - name: Setup Node for Sigstore update tooling
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.18.0
+
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
@@ -32,10 +37,37 @@ jobs:
       - name: Build library
         run: bun run build
 
-      - name: Run tests
+      - name: Test trusted-release updater
+        run: bun run test:trusted-release-updater
+
+      - name: Detect a signed development release
+        id: trusted-release-policy
+        run: |
+          if jq -e 'any(.releases[]; .manifest.environment == "dev")' \
+            src/lib/trusted-enclave-releases.generated.json >/dev/null; then
+            echo "dev_releases_available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dev_releases_available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run offline tests before the first signed development release
+        if: steps.trusted-release-policy.outputs.dev_releases_available != 'true'
+        env:
+          VITE_OPEN_SECRET_API_URL: http://localhost:3000
+          VITE_OPEN_SECRET_ATTESTATION_ENVIRONMENT: dev
+        run: |
+          bun test --timeout 30000 \
+            src/lib/test/integration/attestation.test.ts \
+            src/lib/test/integration/attestationSession.test.ts \
+            src/lib/test/integration/developerHook.test.ts \
+            src/lib/test/integration/pcr.test.ts \
+            src/lib/test/integration/platformPushSettings.test.ts
+
+      - name: Run live tests
+        if: steps.trusted-release-policy.outputs.dev_releases_available == 'true'
         env:
           VITE_OPEN_SECRET_API_URL: ${{ secrets.VITE_OPEN_SECRET_API_URL }}
-          VITE_OPEN_SECRET_PCR_ENVIRONMENT: development
+          VITE_OPEN_SECRET_ATTESTATION_ENVIRONMENT: dev
           VITE_TEST_EMAIL: ${{ secrets.VITE_TEST_EMAIL }}
           VITE_TEST_PASSWORD: ${{ secrets.VITE_TEST_PASSWORD }}
           VITE_TEST_NAME: ${{ secrets.VITE_TEST_NAME }}
