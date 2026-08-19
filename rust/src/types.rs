@@ -1,6 +1,9 @@
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::{DateTime, Utc};
+use ring::signature::{UnparsedPublicKey, ED25519};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use std::{collections::HashSet, net::SocketAddr};
 use uuid::Uuid;
 
 // Attestation & Key Exchange Types
@@ -235,6 +238,783 @@ pub struct AppUser {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: AppUser,
+}
+
+// Maple Remote Device Types
+
+/// Current version of the Maple remote-device registration contract.
+pub const MAPLE_DEVICE_PROTOCOL_VERSION: u16 = 1;
+
+/// Current version of the server-reconstructed canonical registration transcript.
+pub const MAPLE_DEVICE_TRANSCRIPT_VERSION: u16 = 1;
+
+/// Default Maple device-directory page size applied by the server.
+pub const MAPLE_DEVICE_LIST_DEFAULT_LIMIT: u16 = 25;
+
+/// Largest Maple device-directory page accepted by the Rust SDK.
+pub const MAPLE_DEVICE_LIST_MAX_LIMIT: u16 = 100;
+
+/// Largest opaque Maple device-directory cursor accepted from a caller.
+pub const MAPLE_DEVICE_LIST_MAX_CURSOR_BYTES: usize = 512;
+
+/// Maximum relay routes carried in one signed Iroh endpoint address.
+pub const MAPLE_DEVICE_MAX_RELAY_URLS: usize = 4;
+
+/// Maximum direct socket routes carried in one signed Iroh endpoint address.
+pub const MAPLE_DEVICE_MAX_DIRECT_ADDRESSES: usize = 16;
+
+/// Maximum encoded length of one canonical relay URL.
+pub const MAPLE_DEVICE_MAX_RELAY_URL_BYTES: usize = 512;
+
+/// Maximum encoded length of one canonical direct `SocketAddr`.
+pub const MAPLE_DEVICE_MAX_DIRECT_ADDRESS_BYTES: usize = 64;
+
+/// Bounded, non-secret routing information for one Iroh endpoint.
+///
+/// This intentionally represents only Iroh relay URLs and direct socket
+/// addresses. It cannot carry an endpoint secret key or an opaque/custom Iroh
+/// transport address. Direct routes may be public, private, or loopback
+/// unicast addresses. The device directory itself is encrypted; callers must
+/// treat all routes as sensitive network metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MapleIrohEndpointAddr {
+    pub relay_urls: Vec<String>,
+    pub direct_addresses: Vec<String>,
+}
+
+struct ValidatedMapleDeviceTranscript<'a> {
+    identity_public_key: [u8; 32],
+    iroh_endpoint_key: [u8; 32],
+    relay_urls: Vec<&'a str>,
+    direct_addresses: Vec<&'a str>,
+    capabilities: Vec<&'a str>,
+}
+
+impl MapleIrohEndpointAddr {
+    /// Builds the canonical JSON form used by registration and list records.
+    pub fn canonical_v1(
+        relay_urls: Vec<String>,
+        direct_addresses: Vec<String>,
+    ) -> crate::Result<Self> {
+        let candidate = Self {
+            relay_urls,
+            direct_addresses,
+        };
+        let (relay_urls, direct_addresses) = candidate.canonical_parts()?;
+        Ok(Self {
+            relay_urls: relay_urls.into_iter().map(str::to_owned).collect(),
+            direct_addresses: direct_addresses.into_iter().map(str::to_owned).collect(),
+        })
+    }
+
+    /// Validates that the DTO contains only bounded, non-secret Iroh routes.
+    pub fn validate(&self) -> crate::Result<()> {
+        let (relay_urls, direct_addresses) = self.canonical_parts()?;
+        if relay_urls.as_slice() != self.relay_urls
+            || direct_addresses.as_slice() != self.direct_addresses
+        {
+            return Err(crate::Error::Configuration(
+                "Maple Iroh endpoint routes must use canonical sorted order".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn canonical_parts(&self) -> crate::Result<(Vec<&str>, Vec<&str>)> {
+        if self.relay_urls.len() > MAPLE_DEVICE_MAX_RELAY_URLS {
+            return Err(crate::Error::Configuration(format!(
+                "Maple Iroh endpoint supports at most {MAPLE_DEVICE_MAX_RELAY_URLS} relay URLs"
+            )));
+        }
+        if self.direct_addresses.len() > MAPLE_DEVICE_MAX_DIRECT_ADDRESSES {
+            return Err(crate::Error::Configuration(format!(
+                "Maple Iroh endpoint supports at most {MAPLE_DEVICE_MAX_DIRECT_ADDRESSES} direct addresses"
+            )));
+        }
+        if self.relay_urls.is_empty() && self.direct_addresses.is_empty() {
+            return Err(crate::Error::Configuration(
+                "Maple Iroh endpoint must contain at least one relay URL or direct address"
+                    .to_string(),
+            ));
+        }
+
+        let mut relay_urls = Vec::with_capacity(self.relay_urls.len());
+        let mut seen_relays = HashSet::with_capacity(self.relay_urls.len());
+        for relay_url in &self.relay_urls {
+            let parsed = reqwest::Url::parse(relay_url).map_err(|_| {
+                crate::Error::Configuration("Maple Iroh relay URL is invalid".to_string())
+            })?;
+            if relay_url.is_empty()
+                || relay_url.len() > MAPLE_DEVICE_MAX_RELAY_URL_BYTES
+                || parsed.as_str() != relay_url
+                || parsed.scheme() != "https"
+                || parsed.host().is_none()
+                || !parsed.username().is_empty()
+                || parsed.password().is_some()
+                || parsed.port() == Some(0)
+                || parsed.query().is_some()
+                || parsed.fragment().is_some()
+                || !seen_relays.insert(relay_url.as_str())
+            {
+                return Err(crate::Error::Configuration(
+                    "Maple Iroh relay URLs must be unique canonical HTTPS URLs without credentials, queries, or fragments"
+                        .to_string(),
+                ));
+            }
+            relay_urls.push(relay_url.as_str());
+        }
+        relay_urls.sort_unstable();
+
+        let mut direct_addresses = Vec::with_capacity(self.direct_addresses.len());
+        let mut seen_direct = HashSet::with_capacity(self.direct_addresses.len());
+        for direct_address in &self.direct_addresses {
+            let parsed = direct_address.parse::<SocketAddr>().map_err(|_| {
+                crate::Error::Configuration(
+                    "Maple Iroh direct address is not a socket address".to_string(),
+                )
+            })?;
+            if direct_address.is_empty()
+                || direct_address.len() > MAPLE_DEVICE_MAX_DIRECT_ADDRESS_BYTES
+                || parsed.to_string() != *direct_address
+                || parsed.port() == 0
+                || parsed.ip().is_unspecified()
+                || parsed.ip().is_multicast()
+                || parsed.ip() == std::net::IpAddr::V4(std::net::Ipv4Addr::BROADCAST)
+                || !seen_direct.insert(direct_address.as_str())
+            {
+                return Err(crate::Error::Configuration(
+                    "Maple Iroh direct addresses must be unique canonical unicast SocketAddr values with nonzero ports"
+                        .to_string(),
+                ));
+            }
+            direct_addresses.push(direct_address.as_str());
+        }
+        direct_addresses.sort_unstable();
+
+        Ok((relay_urls, direct_addresses))
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MapleDeviceIdentityAlgorithm {
+    Ed25519,
+}
+
+impl MapleDeviceIdentityAlgorithm {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Ed25519 => "ed25519",
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MapleDevicePlatform {
+    Macos,
+    Windows,
+    Linux,
+    Ios,
+    Android,
+}
+
+impl MapleDevicePlatform {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Macos => "macos",
+            Self::Windows => "windows",
+            Self::Linux => "linux",
+            Self::Ios => "ios",
+            Self::Android => "android",
+        }
+    }
+}
+
+/// A signed, caller-owned Maple device registration request.
+///
+/// These structured fields are the input to the server's canonical transcript
+/// reconstruction. The SDK does not accept caller-chosen canonical bytes and
+/// verifies the completed Ed25519 signature before sending the request.
+/// Private-key generation and storage belong to the Maple installation and its
+/// platform secure-storage implementation.
+///
+/// An installation ID whose remote enrollment lineage has been retired is
+/// permanently unavailable for registration. Re-enrollment must create a
+/// fresh installation ID and identity key/endpoint identity; changing mutable
+/// display or routing fields does not revive the retired installation.
+/// `operation_id` must be generated once by the caller and retained across
+/// ambiguous outcomes; the encrypted client may automatically retry this exact
+/// request after refreshing authentication or its attested session.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RegisterMapleDeviceRequest {
+    pub protocol_version: u16,
+    pub transcript_version: u16,
+    pub operation_id: Uuid,
+    pub device_id: Uuid,
+    pub installation_id: Uuid,
+    /// Signed compare-and-swap precondition for an existing registration.
+    /// `None` creates a registration; `Some(current_revision)` refreshes the
+    /// same installation without permitting identity-key replacement.
+    pub expected_revision: Option<i64>,
+    /// Signed account security-epoch precondition. A newly bootstrapped
+    /// account starts at epoch 1; callers must persist the latest verified
+    /// epoch and refresh device state when the service rejects a stale value.
+    pub known_security_epoch: u64,
+    /// Signed stale-state precondition. The server derives account authority
+    /// from authentication and rejects a mismatch; this field never selects a
+    /// database namespace.
+    pub asserted_account_id: Uuid,
+    /// Signed public `org_projects.client_id` precondition for the authenticated
+    /// OpenSecret project. The server derives project authority independently.
+    pub asserted_project_id: Uuid,
+    pub identity_algorithm: MapleDeviceIdentityAlgorithm,
+    pub identity_public_key: String,
+    pub iroh_endpoint_id: String,
+    /// Monotonic endpoint lifecycle epoch, not an address-generation counter.
+    /// Routine relay/direct address churn keeps this value stable and advances
+    /// the registration `revision` through `expected_revision` CAS instead;
+    /// v1 updates may retain or advance it for the same immutable identity but
+    /// may never decrease it.
+    pub endpoint_epoch: u64,
+    pub iroh_endpoint_addr: MapleIrohEndpointAddr,
+    pub platform: MapleDevicePlatform,
+    pub display_name: String,
+    pub capabilities: Vec<String>,
+    pub signature: String,
+}
+
+impl std::fmt::Debug for RegisterMapleDeviceRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RegisterMapleDeviceRequest")
+            .field("protocol_version", &self.protocol_version)
+            .field("transcript_version", &self.transcript_version)
+            .field("operation_id", &self.operation_id)
+            .field("device_id", &self.device_id)
+            .field("installation_id", &self.installation_id)
+            .field("expected_revision", &self.expected_revision)
+            .field("known_security_epoch", &self.known_security_epoch)
+            .field("asserted_account_id", &self.asserted_account_id)
+            .field("asserted_project_id", &self.asserted_project_id)
+            .field("identity_algorithm", &self.identity_algorithm.as_str())
+            .field("identity_public_key", &"<redacted>")
+            .field("iroh_endpoint_id", &"<redacted>")
+            .field("endpoint_epoch", &self.endpoint_epoch)
+            .field("relay_url_count", &self.iroh_endpoint_addr.relay_urls.len())
+            .field(
+                "direct_address_count",
+                &self.iroh_endpoint_addr.direct_addresses.len(),
+            )
+            .field("platform", &self.platform.as_str())
+            .field("display_name", &"<redacted>")
+            .field("capability_count", &self.capabilities.len())
+            .field("signature", &"<redacted>")
+            .finish()
+    }
+}
+
+impl RegisterMapleDeviceRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn v1(
+        operation_id: Uuid,
+        device_id: Uuid,
+        installation_id: Uuid,
+        expected_revision: Option<i64>,
+        known_security_epoch: u64,
+        asserted_account_id: Uuid,
+        asserted_project_id: Uuid,
+        identity_public_key: impl Into<String>,
+        iroh_endpoint_id: impl Into<String>,
+        endpoint_epoch: u64,
+        iroh_endpoint_addr: MapleIrohEndpointAddr,
+        platform: MapleDevicePlatform,
+        display_name: impl Into<String>,
+        capabilities: Vec<String>,
+        signature: impl Into<String>,
+    ) -> Self {
+        Self::unsigned_v1(
+            operation_id,
+            device_id,
+            installation_id,
+            expected_revision,
+            known_security_epoch,
+            asserted_account_id,
+            asserted_project_id,
+            identity_public_key,
+            iroh_endpoint_id,
+            endpoint_epoch,
+            iroh_endpoint_addr,
+            platform,
+            display_name,
+            capabilities,
+        )
+        .with_signature(signature)
+    }
+
+    /// Creates the structured v1 registration before the caller signs it.
+    ///
+    /// Call [`Self::canonical_transcript`], sign those bytes with the
+    /// installation's externally managed key, then attach the public signature
+    /// with [`Self::with_signature`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn unsigned_v1(
+        operation_id: Uuid,
+        device_id: Uuid,
+        installation_id: Uuid,
+        expected_revision: Option<i64>,
+        known_security_epoch: u64,
+        asserted_account_id: Uuid,
+        asserted_project_id: Uuid,
+        identity_public_key: impl Into<String>,
+        iroh_endpoint_id: impl Into<String>,
+        endpoint_epoch: u64,
+        iroh_endpoint_addr: MapleIrohEndpointAddr,
+        platform: MapleDevicePlatform,
+        display_name: impl Into<String>,
+        capabilities: Vec<String>,
+    ) -> Self {
+        Self {
+            protocol_version: MAPLE_DEVICE_PROTOCOL_VERSION,
+            transcript_version: MAPLE_DEVICE_TRANSCRIPT_VERSION,
+            operation_id,
+            device_id,
+            installation_id,
+            expected_revision,
+            known_security_epoch,
+            asserted_account_id,
+            asserted_project_id,
+            identity_algorithm: MapleDeviceIdentityAlgorithm::Ed25519,
+            identity_public_key: identity_public_key.into(),
+            iroh_endpoint_id: iroh_endpoint_id.into(),
+            endpoint_epoch,
+            iroh_endpoint_addr,
+            platform,
+            display_name: display_name.into(),
+            capabilities,
+            signature: String::new(),
+        }
+    }
+
+    pub fn with_signature(mut self, signature: impl Into<String>) -> Self {
+        self.signature = signature.into();
+        self
+    }
+
+    /// Reconstructs the versioned canonical bytes this request must sign.
+    ///
+    /// This validates every signed public field, sorts capabilities without
+    /// changing the caller's request object, and deliberately excludes
+    /// `signature`. The OpenSecret service independently reconstructs these
+    /// exact bytes after deriving and matching the account and project from the
+    /// authenticated request context.
+    pub fn canonical_transcript(&self) -> crate::Result<Vec<u8>> {
+        let validated = self.validate_transcript_fields()?;
+        let mut canonical = MapleCanonicalBytes::new("os.maple-device-registration.v1");
+        canonical
+            .append_u16(self.protocol_version)
+            .append_u16(self.transcript_version)
+            .append_uuid(self.asserted_account_id)
+            .append_uuid(self.asserted_project_id)
+            .append_u64(self.known_security_epoch)
+            .append_uuid(self.operation_id)
+            .append_uuid(self.device_id)
+            .append_uuid(self.installation_id)
+            .append_bool(self.expected_revision.is_some());
+        if let Some(expected_revision) = self.expected_revision {
+            canonical.append_i64(expected_revision);
+        }
+        canonical
+            .append_str(self.identity_algorithm.as_str())
+            .append_bytes(&validated.identity_public_key)
+            .append_bytes(&validated.iroh_endpoint_key)
+            .append_u64(self.endpoint_epoch)
+            .append_u16(validated.relay_urls.len() as u16);
+        for relay_url in validated.relay_urls {
+            canonical.append_str(relay_url);
+        }
+        canonical.append_u16(validated.direct_addresses.len() as u16);
+        for direct_address in validated.direct_addresses {
+            canonical.append_str(direct_address);
+        }
+        canonical
+            .append_str(self.platform.as_str())
+            .append_str(&self.display_name)
+            .append_u16(validated.capabilities.len() as u16);
+        for capability in validated.capabilities {
+            canonical.append_str(capability);
+        }
+        Ok(canonical.into_bytes())
+    }
+
+    /// Validates the complete signed request without generating or storing keys.
+    pub fn validate(&self) -> crate::Result<()> {
+        let transcript = self.canonical_transcript()?;
+        let validated = self.validate_transcript_fields()?;
+        let signature = decode_canonical_base64(&self.signature, "Maple device signature")?;
+        if signature.len() != 64 {
+            return Err(crate::Error::Configuration(
+                "Maple device signature must contain exactly 64 bytes".to_string(),
+            ));
+        }
+        UnparsedPublicKey::new(&ED25519, validated.identity_public_key)
+            .verify(&transcript, &signature)
+            .map_err(|_| {
+                crate::Error::Configuration(
+                    "Maple device signature does not verify for the signed registration"
+                        .to_string(),
+                )
+            })?;
+        Ok(())
+    }
+
+    fn validate_transcript_fields(&self) -> crate::Result<ValidatedMapleDeviceTranscript<'_>> {
+        if self.protocol_version != MAPLE_DEVICE_PROTOCOL_VERSION {
+            return Err(crate::Error::Configuration(format!(
+                "Unsupported Maple device protocol version: {}",
+                self.protocol_version
+            )));
+        }
+        if self.transcript_version != MAPLE_DEVICE_TRANSCRIPT_VERSION {
+            return Err(crate::Error::Configuration(format!(
+                "Unsupported Maple device transcript version: {}",
+                self.transcript_version
+            )));
+        }
+        for (name, value) in [
+            ("operation_id", self.operation_id),
+            ("asserted_account_id", self.asserted_account_id),
+            ("asserted_project_id", self.asserted_project_id),
+            ("device_id", self.device_id),
+            ("installation_id", self.installation_id),
+        ] {
+            if value.is_nil() {
+                return Err(crate::Error::Configuration(format!(
+                    "Maple device {name} must not be nil"
+                )));
+            }
+        }
+        if self
+            .expected_revision
+            .is_some_and(|revision| revision <= 0 || revision == i64::MAX)
+        {
+            return Err(crate::Error::Configuration(
+                "Maple device expected revision must be positive and incrementable".to_string(),
+            ));
+        }
+        if self.known_security_epoch == 0 || self.known_security_epoch > i64::MAX as u64 {
+            return Err(crate::Error::Configuration(
+                "Maple device known security epoch must be nonzero and supported by the service"
+                    .to_string(),
+            ));
+        }
+        if self.endpoint_epoch > i64::MAX as u64 {
+            return Err(crate::Error::Configuration(
+                "Maple device endpoint epoch exceeds the supported range".to_string(),
+            ));
+        }
+        let (relay_urls, direct_addresses) = self.iroh_endpoint_addr.canonical_parts()?;
+
+        let identity_public_key =
+            decode_canonical_base64(&self.identity_public_key, "Maple device public key")?;
+        let identity_public_key: [u8; 32] = identity_public_key.try_into().map_err(|_| {
+            crate::Error::Configuration(
+                "Maple device public key must contain exactly 32 bytes".to_string(),
+            )
+        })?;
+
+        if self.iroh_endpoint_id.len() != 64
+            || !self
+                .iroh_endpoint_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
+            return Err(crate::Error::Configuration(
+                "Maple Iroh endpoint ID must be canonical lowercase 64-character hex".to_string(),
+            ));
+        }
+        let iroh_endpoint_key: [u8; 32] = hex::decode(&self.iroh_endpoint_id)
+            .map_err(|_| {
+                crate::Error::Configuration("Maple Iroh endpoint ID is invalid hex".to_string())
+            })?
+            .try_into()
+            .map_err(|_| {
+                crate::Error::Configuration(
+                    "Maple Iroh endpoint ID must contain exactly 32 bytes".to_string(),
+                )
+            })?;
+        if iroh_endpoint_key != identity_public_key {
+            return Err(crate::Error::Configuration(
+                "Maple device public key must match the Iroh endpoint ID".to_string(),
+            ));
+        }
+
+        if self.display_name.is_empty()
+            || self.display_name.trim() != self.display_name
+            || self.display_name.chars().count() > 80
+            || self.display_name.chars().any(char::is_control)
+        {
+            return Err(crate::Error::Configuration(
+                "Maple device display name must be trimmed, contain 1 to 80 characters, and contain no control characters"
+                    .to_string(),
+            ));
+        }
+
+        if self.capabilities.len() > 32 {
+            return Err(crate::Error::Configuration(
+                "Maple device registration supports at most 32 capabilities".to_string(),
+            ));
+        }
+        let mut unique_capabilities = HashSet::with_capacity(self.capabilities.len());
+        for capability in &self.capabilities {
+            let valid = !capability.is_empty()
+                && capability.len() <= 64
+                && capability.bytes().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'.' | b'_' | b':' | b'-')
+                });
+            if !valid || !unique_capabilities.insert(capability.as_str()) {
+                return Err(crate::Error::Configuration(
+                    "Maple device capabilities must be unique lowercase tokens of at most 64 bytes"
+                        .to_string(),
+                ));
+            }
+        }
+        let mut capabilities = unique_capabilities.into_iter().collect::<Vec<_>>();
+        capabilities.sort_unstable();
+
+        Ok(ValidatedMapleDeviceTranscript {
+            identity_public_key,
+            iroh_endpoint_key,
+            relay_urls,
+            direct_addresses,
+            capabilities,
+        })
+    }
+}
+
+fn decode_canonical_base64(value: &str, field_name: &str) -> crate::Result<Vec<u8>> {
+    let decoded = BASE64.decode(value).map_err(|_| {
+        crate::Error::Configuration(format!("{field_name} must be standard base64"))
+    })?;
+    if BASE64.encode(&decoded) != value {
+        return Err(crate::Error::Configuration(format!(
+            "{field_name} must use canonical padded standard base64"
+        )));
+    }
+    Ok(decoded)
+}
+
+#[derive(Default)]
+struct MapleCanonicalBytes {
+    bytes: Vec<u8>,
+}
+
+impl MapleCanonicalBytes {
+    fn new(domain: &str) -> Self {
+        let mut canonical = Self::default();
+        canonical.append_str(domain);
+        canonical
+    }
+
+    fn append_str(&mut self, value: &str) -> &mut Self {
+        self.append_field(b's', value.as_bytes())
+    }
+
+    fn append_bytes(&mut self, value: &[u8]) -> &mut Self {
+        self.append_field(b'b', value)
+    }
+
+    fn append_u16(&mut self, value: u16) -> &mut Self {
+        self.append_field(b'j', &value.to_be_bytes())
+    }
+
+    fn append_bool(&mut self, value: bool) -> &mut Self {
+        self.append_field(b'?', &[u8::from(value)])
+    }
+
+    fn append_i64(&mut self, value: i64) -> &mut Self {
+        self.append_field(b'l', &value.to_be_bytes())
+    }
+
+    fn append_u64(&mut self, value: u64) -> &mut Self {
+        self.append_field(b'L', &value.to_be_bytes())
+    }
+
+    fn append_uuid(&mut self, value: Uuid) -> &mut Self {
+        self.append_field(b'u', value.as_bytes())
+    }
+
+    fn append_field(&mut self, tag: u8, value: &[u8]) -> &mut Self {
+        let len = u32::try_from(value.len()).expect("Maple canonical field length fits in u32");
+        self.bytes.push(tag);
+        self.bytes.extend_from_slice(&len.to_be_bytes());
+        self.bytes.extend_from_slice(value);
+        self
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+/// Idempotent receipt returned by Maple device registration.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MapleDeviceRegistrationResponse {
+    pub protocol_version: u16,
+    pub operation_id: Uuid,
+    pub registration_id: Uuid,
+    pub device_id: Uuid,
+    pub revision: i64,
+    pub accepted_at: DateTime<Utc>,
+    pub security_epoch: u64,
+    pub revocation_sync: crate::MapleRevocationSyncV1,
+}
+
+impl std::fmt::Debug for MapleDeviceRegistrationResponse {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MapleDeviceRegistrationResponse")
+            .field("protocol_version", &self.protocol_version)
+            .field("revision", &self.revision)
+            .field("security_epoch", &self.security_epoch)
+            .field("sync_status", &self.revocation_sync.status)
+            .field("authority_material", &"[redacted]")
+            .finish()
+    }
+}
+
+/// Durable account-scoped record returned after device-directory decryption.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MapleDevice {
+    pub registration_id: Uuid,
+    pub device_id: Uuid,
+    pub installation_id: Uuid,
+    pub identity_algorithm: MapleDeviceIdentityAlgorithm,
+    pub identity_public_key: String,
+    pub iroh_endpoint_id: String,
+    pub endpoint_epoch: u64,
+    pub iroh_endpoint_addr: MapleIrohEndpointAddr,
+    pub platform: MapleDevicePlatform,
+    pub display_name: String,
+    pub capabilities: Vec<String>,
+    pub revision: i64,
+}
+
+impl std::fmt::Debug for MapleDevice {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MapleDevice")
+            .field("endpoint_epoch", &self.endpoint_epoch)
+            .field("platform", &self.platform.as_str())
+            .field("capability_count", &self.capabilities.len())
+            .field("revision", &self.revision)
+            .field("authority_material", &"[redacted]")
+            .finish()
+    }
+}
+
+impl MapleDevice {
+    /// Validates a decrypted device-directory record before it is handed to
+    /// Maple's transport layer.
+    pub fn validate(&self) -> crate::Result<()> {
+        if self.registration_id.is_nil()
+            || self.device_id.is_nil()
+            || self.installation_id.is_nil()
+            || self.revision <= 0
+            || self.endpoint_epoch > i64::MAX as u64
+        {
+            return Err(crate::Error::Configuration(
+                "Maple device directory record contains invalid identifiers or revision"
+                    .to_string(),
+            ));
+        }
+
+        let identity_public_key =
+            decode_canonical_base64(&self.identity_public_key, "Maple device public key")?;
+        let identity_public_key: [u8; 32] = identity_public_key.try_into().map_err(|_| {
+            crate::Error::Configuration(
+                "Maple device public key must contain exactly 32 bytes".to_string(),
+            )
+        })?;
+        if self.iroh_endpoint_id != hex::encode(identity_public_key) {
+            return Err(crate::Error::Configuration(
+                "Maple device directory public key does not match its Iroh endpoint ID".to_string(),
+            ));
+        }
+        self.iroh_endpoint_addr.validate()?;
+        if self.display_name.is_empty()
+            || self.display_name.trim() != self.display_name
+            || self.display_name.chars().count() > 80
+            || self.display_name.chars().any(char::is_control)
+        {
+            return Err(crate::Error::Configuration(
+                "Maple device directory display name must be trimmed, contain 1 to 80 characters, and contain no control characters"
+                    .to_string(),
+            ));
+        }
+        if self.capabilities.len() > 32 {
+            return Err(crate::Error::Configuration(
+                "Maple device directory record supports at most 32 capabilities".to_string(),
+            ));
+        }
+        for capability in &self.capabilities {
+            let valid = !capability.is_empty()
+                && capability.len() <= 64
+                && capability.bytes().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'.' | b'_' | b':' | b'-')
+                });
+            if !valid {
+                return Err(crate::Error::Configuration(
+                    "Maple device directory capabilities must be lowercase tokens of at most 64 bytes"
+                        .to_string(),
+                ));
+            }
+        }
+        if self.capabilities.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(crate::Error::Configuration(
+                "Maple device directory capabilities must be in strictly ascending canonical order"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct MapleDeviceListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u16>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MapleDeviceListResponse {
+    pub protocol_version: u16,
+    pub security_epoch: u64,
+    pub devices: Vec<MapleDevice>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+impl std::fmt::Debug for MapleDeviceListResponse {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MapleDeviceListResponse")
+            .field("protocol_version", &self.protocol_version)
+            .field("security_epoch", &self.security_epoch)
+            .field("device_count", &self.devices.len())
+            .field("has_more", &self.has_more)
+            .field("authority_material", &"[redacted]")
+            .finish()
+    }
 }
 
 // Push Notification Types
@@ -1263,7 +2043,430 @@ pub enum AgentSseEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ring::signature::{Ed25519KeyPair, KeyPair};
     use serde_json::json;
+    use sha2::{Digest, Sha256};
+
+    fn sign_maple_request(unsigned: RegisterMapleDeviceRequest) -> RegisterMapleDeviceRequest {
+        let key = Ed25519KeyPair::from_seed_unchecked(&[17u8; 32]).unwrap();
+        assert_eq!(
+            key.public_key().as_ref(),
+            BASE64.decode(&unsigned.identity_public_key).unwrap()
+        );
+        let signature = key.sign(&unsigned.canonical_transcript().unwrap());
+        unsigned.with_signature(BASE64.encode(signature.as_ref()))
+    }
+
+    fn sample_iroh_addr() -> MapleIrohEndpointAddr {
+        MapleIrohEndpointAddr::canonical_v1(
+            vec![
+                "https://use1-1.relay.n0.iroh.link./".to_string(),
+                "https://euw1-1.relay.n0.iroh.link./".to_string(),
+            ],
+            vec![
+                "[2001:db8::1]:4433".to_string(),
+                "203.0.113.7:4433".to_string(),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn maple_device_v1_request_serializes_only_structured_transcript_fields() {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let identity_public_key_base64 = BASE64.encode(&identity_public_key);
+        let iroh_endpoint_id = hex::encode(&identity_public_key);
+        let request = sign_maple_request(RegisterMapleDeviceRequest::unsigned_v1(
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440003").unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440004").unwrap(),
+            None,
+            1,
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap(),
+            &identity_public_key_base64,
+            &iroh_endpoint_id,
+            7,
+            sample_iroh_addr(),
+            MapleDevicePlatform::Macos,
+            "MacBook Pro",
+            vec!["agent.control".to_string(), "agent.host".to_string()],
+        ));
+        let signature = request.signature.clone();
+
+        let serialized_string = serde_json::to_string(&request).unwrap();
+        let expected_serialized_string = format!(
+            concat!(
+                "{{\"protocol_version\":1,\"transcript_version\":1,",
+                "\"operation_id\":\"550e8400-e29b-41d4-a716-446655440000\",",
+                "\"device_id\":\"550e8400-e29b-41d4-a716-446655440003\",",
+                "\"installation_id\":\"550e8400-e29b-41d4-a716-446655440004\",",
+                "\"expected_revision\":null,\"known_security_epoch\":1,",
+                "\"asserted_account_id\":\"550e8400-e29b-41d4-a716-446655440001\",",
+                "\"asserted_project_id\":\"550e8400-e29b-41d4-a716-446655440002\",",
+                "\"identity_algorithm\":\"ed25519\",",
+                "\"identity_public_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=\",",
+                "\"iroh_endpoint_id\":\"d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",",
+                "\"endpoint_epoch\":7,",
+                "\"iroh_endpoint_addr\":{{\"relay_urls\":[\"https://euw1-1.relay.n0.iroh.link./\",\"https://use1-1.relay.n0.iroh.link./\"],",
+                "\"direct_addresses\":[\"203.0.113.7:4433\",\"[2001:db8::1]:4433\"]}},",
+                "\"platform\":\"macos\",\"display_name\":\"MacBook Pro\",",
+                "\"capabilities\":[\"agent.control\",\"agent.host\"],\"signature\":\"{}\"}}"
+            ),
+            signature
+        );
+        assert_eq!(serialized_string, expected_serialized_string);
+        let expected_serialized = json!({
+            "protocol_version": 1,
+            "transcript_version": 1,
+            "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+            "device_id": "550e8400-e29b-41d4-a716-446655440003",
+            "installation_id": "550e8400-e29b-41d4-a716-446655440004",
+            "expected_revision": null,
+            "known_security_epoch": 1,
+            "asserted_account_id": "550e8400-e29b-41d4-a716-446655440001",
+            "asserted_project_id": "550e8400-e29b-41d4-a716-446655440002",
+            "identity_algorithm": "ed25519",
+            "identity_public_key": identity_public_key_base64,
+            "iroh_endpoint_id": iroh_endpoint_id,
+            "endpoint_epoch": 7,
+            "iroh_endpoint_addr": {
+                "relay_urls": [
+                    "https://euw1-1.relay.n0.iroh.link./",
+                    "https://use1-1.relay.n0.iroh.link./"
+                ],
+                "direct_addresses": ["203.0.113.7:4433", "[2001:db8::1]:4433"]
+            },
+            "platform": "macos",
+            "display_name": "MacBook Pro",
+            "capabilities": ["agent.control", "agent.host"],
+            "signature": signature
+        });
+        let serialized: Value = serde_json::from_str(&serialized_string).unwrap();
+        assert_eq!(serialized, expected_serialized);
+        assert!(serialized.get("canonical_transcript").is_none());
+        assert!(serialized.get("private_key").is_none());
+    }
+
+    #[test]
+    fn maple_device_v1_canonical_transcript_matches_frozen_epoch_vectors() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/maple_pairing_v1_vectors.json"
+        ))
+        .unwrap();
+        for (request_name, transcript_name, digest_name) in [
+            (
+                "register_device_request_epoch_1",
+                "register_device_request_epoch_1_transcript_hex",
+                "register_device_request_epoch_1_digest",
+            ),
+            (
+                "register_device_request_epoch_4",
+                "register_device_request_epoch_4_transcript_hex",
+                "register_device_request_epoch_4_digest",
+            ),
+        ] {
+            let request: RegisterMapleDeviceRequest =
+                serde_json::from_value(fixture[request_name].clone()).unwrap();
+            request.validate().unwrap();
+            let transcript = request.canonical_transcript().unwrap();
+            assert_eq!(
+                hex::encode(&transcript),
+                fixture[transcript_name].as_str().unwrap()
+            );
+            assert_eq!(
+                BASE64.encode(Sha256::digest(&transcript)),
+                fixture[digest_name].as_str().unwrap()
+            );
+
+            let mut tampered_epoch = request;
+            tampered_epoch.known_security_epoch += 1;
+            assert!(matches!(
+                tampered_epoch.validate(),
+                Err(crate::Error::Configuration(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn maple_device_v1_validation_rejects_identity_and_metadata_ambiguity() {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let valid = sign_maple_request(RegisterMapleDeviceRequest::unsigned_v1(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            None,
+            1,
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            BASE64.encode(&identity_public_key),
+            hex::encode(&identity_public_key),
+            1,
+            sample_iroh_addr(),
+            MapleDevicePlatform::Ios,
+            "iPhone",
+            vec!["agent.control".to_string()],
+        ));
+        valid.validate().unwrap();
+
+        let invalid_requests = [
+            RegisterMapleDeviceRequest {
+                iroh_endpoint_id: hex::encode([8u8; 32]),
+                ..valid.clone()
+            },
+            RegisterMapleDeviceRequest {
+                display_name: " iPhone".to_string(),
+                ..valid.clone()
+            },
+            RegisterMapleDeviceRequest {
+                capabilities: vec!["agent.control".to_string(), "agent.control".to_string()],
+                ..valid.clone()
+            },
+            RegisterMapleDeviceRequest {
+                signature: BASE64.encode([9u8; 63]),
+                ..valid
+            },
+        ];
+        for request in invalid_requests {
+            assert!(matches!(
+                request.validate(),
+                Err(crate::Error::Configuration(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn maple_device_registration_debug_redacts_identity_endpoint_routes_name_and_signature() {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let request = sign_maple_request(RegisterMapleDeviceRequest::unsigned_v1(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            None,
+            1,
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            BASE64.encode(&identity_public_key),
+            hex::encode(&identity_public_key),
+            1,
+            sample_iroh_addr(),
+            MapleDevicePlatform::Macos,
+            "Sensitive Maple Host Name",
+            vec!["agent.host".to_string()],
+        ));
+
+        let debug = format!("{request:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains(&request.identity_public_key));
+        assert!(!debug.contains(&request.iroh_endpoint_id));
+        assert!(!debug.contains(&request.display_name));
+        assert!(!debug.contains(&request.signature));
+        assert!(!request
+            .iroh_endpoint_addr
+            .relay_urls
+            .iter()
+            .any(|relay_url| debug.contains(relay_url)));
+        assert!(!request
+            .iroh_endpoint_addr
+            .direct_addresses
+            .iter()
+            .any(|address| debug.contains(address)));
+    }
+
+    #[test]
+    fn maple_device_directory_debug_redacts_identity_routes_names_and_cursor() {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let device = MapleDevice {
+            registration_id: Uuid::new_v4(),
+            device_id: Uuid::new_v4(),
+            installation_id: Uuid::new_v4(),
+            identity_algorithm: MapleDeviceIdentityAlgorithm::Ed25519,
+            identity_public_key: BASE64.encode(&identity_public_key),
+            iroh_endpoint_id: hex::encode(&identity_public_key),
+            endpoint_epoch: 7,
+            iroh_endpoint_addr: sample_iroh_addr(),
+            platform: MapleDevicePlatform::Macos,
+            display_name: "Sensitive Maple Host Name".to_string(),
+            capabilities: vec!["agent.host".to_string()],
+            revision: 3,
+        };
+        let cursor = "sensitive-device-directory-cursor".to_string();
+        let page = MapleDeviceListResponse {
+            protocol_version: 1,
+            security_epoch: 4,
+            devices: vec![device.clone()],
+            next_cursor: Some(cursor.clone()),
+            has_more: true,
+        };
+
+        for debug in [format!("{device:?}"), format!("{page:?}")] {
+            assert!(debug.contains("[redacted]"));
+            for secret in [
+                device.registration_id.to_string(),
+                device.device_id.to_string(),
+                device.installation_id.to_string(),
+                device.identity_public_key.clone(),
+                device.iroh_endpoint_id.clone(),
+                device.display_name.clone(),
+                cursor.clone(),
+            ] {
+                assert!(!debug.contains(&secret));
+            }
+            assert!(!device
+                .iroh_endpoint_addr
+                .relay_urls
+                .iter()
+                .any(|route| debug.contains(route)));
+            assert!(!device
+                .iroh_endpoint_addr
+                .direct_addresses
+                .iter()
+                .any(|route| debug.contains(route)));
+        }
+    }
+
+    #[test]
+    fn maple_iroh_endpoint_addr_is_canonical_bounded_and_contains_no_secret_material() {
+        let canonical = sample_iroh_addr();
+        assert_eq!(
+            serde_json::to_value(&canonical).unwrap(),
+            json!({
+                "relay_urls": [
+                    "https://euw1-1.relay.n0.iroh.link./",
+                    "https://use1-1.relay.n0.iroh.link./"
+                ],
+                "direct_addresses": ["203.0.113.7:4433", "[2001:db8::1]:4433"]
+            })
+        );
+
+        let unsorted = MapleIrohEndpointAddr {
+            relay_urls: vec![
+                "https://use1-1.relay.n0.iroh.link./".to_string(),
+                "https://euw1-1.relay.n0.iroh.link./".to_string(),
+            ],
+            direct_addresses: vec![],
+        };
+        assert!(unsorted.validate().is_err());
+        assert_eq!(
+            MapleIrohEndpointAddr::canonical_v1(unsorted.relay_urls, unsorted.direct_addresses)
+                .unwrap()
+                .relay_urls,
+            vec![
+                "https://euw1-1.relay.n0.iroh.link./",
+                "https://use1-1.relay.n0.iroh.link./"
+            ]
+        );
+
+        for invalid in [
+            MapleIrohEndpointAddr {
+                relay_urls: vec![],
+                direct_addresses: vec![],
+            },
+            MapleIrohEndpointAddr {
+                relay_urls: vec!["http://relay.example/".to_string()],
+                direct_addresses: vec![],
+            },
+            MapleIrohEndpointAddr {
+                relay_urls: vec!["https://user@relay.example/".to_string()],
+                direct_addresses: vec![],
+            },
+            MapleIrohEndpointAddr {
+                relay_urls: vec![],
+                direct_addresses: vec!["0.0.0.0:4433".to_string()],
+            },
+            MapleIrohEndpointAddr {
+                relay_urls: vec![],
+                direct_addresses: vec!["255.255.255.255:4433".to_string()],
+            },
+            MapleIrohEndpointAddr {
+                relay_urls: vec![],
+                direct_addresses: vec!["2001:db8::1:4433".to_string()],
+            },
+        ] {
+            assert!(invalid.validate().is_err());
+        }
+
+        let literal: MapleIrohEndpointAddr = serde_json::from_value(json!({
+            "relay_urls": ["https://relay.example/"],
+            "direct_addresses": ["192.0.2.7:7777"]
+        }))
+        .unwrap();
+        literal.validate().unwrap();
+        assert!(serde_json::from_value::<MapleIrohEndpointAddr>(json!({
+            "relay_urls": ["https://relay.example/"],
+            "direct_addresses": [],
+            "private_key": "must-not-fit-this-schema"
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn maple_device_literal_json_preserves_endpoint_address_contract() {
+        let literal = json!({
+            "registration_id": "550e8400-e29b-41d4-a716-446655440005",
+            "device_id": "550e8400-e29b-41d4-a716-446655440003",
+            "installation_id": "550e8400-e29b-41d4-a716-446655440004",
+            "identity_algorithm": "ed25519",
+            "identity_public_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+            "iroh_endpoint_id": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+            "endpoint_epoch": 7,
+            "iroh_endpoint_addr": {
+                "relay_urls": ["https://relay.example/"],
+                "direct_addresses": ["192.0.2.7:7777"]
+            },
+            "platform": "macos",
+            "display_name": "MacBook Pro",
+            "capabilities": ["agent.host"],
+            "revision": 2
+        });
+        let device: MapleDevice = serde_json::from_value(literal.clone()).unwrap();
+        device.validate().unwrap();
+        assert_eq!(serde_json::to_value(device).unwrap(), literal);
+    }
+
+    #[test]
+    fn maple_device_directory_capabilities_require_strict_ascending_order() {
+        let identity_public_key =
+            hex::decode("d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737")
+                .unwrap();
+        let valid = MapleDevice {
+            registration_id: Uuid::new_v4(),
+            device_id: Uuid::new_v4(),
+            installation_id: Uuid::new_v4(),
+            identity_algorithm: MapleDeviceIdentityAlgorithm::Ed25519,
+            identity_public_key: BASE64.encode(&identity_public_key),
+            iroh_endpoint_id: hex::encode(&identity_public_key),
+            endpoint_epoch: 1,
+            iroh_endpoint_addr: sample_iroh_addr(),
+            platform: MapleDevicePlatform::Macos,
+            display_name: "Maple Host".to_string(),
+            capabilities: vec!["agent.control".to_string(), "agent.host".to_string()],
+            revision: 1,
+        };
+        valid.validate().unwrap();
+
+        for capabilities in [
+            vec!["agent.host".to_string(), "agent.control".to_string()],
+            vec!["agent.control".to_string(), "agent.control".to_string()],
+        ] {
+            let invalid = MapleDevice {
+                capabilities,
+                ..valid.clone()
+            };
+            assert!(matches!(
+                invalid.validate(),
+                Err(crate::Error::Configuration(_))
+            ));
+        }
+    }
 
     #[test]
     fn nullable_field_request_serialization_distinguishes_missing_and_null() {

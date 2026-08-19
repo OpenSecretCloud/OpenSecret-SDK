@@ -33,6 +33,7 @@ p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
 sha2 = "0.10"
 base64 = "0.22"
 ring = "0.17"  # For certificate validation
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["fast"] }
 hex = "0.4"  # For debug output
 
 # X.509 and certificate handling

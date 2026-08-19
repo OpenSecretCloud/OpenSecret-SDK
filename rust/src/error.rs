@@ -35,6 +35,21 @@ pub enum Error {
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
 
+    #[error("Maple device security epoch is stale; refresh device state and retry.")]
+    MapleSecurityEpochStale,
+
+    #[error("Maple remote access must be cleared on the host before this operation can continue.")]
+    MaplePairingResetClearRequired,
+
+    /// The installation enrollment was permanently retired after its remote
+    /// authority lineage was cleared. The caller must reset local Remote
+    /// enrollment state, generate a fresh installation ID and identity, and
+    /// enroll again; retrying this installation cannot restore authority.
+    #[error(
+        "This Maple installation enrollment is retired; reset Remote access on this device and enroll it again."
+    )]
+    MapleInstallationRetired,
+
     #[error("API error: {status}: {message}")]
     Api { status: u16, message: String },
 
