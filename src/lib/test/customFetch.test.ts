@@ -352,19 +352,10 @@ describe("createCustomFetch stale-session recovery", () => {
   test("forwards one endpoint-bound PCR policy through lookup and renewal", async () => {
     const apiUrl = "https://enclave.example.test/base";
     const pcrConfig: PcrConfig = {
-      environment: "development",
-      pcr0DevValues: ["2a".repeat(48)],
-      remoteAttestation: false
+      environment: "dev"
     };
     const expectedPcrConfig: PcrConfig = {
-      environment: "development",
-      pcr0Values: [],
-      pcr0DevValues: ["2a".repeat(48)],
-      remoteAttestation: false,
-      remoteAttestationUrls: {
-        prod: "https://raw.githubusercontent.com/OpenSecretCloud/opensecret/master/pcrProdHistory.json",
-        dev: "https://raw.githubusercontent.com/OpenSecretCloud/opensecret/master/pcrDevHistory.json"
-      }
+      environment: "dev"
     };
     const calls: Array<[boolean | undefined, string | undefined, PcrConfig | undefined]> = [];
     let currentAttestation = staleAttestation;
@@ -379,9 +370,7 @@ describe("createCustomFetch stale-session recovery", () => {
         },
         fetch: async (_input, init) => {
           if (recordRequest(init).sessionId === staleAttestation.sessionId) {
-            pcrConfig.environment = "production";
-            pcrConfig.pcr0DevValues = ["4c".repeat(48)];
-            pcrConfig.remoteAttestation = true;
+            pcrConfig.environment = "prod";
             return new Response("stale", { status: 400 });
           }
           return Response.json({ encrypted: '2:{"ok":true}' });
@@ -410,8 +399,7 @@ describe("createCustomFetch stale-session recovery", () => {
     const originalPcrConfig = getApiPcrConfig();
     const apiUrl = "https://provider.example.test";
     const pcrConfig: PcrConfig = {
-      pcr0Values: ["3b".repeat(48)],
-      remoteAttestation: false
+      environment: "prod"
     };
     const calls: Array<[boolean | undefined, string | undefined, PcrConfig | undefined]> = [];
 
@@ -435,7 +423,7 @@ describe("createCustomFetch stale-session recovery", () => {
       expect(calls[0][0]).toBe(false);
       expect(calls[0][1]).toBe(apiUrl);
       expect(calls[0][2]).toEqual(expect.objectContaining(pcrConfig));
-      expect(calls[0][2]?.environment).toBe("production");
+      expect(calls[0][2]?.environment).toBe("prod");
     } finally {
       setApiUrl(originalApiUrl, originalPcrConfig);
     }

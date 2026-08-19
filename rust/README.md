@@ -208,12 +208,12 @@ The SDK reads configuration from `.env.local` in the parent directory (OpenSecre
 Required environment variables in `.env.local`:
 ```bash
 VITE_OPEN_SECRET_API_URL=http://localhost:3000
-VITE_OPEN_SECRET_PCR_ENVIRONMENT=production
+VITE_OPEN_SECRET_ATTESTATION_ENVIRONMENT=prod
 VITE_TEST_CLIENT_ID=your-client-id-uuid
 ```
 
-Production is the default when `VITE_OPEN_SECRET_PCR_ENVIRONMENT` is omitted.
-Set it to `development` when the configured URL is a hosted development enclave.
+Production is the default when `VITE_OPEN_SECRET_ATTESTATION_ENVIRONMENT` is omitted.
+Set it to `dev` when the configured URL is a hosted development enclave.
 
 Run tests:
 ```bash

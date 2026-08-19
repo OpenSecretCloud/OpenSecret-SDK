@@ -2943,7 +2943,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cross_environment_pcr0_fails_before_key_exchange() {
+    async fn unreleased_policy_fails_before_key_exchange() {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/key_exchange"))
@@ -2953,9 +2953,9 @@ mod tests {
             .await;
 
         let production_policy =
-            Pcr0TrustPolicy::official_for(Pcr0Environment::Production).without_remote_history();
+            TrustedReleasePolicy::embedded(AttestationEnvironment::Production).unwrap();
         let client =
-            OpenSecretClient::new_with_pcr0_trust_policy(mock_server.uri(), production_policy)
+            OpenSecretClient::new_with_attestation_policy(mock_server.uri(), production_policy)
                 .unwrap();
         let document = synthetic_verified_attestation(DEVELOPMENT_PCR0);
 
@@ -2964,34 +2964,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(error, Error::AttestationVerificationFailed(_)));
-        assert!(client.get_session_id().unwrap().is_none());
-        mock_server.verify().await;
-    }
-
-    #[tokio::test]
-    async fn development_environment_accepts_development_pcr0_before_key_exchange() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/key_exchange"))
-            .respond_with(ResponseTemplate::new(500))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let client = OpenSecretClient::new_with_pcr0_environment(
-            mock_server.uri(),
-            Pcr0Environment::Development,
-        )
-        .unwrap();
-        let document = synthetic_verified_attestation(DEVELOPMENT_PCR0);
-
-        let error = client
-            .establish_session_from_verified_attestation("test-nonce", document)
-            .await
-            .unwrap_err();
-
-        assert!(matches!(error, Error::Api { status: 500, .. }));
+        assert!(matches!(error, Error::UnreleasedAttestationPolicy { .. }));
         assert!(client.get_session_id().unwrap().is_none());
         mock_server.verify().await;
     }
@@ -3003,7 +2976,9 @@ mod tests {
             "https://example.com/localhost",
             "https://example.com/127.0.0.1",
         ] {
-            let client = OpenSecretClient::new(url).unwrap();
+            let policy =
+                TrustedReleasePolicy::embedded(AttestationEnvironment::Production).unwrap();
+            let client = OpenSecretClient::new_with_attestation_policy(url, policy).unwrap();
             assert!(!client.use_mock_attestation, "unexpected mock URL: {url}");
         }
 
@@ -3047,8 +3022,10 @@ mod tests {
             assert!(client.unwrap().use_mock_attestation);
         } else {
             assert!(client.is_err());
+            let policy =
+                TrustedReleasePolicy::embedded(AttestationEnvironment::Production).unwrap();
             assert!(
-                !OpenSecretClient::new("https://10.0.2.2:3000")
+                !OpenSecretClient::new_with_attestation_policy("https://10.0.2.2:3000", policy)
                     .unwrap()
                     .use_mock_attestation
             );

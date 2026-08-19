@@ -341,6 +341,12 @@ export function resolveAttestationEnvironment(
   apiUrl: string,
   explicitEnvironment?: AttestationEnvironment
 ): AttestationEnvironment {
+  if (
+    explicitEnvironment !== undefined &&
+    !AttestationEnvironmentSchema.safeParse(explicitEnvironment).success
+  ) {
+    throw new Error("Attestation environment must be exactly prod or dev.");
+  }
   const origin = normalizeApiOrigin(apiUrl);
   const officialEnvironment = OFFICIAL_ENVIRONMENTS_BY_ORIGIN.get(origin);
 
