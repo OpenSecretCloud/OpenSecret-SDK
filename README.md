@@ -1,5 +1,31 @@
 # OpenSecret SDKs
 
+> **Development moved to [MaplePrivacyLabs/Maple](https://github.com/MaplePrivacyLabs/Maple/tree/master/sdk).**
+> New SDK work, issues, and pull requests belong in the monorepo's `sdk/`
+> (TypeScript/React) and `sdk/rust/` (Rust) directories.
+
+The current packages are [`@mapleai/sdk`](https://www.npmjs.com/package/@mapleai/sdk)
+and [`maple-sdk`](https://crates.io/crates/maple-sdk), first published as
+3.5.2 and 3.6.2 respectively. See the
+[current SDK documentation](https://github.com/MaplePrivacyLabs/Maple/blob/master/sdk/README.md)
+for TypeScript installation and migration, and the
+[current Rust SDK guide](https://github.com/MaplePrivacyLabs/Maple/blob/master/sdk/rust/README.md)
+for Rust. Exported names such as `OpenSecretProvider` and `OpenSecretClient`
+remain unchanged; Rust imports use `maple_sdk`.
+
+Existing `@opensecret/react` and `opensecret` package versions remain available
+for older consumers. Updating source repositories does not update those
+consumers automatically. New package releases use the monorepo's independent,
+protected [SDK publishing workflows](https://github.com/MaplePrivacyLabs/Maple/blob/master/docs/sdk-publishing.md).
+Do not publish new SDK versions from this checkout.
+
+The source and all retained component documentation, including `rust/README.md`,
+describe the legacy packages and remain as historical reference. Existing
+issues and draft pull requests remain here
+until their disposition is recorded; this notice does not close or port them.
+
+## Legacy SDK reference
+
 This repository contains the TypeScript/React and Rust clients used by Maple
 and OpenSecret's internal applications. Both clients establish attested,
 end-to-end encrypted sessions with an OpenSecret backend and expose the API
@@ -89,11 +115,9 @@ bun run pack
 
 Only `dist/` is included in the package.
 
-Publish a freshly built npm artifact with:
-
-```sh
-just publish-npm
-```
+The legacy `just publish-npm` recipe is retained in source for history.
+Use the [monorepo publishing guide](https://github.com/MaplePrivacyLabs/Maple/blob/master/docs/sdk-publishing.md)
+for new versions.
 
 ## Rust SDK
 
@@ -122,11 +146,9 @@ nix develop --no-update-lock-file -c bash -lc '
 Integration tests use the variables documented in `rust/.env.example` and are
 separate from the default local validation path.
 
-Publish the locked Rust crate with:
-
-```sh
-just publish-cargo
-```
+The legacy `just publish-cargo` recipe is retained in source for history.
+Use the [monorepo publishing guide](https://github.com/MaplePrivacyLabs/Maple/blob/master/docs/sdk-publishing.md)
+for new versions.
 
 ## Change discipline
 
